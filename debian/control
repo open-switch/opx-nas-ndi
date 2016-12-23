@@ -1,0 +1,18 @@
+Source: libopx-nas-ndi
+Section: net
+Priority: optional
+Maintainer: Dell <support@dell.com>
+Build-Depends: debhelper (>= 9),dh-autoreconf,autotools-dev,libopx-common-dev,libopx-nas-common-dev,libopx-logging-dev,opx-ndi-api-dev,opx-sai-api-dev,libopx-sai-common-dev
+Standards-Version: 3.9.3
+Vcs-Browser: https://github.com/open-switch/opx-nas-ndi
+Vcs-Git: https://github.com/open-switch/opx-nas-ndi.git
+
+Package: libopx-nas-ndi1
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: This package contains nas-ndi code
+
+Package: libopx-nas-ndi-dev
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},libopx-nas-ndi1 (=${binary:Version}),libopx-common-dev,libopx-logging-dev,libopx-nas-common-dev,opx-ndi-api-dev,libopx-base-model-dev,opx-sai-api-dev,libopx-sai-common1
+Description: This package contains nas-ndi code
