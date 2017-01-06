@@ -1,15 +1,4 @@
-OPX NAS NDI 
-=============
+# opx-nas-ndi
+This repository contains a mediation layer between the NAS software and the SAI API. It isolates NAS software from changes of the SAI API. The NDI functions accept input data structures from NAS modules and converts them to the format accepted by the SAI interfaces. 
 
-NDI utilities for the OPX project.  This software sits between the NAS
-and the SAI interfaces providing a thin translation layer used to
-isolate SAI updates from the rest of the software.
-
-Description
------------
-
-This repo contains APIs to access SAI services. It provides functions
-that take input data structure from NAS modules and convert it to
-attributes list accepted by SAI interfaces
-
-(c) Dell 2016
+(c) 2017 Dell
