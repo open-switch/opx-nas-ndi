@@ -22,4 +22,4 @@ libopx_nas_ndi_la_CXXFLAGS=-std=c++11
 
 libopx_nas_ndi_la_LDFLAGS=-shared -version-info 1:1:0
 
-libopx_nas_ndi_la_LIBADD=-lopx_common -lopx_logging -lopx_sai_common -lopx_nas_common -lopx_cps_class_map
+libopx_nas_ndi_la_LIBADD=-lpthread -lopx_common -lopx_logging -lopx_sai_common -lopx_nas_common -lopx_cps_class_map
