@@ -6,6 +6,6 @@ libopx-nas-ndi\_*version*\_*arch*.deb — Utility libraries  
 
 libopx-nas-ndi-dev\_*version*\_*arch*.deb — Exported header file  
 
-See [Network-device-interface](https://github.com/open-switch/opx-docs/wiki/Network-device-interface) for more information on the NAS L3 module.
+See [Network device interface](https://github.com/open-switch/opx-docs/wiki/Network-device-interface) for more information on the NAS L3 module.
 
 (c) 2017 Dell
