@@ -1,4 +1,4 @@
-Source: libopx-nas-ndi
+Source: opx-nas-ndi
 Section: net
 Priority: optional
 Maintainer: Dell EMC <ops-dev@lists.openswitch.net>
