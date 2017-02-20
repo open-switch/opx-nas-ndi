@@ -1,3 +1,10 @@
+opx-nas-ndi (1.0.2) unstable; urgency=medium
+
+  [ Satish Mynam ]
+  * Manage port and vlan stats in ndi
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Mon, 20 Feb 2017 22:21:48 +0000
+
 opx-nas-ndi (1.0.1) unstable; urgency=medium
 
   * Initial release.
