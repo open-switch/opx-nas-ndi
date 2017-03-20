@@ -107,6 +107,9 @@ static t_std_error ndi_packet_get_attr (const sai_attribute_t *p_attr, ndi_packe
         case SAI_HOSTIF_PACKET_ATTR_INGRESS_LAG:
             // @Todo - to handle lag case
             break;
+        case SAI_HOSTIF_PACKET_ATTR_TRAP_TYPE:
+            // @Todo - to handle trap type attr
+            break;
 
         case SAI_HOSTIF_PACKET_ATTR_USER_TRAP_ID:
             if(p_attr->value.s32 == SAI_HOSTIF_TRAP_TYPE_SAMPLEPACKET)
