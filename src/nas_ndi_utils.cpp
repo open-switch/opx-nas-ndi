@@ -36,12 +36,21 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <set>
+#include <sstream>
+#include <vector>
+#include <iostream>
+#include <fstream>
+
 #define NDI_SAI_PORT_OBJECT_TYPE_BITPOS     48
 #define NDI_SAI_PORT_OBJECT_ID_BITPOS     0
 
 #define NDI_SAI_PORT_OBJECT_ID_BITMASK       0x0000ffffffffffff
 #define NDI_SAI_PORT_OBJECT_TYPE_BITMASK     0x0fff000000000000
 
+static std::map<sai_switch_profile_id_t, size_t> profile_id_map;
+static std::vector<std::map<std::string, std::string>> profile_map;
+static std::vector<std::map<std::string, std::string>::iterator> profile_iter;
 
 static std::map<ndi_stat_id_t ,sai_port_stat_t>
 ndi_to_sai_if_stat_ids = {
@@ -226,4 +235,87 @@ bool ndi_to_sai_vlan_stats(ndi_stat_id_t ndi_id, sai_vlan_stat_t * sai_id){
     }
     *sai_id = it->second;
     return true;
+}
+
+const char *ndi_profile_get_value(sai_switch_profile_id_t profile_id, const char *variable) {
+    if (variable == NULL) {
+        NDI_INIT_LOG_ERROR("variable for the key %s is null", variable);
+        return NULL;
+    }
+    size_t profile_index = profile_id_map[profile_id];
+    auto it = profile_map[profile_index].find(variable);
+    if (it == profile_map[profile_index].end()) {
+        NDI_INIT_LOG_TRACE("iterator reached end");
+        return NULL;
+    }
+    NDI_INIT_LOG_TRACE("get value for the key %s: %s", variable, it->second.c_str());
+    return it->second.c_str();
+}
+
+int ndi_profile_get_next_value(sai_switch_profile_id_t profile_id, const char **variable, const char **value)
+{
+    size_t profile_index = profile_id_map[profile_id];
+    if (value == NULL) {
+        NDI_INIT_LOG_TRACE("resetting profile map iterator");
+        profile_iter[profile_index] = profile_map[profile_index].begin();
+        return 0;
+    }
+    if (variable == NULL) {
+        NDI_INIT_LOG_ERROR("variable is null");
+        return -1;
+    }
+    if (profile_iter[profile_index] == profile_map[profile_index].end()) {
+        NDI_INIT_LOG_TRACE("iterator reached end");
+        return -1;
+    }
+    *variable = profile_iter[profile_index]->first.c_str();
+    *value = profile_iter[profile_index]->second.c_str();
+    NDI_INIT_LOG_TRACE("get next key-value pair %s: %s", *variable, *value);
+    profile_iter[profile_index]++;
+    return 0;
+}
+
+t_std_error handle_profile_map(sai_switch_profile_id_t profile_id, 
+                               const char *profile_file_name) {
+    std::string profile_map_file = DEFAULT_SAI_PROFILE_FILE;
+    if (profile_file_name != NULL) {
+        profile_map_file = profile_file_name;
+    }
+
+    size_t profile_index = profile_id_map.size();
+    profile_id_map[profile_id] = profile_index;
+
+    if (profile_map.size() <= profile_id) {
+        profile_map.resize(profile_index + 1);
+    }
+    if (profile_iter.size() <= profile_index) {
+        size_t profile_iter_size = profile_iter.size();
+        profile_iter.resize(profile_index + 1);
+        for (int i = profile_iter_size; i <= profile_iter.size(); ++i) {
+            profile_iter[i] = profile_map[i].begin();
+        }
+    }
+    std::ifstream profile(profile_map_file);
+    if (!profile.is_open()) {
+        NDI_INIT_LOG_INFO("failed to open profile map file: %s : %s using SAI default profile",
+                          profile_map_file.c_str(), strerror(errno));
+        return STD_ERR_OK;
+    }
+    std::string line;
+    while(getline(profile, line)) {
+        if (line.size() > 0 && (line[0] == '#' || line[0] == ';'))
+            continue;
+
+        size_t pos = line.find("=");
+        if (pos == std::string::npos) {
+            NDI_INIT_LOG_INFO("not found '=' in line %s", line.c_str());
+            continue;
+        }
+        std::string key = line.substr(0, pos);
+        std::string value = line.substr(pos + 1);
+        profile_map[profile_id][key] = value;
+
+        NDI_INIT_LOG_TRACE("handle profile map insert key %s: %s", key.c_str(), value.c_str());
+    }
+    return STD_ERR_OK;
 }
