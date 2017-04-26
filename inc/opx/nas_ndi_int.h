@@ -44,7 +44,7 @@
 extern "C"{
 #endif
 
-
+#define DEFAULT_SAI_PROFILE_FILE "/etc/opx/sai/sai-profile.ini"
 
 /**
  * @class SAI API Table

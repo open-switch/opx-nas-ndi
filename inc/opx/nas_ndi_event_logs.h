@@ -63,6 +63,9 @@
 #define NDI_LOG_INFO(ID, msg, ...) \
                    EV_LOGGING(NDI, INFO, ID, msg, ##__VA_ARGS__)
 
+#define NDI_INIT_LOG_INFO(msg, ...) \
+                   NDI_LOG_INFO("NDI-INIT", msg, ##__VA_ARGS__)
+
 #define NDI_LAG_LOG_INFO(msg, ...) \
                    NDI_LOG_INFO("NDI-LAG", msg, ##__VA_ARGS__)
 
