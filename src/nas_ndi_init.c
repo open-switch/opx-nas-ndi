@@ -80,28 +80,8 @@ typedef struct {
 static std_thread_create_param_t _thread;
 static int _nas_fd[2];        //used with the pipe function call ([0] = read side, [1] = write)
 
-static const char* ndi_profile_get_value(sai_switch_profile_id_t profile_id,
-                                     const char* variable)
-{
-    /*  @todo TODO  implement this later */
-    NDI_INIT_LOG_TRACE("get value for the key %s\n", variable);
-    return NULL;
-}
-
-static int ndi_profile_get_next_value(sai_switch_profile_id_t profile_id,
-                                   const char** variable,
-                                   const char** value)
-{
-    /*  @todo TODO implement this later */
-    NDI_INIT_LOG_TRACE("get next key-value pair\n");
-    *variable = NULL;
-    *value = NULL;
-    return -1; /*  return -1 for end of the list */
-}
-
 static t_std_error nas_ndi_service_method_init(service_method_table_t **service_ptr)
 {
-
     if (service_ptr == NULL) {
         return (STD_ERR(NPU, PARAM, 0));
     }
@@ -581,6 +561,7 @@ t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
                                          ndi_packet_rx_cb;
     }
     /*  initialize the NPU */
+    handle_profile_map(ndi_db_ptr->npu_profile_id, getenv("OPX_SAI_PROFILE_FILE"));
 
     sai_ret = sai_switch_api_tbl->initialize_switch(ndi_db_ptr->npu_profile_id, NULL,
                                                     NULL, &switch_notification);
