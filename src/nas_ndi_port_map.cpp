@@ -320,7 +320,7 @@ t_std_error ndi_port_map_sai_port_add(npu_id_t npu, sai_object_id_t sai_port, np
     g_ndi_port_map_tbl[npu][first_hwport].hwport_list.resize(hwport_count);
 
     for (uint32_t idx =0; idx < hwport_count; idx++) {
-       g_ndi_port_map_tbl[npu][first_hwport].hwport_list[idx] = hwport_list[idx];
+        g_ndi_port_map_tbl[npu][first_hwport].hwport_list[idx] = hwport_list[idx];
     }
 
     /*  Now add an entry in the sai port map   */
@@ -354,6 +354,14 @@ t_std_error ndi_sai_cpu_port_add(npu_id_t npu_id)
         return(ret_code);
     }
 
+    if (ndi_cpu_port > g_ndi_port_map_tbl[npu_id].size()-1) {
+        try {
+             g_ndi_port_map_tbl[npu_id].resize(ndi_cpu_port+1);
+        } catch(...) {
+            return(STD_ERR(NPU,NOMEM,0));
+        }
+    }
+
     /*  Fetch SAI CPU port Id  */
     sai_attr.id  = SAI_SWITCH_ATTR_CPU_PORT;
     if ((sai_ret = sai_switch_api_tbl->get_switch_attribute(1, &sai_attr)) != SAI_STATUS_SUCCESS) {
@@ -369,7 +377,7 @@ t_std_error ndi_sai_cpu_port_add(npu_id_t npu_id)
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_count = 1;
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].flags |= NDI_PORT_MAP_ACTIVE_MASK | NDI_PORT_MAP_CPU_PORT_MASK;
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_list.resize(1);
-    g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_list[0] = 0; /*  hwport is 0 for cpu port */
+    g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_list[0] = ndi_cpu_port;
 
     sai_entry.npu_id = npu_id;
     sai_entry.npu_port = ndi_cpu_port;
