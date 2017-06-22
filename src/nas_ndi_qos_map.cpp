@@ -34,20 +34,18 @@
 
 typedef std::unordered_map<ndi_qos_map_type_t, sai_qos_map_type_t, std::hash<int>> ndi_2_sai_qos_map_type_mapping;
 ndi_2_sai_qos_map_type_mapping    NDI_2_SAI_QOS_MAP_TYPE = {
-        {NDI_QOS_MAP_DOT1P_TO_TC,       SAI_QOS_MAP_DOT1P_TO_TC},
-        {NDI_QOS_MAP_DOT1P_TO_COLOR,    SAI_QOS_MAP_DOT1P_TO_COLOR},
-        {NDI_QOS_MAP_DOT1P_TO_TC_COLOR, SAI_QOS_MAP_DOT1P_TO_TC_AND_COLOR},
-        {NDI_QOS_MAP_DSCP_TO_TC,        SAI_QOS_MAP_DSCP_TO_TC},
-        {NDI_QOS_MAP_DSCP_TO_COLOR,     SAI_QOS_MAP_DSCP_TO_COLOR},
-        {NDI_QOS_MAP_DSCP_TO_TC_COLOR,  SAI_QOS_MAP_DSCP_TO_TC_AND_COLOR},
-        {NDI_QOS_MAP_TC_TO_QUEUE,       SAI_QOS_MAP_TC_TO_QUEUE},
-        {NDI_QOS_MAP_TC_TO_DSCP,        SAI_QOS_MAP_TC_TO_DSCP},
-        {NDI_QOS_MAP_TC_TO_DOT1P,       SAI_QOS_MAP_TC_TO_DOT1P},
-        {NDI_QOS_MAP_TC_COLOR_TO_DSCP,  SAI_QOS_MAP_TC_AND_COLOR_TO_DSCP},
-        {NDI_QOS_MAP_TC_COLOR_TO_DOT1P, SAI_QOS_MAP_TC_AND_COLOR_TO_DOT1P},
-        {NDI_QOS_MAP_TC_TO_PG,          SAI_QOS_MAP_TC_TO_PRIORITY_GROUP},
-        {NDI_QOS_MAP_PG_TO_PFC,         SAI_QOS_MAP_PRIORITY_GROUP_TO_PFC_PRIORITY},
-        {NDI_QOS_MAP_PFC_TO_QUEUE,      SAI_QOS_MAP_PFC_PRIORITY_TO_QUEUE},
+        {NDI_QOS_MAP_DOT1P_TO_TC,       SAI_QOS_MAP_TYPE_DOT1P_TO_TC},
+        {NDI_QOS_MAP_DOT1P_TO_COLOR,    SAI_QOS_MAP_TYPE_DOT1P_TO_COLOR},
+        {NDI_QOS_MAP_DOT1P_TO_TC_COLOR, SAI_QOS_MAP_TYPE_DOT1P_TO_TC_AND_COLOR},
+        {NDI_QOS_MAP_DSCP_TO_TC,        SAI_QOS_MAP_TYPE_DSCP_TO_TC},
+        {NDI_QOS_MAP_DSCP_TO_COLOR,     SAI_QOS_MAP_TYPE_DSCP_TO_COLOR},
+        {NDI_QOS_MAP_DSCP_TO_TC_COLOR,  SAI_QOS_MAP_TYPE_DSCP_TO_TC_AND_COLOR},
+        {NDI_QOS_MAP_TC_TO_QUEUE,       SAI_QOS_MAP_TYPE_TC_TO_QUEUE},
+        {NDI_QOS_MAP_TC_COLOR_TO_DSCP,  SAI_QOS_MAP_TYPE_TC_AND_COLOR_TO_DSCP},
+        {NDI_QOS_MAP_TC_COLOR_TO_DOT1P, SAI_QOS_MAP_TYPE_TC_AND_COLOR_TO_DOT1P},
+        {NDI_QOS_MAP_TC_TO_PG,          SAI_QOS_MAP_TYPE_TC_TO_PRIORITY_GROUP},
+        {NDI_QOS_MAP_PG_TO_PFC,         SAI_QOS_MAP_TYPE_PFC_PRIORITY_TO_PRIORITY_GROUP},
+        {NDI_QOS_MAP_PFC_TO_QUEUE,      SAI_QOS_MAP_TYPE_PFC_PRIORITY_TO_QUEUE},
 
 };
 
@@ -64,20 +62,18 @@ sai_packet_color_t ndi2sai_qos_packet_color(BASE_QOS_PACKET_COLOR_t color)
 
 typedef std::unordered_map<sai_qos_map_type_t, ndi_qos_map_type_t, std::hash<int>> sai_2_ndi_qos_map_type_mapping;
 sai_2_ndi_qos_map_type_mapping    SAI_2_NDI_QOS_MAP_TYPE = {
-        {SAI_QOS_MAP_DOT1P_TO_TC,           NDI_QOS_MAP_DOT1P_TO_TC},
-        {SAI_QOS_MAP_DOT1P_TO_COLOR,        NDI_QOS_MAP_DOT1P_TO_COLOR},
-        {SAI_QOS_MAP_DOT1P_TO_TC_AND_COLOR, NDI_QOS_MAP_DOT1P_TO_TC_COLOR},
-        {SAI_QOS_MAP_DSCP_TO_TC,            NDI_QOS_MAP_DSCP_TO_TC},
-        {SAI_QOS_MAP_DSCP_TO_COLOR,         NDI_QOS_MAP_DSCP_TO_COLOR},
-        {SAI_QOS_MAP_DSCP_TO_TC_AND_COLOR,  NDI_QOS_MAP_DSCP_TO_TC_COLOR},
-        {SAI_QOS_MAP_TC_TO_QUEUE,           NDI_QOS_MAP_TC_TO_QUEUE},
-        {SAI_QOS_MAP_TC_TO_DSCP,            NDI_QOS_MAP_TC_TO_DSCP},
-        {SAI_QOS_MAP_TC_TO_DOT1P,           NDI_QOS_MAP_TC_TO_DOT1P},
-        {SAI_QOS_MAP_TC_AND_COLOR_TO_DSCP,  NDI_QOS_MAP_TC_COLOR_TO_DSCP},
-        {SAI_QOS_MAP_TC_AND_COLOR_TO_DOT1P, NDI_QOS_MAP_TC_COLOR_TO_DOT1P},
-        {SAI_QOS_MAP_TC_TO_PRIORITY_GROUP,  NDI_QOS_MAP_TC_TO_PG},
-        {SAI_QOS_MAP_PFC_PRIORITY_TO_QUEUE, NDI_QOS_MAP_PFC_TO_QUEUE},
-        {SAI_QOS_MAP_PRIORITY_GROUP_TO_PFC_PRIORITY, NDI_QOS_MAP_PG_TO_PFC},
+        {SAI_QOS_MAP_TYPE_DOT1P_TO_TC,           NDI_QOS_MAP_DOT1P_TO_TC},
+        {SAI_QOS_MAP_TYPE_DOT1P_TO_COLOR,        NDI_QOS_MAP_DOT1P_TO_COLOR},
+        {SAI_QOS_MAP_TYPE_DOT1P_TO_TC_AND_COLOR, NDI_QOS_MAP_DOT1P_TO_TC_COLOR},
+        {SAI_QOS_MAP_TYPE_DSCP_TO_TC,            NDI_QOS_MAP_DSCP_TO_TC},
+        {SAI_QOS_MAP_TYPE_DSCP_TO_COLOR,         NDI_QOS_MAP_DSCP_TO_COLOR},
+        {SAI_QOS_MAP_TYPE_DSCP_TO_TC_AND_COLOR,  NDI_QOS_MAP_DSCP_TO_TC_COLOR},
+        {SAI_QOS_MAP_TYPE_TC_TO_QUEUE,           NDI_QOS_MAP_TC_TO_QUEUE},
+        {SAI_QOS_MAP_TYPE_TC_AND_COLOR_TO_DSCP,  NDI_QOS_MAP_TC_COLOR_TO_DSCP},
+        {SAI_QOS_MAP_TYPE_TC_AND_COLOR_TO_DOT1P, NDI_QOS_MAP_TC_COLOR_TO_DOT1P},
+        {SAI_QOS_MAP_TYPE_TC_TO_PRIORITY_GROUP,  NDI_QOS_MAP_TC_TO_PG},
+        {SAI_QOS_MAP_TYPE_PFC_PRIORITY_TO_QUEUE, NDI_QOS_MAP_PFC_TO_QUEUE},
+        {SAI_QOS_MAP_TYPE_PFC_PRIORITY_TO_PRIORITY_GROUP, NDI_QOS_MAP_PG_TO_PFC},
 };
 
 BASE_QOS_PACKET_COLOR_t sai2ndi_qos_packet_color(sai_packet_color_t color)
@@ -189,6 +185,7 @@ t_std_error ndi_qos_create_map(npu_id_t npu_id,
     sai_object_id_t sai_qos_map_id;
     if ((sai_ret = ndi_sai_qos_map_api(ndi_db_ptr)->
                         create_qos_map(&sai_qos_map_id,
+                                ndi_switch_id_get(),
                                 attr_count,
                                 attr_list))
                          != SAI_STATUS_SUCCESS) {
@@ -226,7 +223,7 @@ t_std_error ndi_qos_set_map_attr(npu_id_t npu_id,
 
     attr_list[0].id = SAI_QOS_MAP_ATTR_MAP_TO_VALUE_LIST;
     attr_list[0].value.qosmap.count = map_entry_count;
-    attr_list[0].value.qosmap.list = &entry_list[0];
+    attr_list[0].value.qosmap.list = entry_list.data();
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
@@ -309,7 +306,7 @@ t_std_error ndi_qos_get_map(npu_id_t npu_id,
 
         attr_list[1].id = SAI_QOS_MAP_ATTR_MAP_TO_VALUE_LIST;
         attr_list[1].value.qosmap.count = map_entry_count;
-        attr_list[1].value.qosmap.list = &entry_list[0];
+        attr_list[1].value.qosmap.list = entry_list.data();
     }
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);

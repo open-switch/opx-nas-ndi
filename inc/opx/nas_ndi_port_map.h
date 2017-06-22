@@ -45,7 +45,8 @@ BASE_IF_PHY_BREAKOUT_MODE_t sai_break_to_ndi_break( int32_t sai_mode);
 
 t_std_error ndi_sai_port_hwport_list_get(npu_id_t npu_id, sai_object_id_t sai_port, uint32_t *hwport_list, uint32_t *count);
 
-t_std_error ndi_port_map_sai_port_add(npu_id_t npu, sai_object_id_t sai_port, npu_port_t *npu_port);
+t_std_error ndi_port_map_sai_port_add(npu_id_t npu, sai_object_id_t sai_port,
+                                      uint32_t *hw_ports, size_t count, npu_port_t *npu_port);
 
 t_std_error ndi_port_map_sai_port_delete(npu_id_t npu, sai_object_id_t sai_port, npu_port_t *npu_port);
 

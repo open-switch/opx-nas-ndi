@@ -54,6 +54,18 @@ static t_std_error ndi_qos_fill_sg_attr(nas_attr_id_t attr_id,
         sai_attr.id = SAI_SCHEDULER_GROUP_ATTR_SCHEDULER_PROFILE_ID;
         sai_attr.value.oid = ndi2sai_scheduler_profile_id(p->scheduler_profile_id);
     }
+    else if (attr_id == BASE_QOS_SCHEDULER_GROUP_MAX_CHILD) {
+        sai_attr.id = SAI_SCHEDULER_GROUP_ATTR_MAX_CHILDS;
+        sai_attr.value.u8 = p->max_child;
+    }
+    else if (attr_id == BASE_QOS_SCHEDULER_GROUP_PARENT) {
+        sai_attr.id = SAI_SCHEDULER_GROUP_ATTR_PARENT_NODE;
+        sai_attr.value.oid = ndi2sai_scheduler_group_id(p->parent);
+    }
+    else {
+        //unsupported attributes for set/create
+        return STD_ERR(NPU, PARAM, 0);
+    }
 
     return STD_ERR_OK;
 }
@@ -62,21 +74,16 @@ static t_std_error ndi_qos_fill_sg_attr(nas_attr_id_t attr_id,
 static t_std_error ndi_qos_fill_sg_attr_list(const nas_attr_id_t *nas_attr_list,
                                     uint_t num_attr,
                                     const ndi_qos_scheduler_group_struct_t *p,
-                                    std::vector<sai_attribute_t> &attr_list,
-                                    uint_t &count)
+                                    std::vector<sai_attribute_t> &attr_list)
 {
     sai_attribute_t sai_attr = {0};
-    t_std_error      rc = STD_ERR_OK;
-
-    count = 0;
+    t_std_error     rc = STD_ERR_OK;
 
     for (uint_t i = 0; i < num_attr; i++) {
         if ((rc = ndi_qos_fill_sg_attr(nas_attr_list[i], p, sai_attr)) != STD_ERR_OK)
             return rc;
 
         attr_list.push_back(sai_attr);
-
-        count++;
     }
 
     return STD_ERR_OK;
@@ -101,7 +108,6 @@ t_std_error ndi_qos_create_scheduler_group(npu_id_t npu_id,
                                 ndi_obj_id_t *ndi_scheduler_group_id)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    uint_t attr_count = 0;
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
@@ -113,13 +119,14 @@ t_std_error ndi_qos_create_scheduler_group(npu_id_t npu_id,
     std::vector<sai_attribute_t>  attr_list;
 
     if (ndi_qos_fill_sg_attr_list(nas_attr_list, num_attr, p,
-                                attr_list, attr_count) != STD_ERR_OK)
+                                attr_list) != STD_ERR_OK)
         return STD_ERR(QOS, CFG, 0);
 
     sai_object_id_t sai_qos_sg_id;
     if ((sai_ret = ndi_sai_qos_scheduler_group_api(ndi_db_ptr)->
             create_scheduler_group(&sai_qos_sg_id,
-                                attr_count,
+                                ndi_switch_id_get(),
+                                num_attr,
                                 &attr_list[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -208,6 +215,9 @@ const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
         {BASE_QOS_SCHEDULER_GROUP_PORT_ID,        SAI_SCHEDULER_GROUP_ATTR_PORT_ID},
         {BASE_QOS_SCHEDULER_GROUP_LEVEL,          SAI_SCHEDULER_GROUP_ATTR_LEVEL},
         {BASE_QOS_SCHEDULER_GROUP_SCHEDULER_PROFILE_ID, SAI_SCHEDULER_GROUP_ATTR_SCHEDULER_PROFILE_ID},
+        {BASE_QOS_SCHEDULER_GROUP_MAX_CHILD,      SAI_SCHEDULER_GROUP_ATTR_MAX_CHILDS},
+        {BASE_QOS_SCHEDULER_GROUP_PARENT,         SAI_SCHEDULER_GROUP_ATTR_PARENT_NODE},
+
 };
 
 static t_std_error _fill_ndi_qos_scheduler_group_struct(sai_attribute_t *attr_list,
@@ -219,7 +229,7 @@ static t_std_error _fill_ndi_qos_scheduler_group_struct(sai_attribute_t *attr_li
         sai_attribute_t *attr = &attr_list[i];
         switch(attr->id) {
         case SAI_SCHEDULER_GROUP_ATTR_MAX_CHILDS:
-            p->max_child = attr->value.u32;
+            p->max_child = attr->value.u8;
             break;
         case SAI_SCHEDULER_GROUP_ATTR_CHILD_COUNT:
             p->child_count = attr->value.u32;
@@ -250,6 +260,9 @@ static t_std_error _fill_ndi_qos_scheduler_group_struct(sai_attribute_t *attr_li
             break;
         case SAI_SCHEDULER_GROUP_ATTR_SCHEDULER_PROFILE_ID:
             p->scheduler_profile_id = sai2ndi_scheduler_profile_id(attr->value.oid);
+            break;
+        case SAI_SCHEDULER_GROUP_ATTR_PARENT_NODE:
+            p->parent = sai2ndi_scheduler_group_id(attr->value.oid);
             break;
         default:
             EV_LOG_TRACE(ev_log_t_QOS, ev_log_s_MAJOR, "QOS",
@@ -291,6 +304,7 @@ t_std_error ndi_qos_get_scheduler_group(npu_id_t npu_id,
 
     try {
         for (uint_t i = 0; i < num_attr; i++) {
+            memset(&sai_attr, 0, sizeof(sai_attr));
             sai_attr.id = ndi2sai_scheduler_group_attr_id_map.at(nas_attr_list[i]);
             if (sai_attr.id == SAI_SCHEDULER_GROUP_ATTR_CHILD_LIST) {
                 sai_attr.value.objlist.count = p->child_count;
@@ -324,97 +338,6 @@ t_std_error ndi_qos_get_scheduler_group(npu_id_t npu_id,
 
 }
 
-/**
- * This function adds a list of child node to a scheduler group
- * @param npu_id
- * @param ndi_scheduler_group_id
- * @param child_count number of childs in ndi_child_list
- * @param ndi_child_list list of the childs to be added
- */
-t_std_error ndi_qos_add_child_to_scheduler_group(npu_id_t npu_id,
-                            ndi_obj_id_t ndi_scheduler_group_id,
-                            uint32_t child_count,
-                            const ndi_obj_id_t *ndi_child_list)
-{
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    std::vector<sai_object_id_t> sai_child_list(child_count);
-
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    if (ndi_db_ptr == NULL) {
-        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                      "npu_id %d not exist\n", npu_id);
-        return STD_ERR(QOS, CFG, 0);
-    }
-
-    for (uint_t i= 0; i< child_count; i++) {
-        // no special conversion necessary for ndi-queue-id or ndi-scheduler-group-id
-        sai_child_list[i] = ndi_child_list[i];
-    }
-
-    if ((sai_ret = ndi_sai_qos_scheduler_group_api(ndi_db_ptr)->
-            add_child_object_to_group(
-                    ndi2sai_scheduler_group_id(ndi_scheduler_group_id),
-                    child_count,
-                    &sai_child_list[0]))
-                         != SAI_STATUS_SUCCESS) {
-        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                      "npu_id %d scheduler group add child failed:"
-                      "ndi_scheduler_group_id: 0x%016lx,"
-                      "child_count: %u\n",
-                      npu_id, ndi_scheduler_group_id, child_count);
-        for (uint i=0; i< child_count; i++)
-            EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                        "child [%u]: 0x%016lx\n",
-                        i, ndi_child_list[i]);
-
-        return STD_ERR(QOS, CFG, sai_ret);
-    }
-
-    return STD_ERR_OK;
-
-}
-
-/**
- * This function deletes a list of child node to a scheduler group
- * @param npu_id
- * @param ndi_scheduler_group_id
- * @param child_count number of childs in ndi_child_list
- * @param ndi_child_list list of the childs to be deleted
- */
-t_std_error ndi_qos_delete_child_from_scheduler_group(npu_id_t npu_id,
-                            ndi_obj_id_t ndi_scheduler_group_id,
-                            uint32_t child_count,
-                            const ndi_obj_id_t *ndi_child_list)
-{
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    std::vector<sai_object_id_t> sai_child_list(child_count);
-
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    if (ndi_db_ptr == NULL) {
-        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                      "npu_id %d not exist\n", npu_id);
-        return STD_ERR(QOS, CFG, 0);
-    }
-
-    for (uint_t i= 0; i< child_count; i++) {
-        // no conversion necessary for ndi-queue-id or ndi-scheduler-group-id
-        sai_child_list[i] = ndi_child_list[i];
-    }
-
-    if ((sai_ret = ndi_sai_qos_scheduler_group_api(ndi_db_ptr)->
-            remove_child_object_from_group(
-                    ndi2sai_scheduler_group_id(ndi_scheduler_group_id),
-                    child_count,
-                    &sai_child_list[0]))
-                         != SAI_STATUS_SUCCESS) {
-        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                      "npu_id %d scheduler group add child failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
-    }
-
-    return STD_ERR_OK;
-
-}
 
 /**
  * This function gets the total number of scheduler-groups on a port

@@ -50,7 +50,8 @@ static std::unordered_map<sai_fdb_event_t, ndi_mac_event_type_t, std::hash<int>>
 sai_to_ndi_event_type = {
     {SAI_FDB_EVENT_LEARNED, NDI_MAC_EVENT_LEARNED},
     {SAI_FDB_EVENT_AGED, NDI_MAC_EVENT_AGED},
-    {SAI_FDB_EVENT_FLUSHED, NDI_MAC_EVENT_FLUSHED}
+    {SAI_FDB_EVENT_FLUSHED, NDI_MAC_EVENT_FLUSHED},
+    {SAI_FDB_EVENT_MOVE,NDI_MAC_EVENT_MOVED}
 };
 
 /*  NDI L2 MAC Utility APIs  */

@@ -62,7 +62,7 @@ t_std_error ndi_sflow_create_session(ndi_sflow_entry_t *sflow_entry){
     }
 
     if ((sai_ret = ndi_sflow_api_get(ndi_db_ptr)->create_samplepacket_session(&sai_sflow_id,
-                                     attr_list_size,&sflow_rate_attr))!= SAI_STATUS_SUCCESS) {
+                   ndi_switch_id_get(),attr_list_size,&sflow_rate_attr))!= SAI_STATUS_SUCCESS) {
         NDI_SFLOW_LOG(ERR,0,"Failed to create new sflow session in the NPU %d, error code %d",
                   sflow_entry->npu_id,sai_ret);
         return STD_ERR(SFLOW, FAIL, sai_ret);

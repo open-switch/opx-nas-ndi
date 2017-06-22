@@ -48,9 +48,9 @@ static t_std_error ndi_switch_attr_get(npu_id_t npu,  sai_attribute_t *attr, siz
         return STD_ERR(NPU, PARAM, 0);
     }
 
-    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute((uint32_t)count,attr))
-            != SAI_STATUS_SUCCESS) {
-        NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-SWITCH", "Error from SAI:%d in get attrs (at least id:%d) for NPU:%d",
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(ndi_switch_id_get(),
+            (uint32_t)count,attr)) != SAI_STATUS_SUCCESS) {
+        NDI_LOG_TRACE("NDI-SWITCH", "Error from SAI:%d in get attrs (at least id:%d) for NPU:%d",
                       sai_ret,attr->id, (int)npu);
          return STD_ERR(INTERFACE, CFG, sai_ret);
     }
@@ -65,9 +65,9 @@ static t_std_error ndi_switch_attr_set(npu_id_t npu,  const sai_attribute_t *att
         return STD_ERR(NPU, PARAM, 0);
     }
 
-    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->set_switch_attribute(attr))
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->set_switch_attribute(ndi_switch_id_get(),attr))
             != SAI_STATUS_SUCCESS) {
-        NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-SAI", "Error from SAI:%d for attr:%d in default set for NPU:%d",
+        NDI_LOG_TRACE("NDI-SAI", "Error from SAI:%d for attr:%d in default set for NPU:%d",
                       sai_ret,attr->id,npu);
          return STD_ERR(NPU, CFG, sai_ret);
     }
@@ -108,8 +108,8 @@ static bool from_sai_type_hash_algo(sai_attribute_t *param ) {
 }
 
 static _enum_map _mode_stoy = {
-        {SAI_SWITCHING_MODE_CUT_THROUGH , BASE_SWITCH_SWITCHING_MODE_CUT_THROUGH},
-        {SAI_SWITCHING_MODE_STORE_AND_FORWARD, BASE_SWITCH_SWITCHING_MODE_STORE_AND_FORWARD }
+        {SAI_SWITCH_SWITCHING_MODE_CUT_THROUGH , BASE_SWITCH_SWITCHING_MODE_CUT_THROUGH},
+        {SAI_SWITCH_SWITCHING_MODE_STORE_AND_FORWARD, BASE_SWITCH_SWITCHING_MODE_STORE_AND_FORWARD }
 };
 
 static bool to_sai_type_switch_mode(sai_attribute_t *param ) {
@@ -136,6 +136,29 @@ struct _sai_op_table {
 };
 
 static std::unordered_map<uint32_t,_sai_op_table> _attr_to_op = {
+    /* BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_DEFAULT_PROFILE
+       to
+        BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_UFT_MODE_INFO
+    are not supported from NDI, the values are returned from NAS itself.
+    for the list of attrs these are added here. in future when support
+    added for synamic update of these values,corresponding values
+    needs to be updated
+    */
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_DEFAULT_PROFILE, {
+            SW_ATTR_U32, NULL, NULL, 0 } },
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_SUPPORTED_PROFILES, {
+            SW_ATTR_U32, NULL, NULL, 0 } },
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_SWITCH_PROFILE, {
+            SW_ATTR_U32, NULL, NULL, 0 } },
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_UFT_MODE, {
+            SW_ATTR_U32, NULL, NULL, 0 } },
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_UFT_MODE_INFO, {
+            SW_ATTR_LST, NULL, NULL, 0 } },
+
     {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_DEFAULT_MAC_ADDRESS, {
             SW_ATTR_MAC, NULL, NULL, SAI_SWITCH_ATTR_SRC_MAC_ADDRESS } },
 
@@ -204,7 +227,7 @@ extern "C" t_std_error ndi_switch_set_attribute(npu_id_t npu, BASE_SWITCH_SWITCH
         const nas_ndi_switch_param_t *param) {
     auto it = _attr_to_op.find(attr);
     if (it==_attr_to_op.end()) {
-        NDI_LOG_ERROR(ev_log_s_MAJOR, "NDI-SAI", "Invalid operation type for NDI (%d)",attr);
+        NDI_LOG_ERROR("NDI-SAI", "Invalid operation type for NDI (%d)",attr);
         return STD_ERR(NPU,FAIL,0);
     }
     sai_attribute_t sai_attr;
@@ -233,7 +256,7 @@ extern "C" t_std_error ndi_switch_set_attribute(npu_id_t npu, BASE_SWITCH_SWITCH
     }
     if (it->second.to_sai_type!=NULL) {
         if (!(it->second.to_sai_type)(&sai_attr)) {
-            NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-SAI", "Values are invalid - can't be converted to SAI types (func:%d)",attr);
+            NDI_LOG_TRACE("NDI-SAI", "Values are invalid - can't be converted to SAI types (func:%d)",attr);
             return STD_ERR(NPU,PARAM,0);
         }
     }
@@ -256,7 +279,7 @@ extern "C" t_std_error ndi_switch_get_attribute(npu_id_t npu, BASE_SWITCH_SWITCH
         nas_ndi_switch_param_t *param) {
     auto it = _attr_to_op.find(attr);
     if (it==_attr_to_op.end()) {
-        NDI_LOG_ERROR(ev_log_s_MAJOR, "NDI-SAI", "Invalid operation type for NDI (%d)",attr);
+        NDI_LOG_ERROR("NDI-SAI", "Invalid operation type for NDI (%d)",attr);
         return STD_ERR(NPU,FAIL,0);
     }
     sai_attribute_t sai_attr;
@@ -276,7 +299,7 @@ extern "C" t_std_error ndi_switch_get_attribute(npu_id_t npu, BASE_SWITCH_SWITCH
     if(rc!=STD_ERR_OK) return rc;
     if (it->second.from_sai_type!=NULL) {
         if (!(it->second.from_sai_type)(&sai_attr)) {
-            NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-SAI", "Values are invalid - can't be converted from SAI types (func:%d)",attr);
+            NDI_LOG_TRACE("NDI-SAI", "Values are invalid - can't be converted from SAI types (func:%d)",attr);
             return STD_ERR(NPU,PARAM,0);
         }
     }
@@ -309,7 +332,7 @@ extern "C" t_std_error ndi_switch_mac_age_time_set(npu_id_t npu_id, uint32_t tim
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
-        NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-MAC", "Invalid npu id %d to set mac age timeout value",
+        NDI_LOG_TRACE("NDI-MAC", "Invalid npu id %d to set mac age timeout value",
                       npu_id);
         return STD_ERR(NPU, PARAM, 0);
     }
@@ -319,10 +342,8 @@ extern "C" t_std_error ndi_switch_mac_age_time_set(npu_id_t npu_id, uint32_t tim
     sai_attr.id = SAI_SWITCH_ATTR_FDB_AGING_TIME;
     sai_attr.value.u32 = (sai_uint32_t)timeout_value;
 
-    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->set_switch_attribute(&sai_attr))
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->set_switch_attribute(ndi_switch_id_get(),&sai_attr))
             != SAI_STATUS_SUCCESS) {
-        NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-MAC", "Error from SAI %d to set mac age timeout value %d",
-                      sai_ret, timeout_value);
          return STD_ERR(MAC, CFG, sai_ret);
     }
 
@@ -337,7 +358,7 @@ extern "C" t_std_error ndi_switch_mac_age_time_get(npu_id_t npu_id, uint32_t *ti
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
-        NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-MAC", "Invalid npu id %d to get mac age timeout value",
+        NDI_LOG_TRACE("NDI-MAC", "Invalid npu id %d to get mac age timeout value",
                       npu_id);
         return STD_ERR(NPU, PARAM, 0);
     }
@@ -346,9 +367,9 @@ extern "C" t_std_error ndi_switch_mac_age_time_get(npu_id_t npu_id, uint32_t *ti
 
     sai_attr.id = SAI_SWITCH_ATTR_FDB_AGING_TIME;
 
-    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(attr_count, &sai_attr))
-            != SAI_STATUS_SUCCESS) {
-        NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-MAC", "Error from  SAI %d to get mac age timeout value",
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(ndi_switch_id_get(),
+                attr_count, &sai_attr)) != SAI_STATUS_SUCCESS) {
+        NDI_LOG_TRACE("NDI-MAC", "Error from  SAI %d to get mac age timeout value",
                       sai_ret);
          return STD_ERR(MAC, CFG, sai_ret);
     }
@@ -366,7 +387,7 @@ extern "C" t_std_error ndi_switch_set_sai_log_level(BASE_SWITCH_SUBSYSTEM_t api_
     if(api_id == BASE_SWITCH_SUBSYSTEM_ALL){
         for(size_t ix = 0 ; ix < BASE_SWITCH_SUBSYSTEM_ALL ; ++ix){
             if ((sai_ret = sai_log_set((sai_api_t)ix,(sai_log_level_t)level))!= SAI_STATUS_SUCCESS){
-                NDI_LOG_TRACE(0, "NDI-DIAG", "Error from  SAI %d to set log level %d"
+                NDI_LOG_TRACE("NDI-DIAG", "Error from  SAI %d to set log level %d"
                               "for sai_module %d",sai_ret,level,api_id);
                 return STD_ERR(DIAG, PARAM, sai_ret);
             }
@@ -374,7 +395,7 @@ extern "C" t_std_error ndi_switch_set_sai_log_level(BASE_SWITCH_SUBSYSTEM_t api_
     }
     else{
         if ((sai_ret = sai_log_set((sai_api_t)api_id,(sai_log_level_t)level))!= SAI_STATUS_SUCCESS){
-            NDI_LOG_TRACE(0, "NDI-DIAG", "Error from  SAI %d to set log level %d"
+            NDI_LOG_TRACE("NDI-DIAG", "Error from  SAI %d to set log level %d"
                           "for sai_module %d",sai_ret,level,api_id);
             return STD_ERR(DIAG, PARAM, sai_ret);
         }
@@ -392,7 +413,7 @@ extern "C" t_std_error ndi_switch_get_queue_numbers(npu_id_t npu_id,
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
-        NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-MAC", "Invalid npu id %d to get queue value",
+        NDI_LOG_TRACE("NDI-MAC", "Invalid npu id %d to get queue value",
                       npu_id);
         return STD_ERR(NPU, PARAM, 0);
     }
@@ -404,9 +425,9 @@ extern "C" t_std_error ndi_switch_get_queue_numbers(npu_id_t npu_id,
     sai_attr[2].id = SAI_SWITCH_ATTR_NUMBER_OF_QUEUES;
     sai_attr[3].id = SAI_SWITCH_ATTR_NUMBER_OF_CPU_QUEUES;
 
-    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(attr_count, sai_attr))
-            != SAI_STATUS_SUCCESS) {
-        NDI_LOG_TRACE(ev_log_s_MAJOR, "NDI-MAC", "Error from  SAI %d to get queue value",
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(ndi_switch_id_get(),
+                attr_count, sai_attr)) != SAI_STATUS_SUCCESS) {
+        NDI_LOG_TRACE("NDI-MAC", "Error from  SAI %d to get queue value",
                       sai_ret);
          return STD_ERR(NPU, CFG, sai_ret);
     }

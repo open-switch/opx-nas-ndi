@@ -1,3 +1,31 @@
+opx-nas-ndi (3.13.0) unstable; urgency=medium
+
+  * Update: Added SFP plus for EMC and QSFP DD SR4
+  * Update: Added FC statistics counters
+  * Update: NDI code changes as part of FC statistics
+  * Update: Modified default state in get API to BLOCKING since SAI is modified to match OCP definition
+  * Update: Added two EMC media. Note x_HALFM implies x.5 meters
+  * Update: If neighbor state is 0, dont program the entry in the host table rather keep it for route with link local nexthop.
+  * Update: ACL bind point and SAI 1.0 changes for ACL
+  * Update: Update dynamic buffer threshold
+  * Update: The value for sample packet returned by nas is changed to SAI_HOSTIF_USER_DEFINED_TRAP_ID_SAMPLEPACKET. 
+  * Update: Added code to return the trapid for match rule packet
+  * Update: Pushing interface type from NAS to SAI for SFP media types.
+  * Update: Miscellaneous performance improvements and optimizations
+  * Feature: FC support
+  * Feature: Added support for FEC/OUI configuration
+  * Feature: Added infra suport from BASE based on "dell-switch-element.yang" for switch profile and UFT.
+  * Feature: Added support for ecmp
+  * Feature: Added support for max-ecmp-entry-per-grp
+  * Feature: Added support for setting packet tx type from NAS (TX_TYPE_PIPELINE_LOOKUP, TX_TYPE_PIPELINE_BYPASS)
+  * Feature: Added support to set Identification led ON/OFF
+  * Feature: Added support of physical interface create/delete
+  * Feature: Added support for ACL UDF
+  * Bugfix: Miscellaneous bug fixes
+  * Cleanup: Miscellaneous cleanup
+ 
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Tue, 20 Jun 2017 14:44:33 -0800
+
 opx-nas-ndi (1.0.2) unstable; urgency=medium
 
   [ Satish Mynam ]

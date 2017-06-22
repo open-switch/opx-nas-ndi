@@ -62,13 +62,17 @@ t_std_error ndi_qos_set_priority_group_buffer_profile_id(ndi_port_t ndi_port_id,
     sai_attr.id = SAI_INGRESS_PRIORITY_GROUP_ATTR_BUFFER_PROFILE;
     sai_attr.value.oid = ndi2sai_buffer_profile_id(buffer_profile_id);
 
-    if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
+    sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
             set_ingress_priority_group_attr(
                     ndi2sai_priority_group_id(ndi_priority_group_id),
-                    &sai_attr))
-                         != SAI_STATUS_SUCCESS) {
+                    &sai_attr);
+
+    if (sai_ret != SAI_STATUS_SUCCESS && sai_ret != SAI_STATUS_ITEM_ALREADY_EXISTS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                      "npu_id %d priority_group profile set failed\n", ndi_port_id.npu_id);
+                   "npu_id %d,  ndi_priority_group_id 0x%016lx, buffer profile 0x%016lx, "
+                   "sai_buf_profile_id 0x%016lx set failed, rc= %d\n",
+                   ndi_port_id.npu_id, ndi_priority_group_id,
+                   buffer_profile_id, sai_attr.value.oid, sai_ret);
         return STD_ERR(QOS, CFG, sai_ret);
     }
 
@@ -167,7 +171,7 @@ uint_t ndi_qos_get_priority_group_id_list(ndi_port_t ndi_port_id,
     sai_attribute_t sai_attr;
     std::vector<sai_object_id_t> sai_priority_group_id_list(count);
 
-    sai_attr.id = SAI_PORT_ATTR_PRIORITY_GROUP_LIST;
+    sai_attr.id = SAI_PORT_ATTR_INGRESS_PRIORITY_GROUP_LIST;
     sai_attr.value.objlist.count = count;
     sai_attr.value.objlist.list = &sai_priority_group_id_list[0];
 
@@ -323,8 +327,7 @@ t_std_error ndi_qos_clear_priority_group_stats(ndi_port_t ndi_port_id,
     }
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
                         clear_ingress_priority_group_stats(ndi2sai_priority_group_id(ndi_priority_group_id),
-                                &counter_id_list[0],
-                                number_of_counters))
+                                number_of_counters, &counter_id_list[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "priority_group clear stats fails: npu_id %u\n",

@@ -33,139 +33,245 @@
 #include <unordered_map>
 
 
-/**
- * This function set queue attribute
- * @param ndi_port_id
- * @param ndi_queue_id
- * @param wred_id
- * @return standard error
- */
-t_std_error ndi_qos_set_queue_wred_id(ndi_port_t ndi_port_id,
-                                    ndi_obj_id_t ndi_queue_id,
-                                    ndi_obj_id_t wred_id)
+static t_std_error ndi_qos_fill_queue_attr(nas_attr_id_t attr_id,
+                        const ndi_qos_queue_struct_t *p,
+                        sai_attribute_t &sai_attr)
 {
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
-    if (ndi_db_ptr == NULL) {
-        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                      "npu_id %d not exist\n", ndi_port_id.npu_id);
-        return STD_ERR(QOS, CFG, 0);
+    // Only the following attributes are settable
+    if (attr_id == BASE_QOS_QUEUE_PORT_ID) {
+        sai_attr.id = SAI_QUEUE_ATTR_PORT;
+        sai_object_id_t sai_port;
+        if (ndi_sai_port_id_get(p->ndi_port.npu_id, p->ndi_port.npu_port, &sai_port) != STD_ERR_OK) {
+            return STD_ERR(NPU, PARAM, 0);
+        }
+        sai_attr.value.oid = sai_port;
     }
-
-    sai_attribute_t attr = {0};
-    attr.id = SAI_QUEUE_ATTR_WRED_PROFILE_ID;
-    attr.value.oid = ndi2sai_wred_profile_id(wred_id);
-
-    if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
-                        set_queue_attribute(ndi2sai_queue_id(ndi_queue_id), &attr))
-                         != SAI_STATUS_SUCCESS) {
-        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                "queue set fails: npu_id %u\n",
-                ndi_port_id.npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+    else if (attr_id == BASE_QOS_QUEUE_TYPE) {
+        sai_attr.id = SAI_QUEUE_ATTR_TYPE;
+        sai_attr.value.s32 = (p->type == BASE_QOS_QUEUE_TYPE_UCAST? SAI_QUEUE_TYPE_UNICAST:
+                                (p->type == BASE_QOS_QUEUE_TYPE_MULTICAST? SAI_QUEUE_TYPE_MULTICAST:
+                                        SAI_QUEUE_TYPE_ALL));
+    }
+    else if (attr_id == BASE_QOS_QUEUE_QUEUE_NUMBER) {
+        sai_attr.id = SAI_QUEUE_ATTR_INDEX;
+        sai_attr.value.u8 = p->queue_index;
+    }
+    else if (attr_id == BASE_QOS_QUEUE_SCHEDULER_PROFILE_ID) {
+        sai_attr.id = SAI_QUEUE_ATTR_SCHEDULER_PROFILE_ID;
+        sai_attr.value.oid = ndi2sai_scheduler_profile_id(p->scheduler_profile);
+    }
+    else if (attr_id == BASE_QOS_QUEUE_WRED_ID) {
+        sai_attr.id = SAI_QUEUE_ATTR_WRED_PROFILE_ID;
+        sai_attr.value.oid = ndi2sai_wred_profile_id(p->wred_id);
+    }
+    else if (attr_id == BASE_QOS_QUEUE_BUFFER_PROFILE_ID) {
+        sai_attr.id = SAI_QUEUE_ATTR_BUFFER_PROFILE_ID;
+        sai_attr.value.oid = ndi2sai_buffer_profile_id(p->buffer_profile);
+    }
+    else if (attr_id == BASE_QOS_QUEUE_PARENT) {
+        sai_attr.id = SAI_QUEUE_ATTR_PARENT_SCHEDULER_NODE;
+        sai_attr.value.oid = ndi2sai_scheduler_group_id(p->parent);
+    }
+    else {
+        // unsupported set/create attributes
+        return STD_ERR(NPU, PARAM, 0);
     }
 
     return STD_ERR_OK;
 }
 
-/**
- * This function set queue attribute
- * @param ndi_port_id
- * @param ndi_queue_id
- * @param buffer_profile_id
- * @return standard error
- */
-t_std_error ndi_qos_set_queue_buffer_profile_id(ndi_port_t ndi_port_id,
-                                    ndi_obj_id_t ndi_queue_id,
-                                    ndi_obj_id_t buffer_profile_id)
+
+static t_std_error ndi_qos_fill_queue_attr_list(const nas_attr_id_t *nas_attr_list,
+                                    uint_t num_attr,
+                                    const ndi_qos_queue_struct_t *p,
+                                    std::vector<sai_attribute_t> &attr_list)
 {
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
-    if (ndi_db_ptr == NULL) {
-        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                      "npu_id %d not exist\n", ndi_port_id.npu_id);
-        return STD_ERR(QOS, CFG, 0);
-    }
+    sai_attribute_t sai_attr = {0};
+    t_std_error     rc = STD_ERR_OK;
 
-    sai_attribute_t attr = {0};
-    attr.id = SAI_QUEUE_ATTR_BUFFER_PROFILE_ID;
-    attr.value.oid = ndi2sai_buffer_profile_id(buffer_profile_id);
+    for (uint_t i = 0; i < num_attr; i++) {
+        if ((rc = ndi_qos_fill_queue_attr(nas_attr_list[i], p, sai_attr)) != STD_ERR_OK)
+            return rc;
 
-    if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
-                        set_queue_attribute(ndi2sai_queue_id(ndi_queue_id), &attr))
-                         != SAI_STATUS_SUCCESS) {
-        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                "queue set fails: npu_id %u\n",
-                ndi_port_id.npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        attr_list.push_back(sai_attr);
     }
 
     return STD_ERR_OK;
 }
 
+
 /**
- * This function set queue attribute
- * @param ndi_port_id
- * @param ndi_queue_id
- * @param scheudler_profile_id
+ * This function creates a Scheduler group ID in the NPU.
+ * @param npu id
+ * @param nas_attr_list based on the CPS API attribute enumeration values
+ * @param num_attr number of attributes in attr_list array
+ * @param p scheduler group structure to be modified
+ * @param[out] ndi_queue_id
  * @return standard error
  */
-t_std_error ndi_qos_set_queue_scheduler_profile_id(ndi_port_t ndi_port_id,
-                                    ndi_obj_id_t ndi_queue_id,
-                                    ndi_obj_id_t scheduler_profile_id)
+t_std_error ndi_qos_create_queue(npu_id_t npu_id,
+                                const nas_attr_id_t *nas_attr_list,
+                                uint_t num_attr,
+                                const ndi_qos_queue_struct_t *p,
+                                ndi_obj_id_t *ndi_queue_id)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
         EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                      "npu_id %d not exist\n", ndi_port_id.npu_id);
+                      "npu_id %d not exist\n", npu_id);
         return STD_ERR(QOS, CFG, 0);
     }
 
-    sai_attribute_t attr = {0};
-    attr.id = SAI_QUEUE_ATTR_SCHEDULER_PROFILE_ID;
-    attr.value.oid = ndi2sai_scheduler_profile_id(scheduler_profile_id);
+    std::vector<sai_attribute_t>  attr_list;
 
+    if (ndi_qos_fill_queue_attr_list(nas_attr_list, num_attr, p,
+                                attr_list) != STD_ERR_OK)
+        return STD_ERR(QOS, CFG, 0);
+
+    sai_object_id_t sai_qos_queue_id;
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
-                        set_queue_attribute(ndi2sai_queue_id(ndi_queue_id), &attr))
+            create_queue(&sai_qos_queue_id,
+                                ndi_switch_id_get(),
+                                num_attr,
+                                &attr_list[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                "queue set fails: npu_id %u\n",
-                ndi_port_id.npu_id);
+                      "npu_id %d queue creation failed\n", npu_id);
+        return STD_ERR(QOS, CFG, sai_ret);
+    }
+    *ndi_queue_id = sai2ndi_queue_id(sai_qos_queue_id);
+    return STD_ERR_OK;
+
+}
+
+ /**
+  * This function sets the queue attributes in the NPU.
+  * @param npu id
+  * @param ndi_queue_id
+  * @param attr_id based on the CPS API attribute enumeration values
+  * @param p queue structure to be modified
+  * @return standard error
+  */
+t_std_error ndi_qos_set_queue_attr(npu_id_t npu_id,
+                                    ndi_obj_id_t ndi_queue_id,
+                                    BASE_QOS_QUEUE_t attr_id,
+                                    const ndi_qos_queue_struct_t *p)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "npu_id %d not exist\n", npu_id);
+        return STD_ERR(QOS, CFG, 0);
+    }
+
+    sai_attribute_t sai_attr;
+    if (ndi_qos_fill_queue_attr(attr_id, p, sai_attr) != STD_ERR_OK)
+        return STD_ERR(QOS, CFG, 0);
+
+    sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
+            set_queue_attribute(
+                    ndi2sai_queue_id(ndi_queue_id),
+                    &sai_attr);
+
+    if (sai_ret != SAI_STATUS_SUCCESS && sai_ret != SAI_STATUS_ITEM_ALREADY_EXISTS) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                      "npu_id %d queue set failed\n", npu_id);
+        return STD_ERR(QOS, CFG, sai_ret);
+    }
+    return STD_ERR_OK;
+
+}
+
+/**
+ * This function deletes a queue in the NPU.
+ * @param npu_id npu id
+ * @param ndi_queue_id
+ * @return standard error
+ */
+t_std_error ndi_qos_delete_queue(npu_id_t npu_id,
+                                    ndi_obj_id_t ndi_queue_id)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "npu_id %d not exist\n", npu_id);
+        return STD_ERR(QOS, CFG, 0);
+    }
+
+    if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
+            remove_queue(ndi2sai_queue_id(ndi_queue_id)))
+                         != SAI_STATUS_SUCCESS) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                      "npu_id %d queue deletion failed\n", npu_id);
         return STD_ERR(QOS, CFG, sai_ret);
     }
 
     return STD_ERR_OK;
+
 }
 
+
+const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
+    ndi2sai_queue_attr_id_map = {
+        {BASE_QOS_QUEUE_TYPE,                 SAI_QUEUE_ATTR_TYPE},
+        {BASE_QOS_QUEUE_QUEUE_NUMBER,         SAI_QUEUE_ATTR_INDEX},
+        {BASE_QOS_QUEUE_PORT_ID,              SAI_QUEUE_ATTR_PORT},
+        {BASE_QOS_QUEUE_BUFFER_PROFILE_ID,    SAI_QUEUE_ATTR_BUFFER_PROFILE_ID},
+        {BASE_QOS_QUEUE_SCHEDULER_PROFILE_ID, SAI_QUEUE_ATTR_SCHEDULER_PROFILE_ID},
+        {BASE_QOS_QUEUE_WRED_ID,              SAI_QUEUE_ATTR_WRED_PROFILE_ID},
+        {BASE_QOS_QUEUE_PARENT,               SAI_QUEUE_ATTR_PARENT_SCHEDULER_NODE},
+
+};
+
 /**
- * This function gets all attributes of a queue
- * @param ndi_port_id
+ * This function get a queue from the NPU.
+ * @param npu id
  * @param ndi_queue_id
- * @param[out] info queue attributes info
- * return standard error
+ * @param nas_attr_list based on the CPS API attribute enumeration values
+ * @param num_attr number of attributes in attr_list array
+ * @param[out] ndi_qos_queue_struct_t filled if success
+ * @return standard error
  */
-t_std_error ndi_qos_get_queue_attribute(ndi_port_t ndi_port_id,
-        ndi_obj_id_t ndi_queue_id,
-        ndi_qos_queue_attribute_t * info)
+t_std_error ndi_qos_get_queue(npu_id_t npu_id,
+                            ndi_obj_id_t ndi_queue_id,
+                            const nas_attr_id_t *nas_attr_list,
+                            uint_t num_attr,
+                            ndi_qos_queue_struct_t *info)
+
 {
     //set all the flags and call sai
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
+    std::vector<sai_attribute_t> attr_list;
+    sai_attribute_t sai_attr;
+    t_std_error rc;
+
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
         EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                      "npu_id %d not exist\n", ndi_port_id.npu_id);
+                      "npu_id %d not exist\n", npu_id);
         return STD_ERR(QOS, CFG, 0);
     }
 
-    std::vector<sai_attribute_t> attr_list;
-    sai_attribute_t attr={0};
-    attr.id = SAI_QUEUE_ATTR_TYPE;
-    attr_list.push_back(attr);
-    attr.id = SAI_QUEUE_ATTR_WRED_PROFILE_ID;
-    attr_list.push_back(attr);
-    attr.id = SAI_QUEUE_ATTR_SCHEDULER_PROFILE_ID;
-    attr_list.push_back(attr);
+    try {
+        for (uint_t i = 0; i < num_attr; i++) {
+            memset(&sai_attr, 0, sizeof(sai_attr));
+            sai_attr.id = ndi2sai_queue_attr_id_map.at(nas_attr_list[i]);
+            attr_list.push_back(sai_attr);
+        }
+    }
+    catch(...) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                    "Unexpected error.\n", npu_id);
+        return STD_ERR(QOS, CFG, 0);
+    }
+
 
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
                         get_queue_attribute(ndi2sai_queue_id(ndi_queue_id),
@@ -174,17 +280,34 @@ t_std_error ndi_qos_get_queue_attribute(ndi_port_t ndi_port_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "queue get fails: npu_id %u, ndi_queue_id 0x%016lx\n",
-                ndi_port_id.npu_id, ndi_queue_id);
+                npu_id, ndi_queue_id);
         return STD_ERR(QOS, CFG, sai_ret);
     }
 
     for (auto attr: attr_list) {
+        if (attr.id == SAI_QUEUE_ATTR_PORT) {
+            rc = ndi_npu_port_id_get(attr.value.oid,
+                                     &info->ndi_port.npu_id,
+                                     &info->ndi_port.npu_port);
+            if (rc != STD_ERR_OK) {
+                EV_LOG_TRACE(ev_log_t_QOS, ev_log_s_MAJOR, "QOS",
+                             "Invalid port_id attribute");
+                return rc;
+            }
+        }
+
         if (attr.id == SAI_QUEUE_ATTR_TYPE) {
-            info->type = (attr.value.u32 == SAI_QUEUE_TYPE_UNICAST?
+            info->type = (attr.value.s32 == SAI_QUEUE_TYPE_UNICAST?
                             BASE_QOS_QUEUE_TYPE_UCAST:
-                            (attr.value.u32 == SAI_QUEUE_TYPE_MULTICAST?
+                            (attr.value.s32 == SAI_QUEUE_TYPE_MULTICAST?
                              BASE_QOS_QUEUE_TYPE_MULTICAST: BASE_QOS_QUEUE_TYPE_NONE));
         }
+
+        if (attr.id == SAI_QUEUE_ATTR_INDEX)
+            info->queue_index = attr.value.u8;
+
+        if (attr.id == SAI_QUEUE_ATTR_PARENT_SCHEDULER_NODE)
+            info->parent = sai2ndi_scheduler_group_id(attr.value.oid);
 
         if (attr.id == SAI_QUEUE_ATTR_WRED_PROFILE_ID)
             info->wred_id = sai2ndi_wred_profile_id(attr.value.oid);

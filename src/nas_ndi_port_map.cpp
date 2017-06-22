@@ -189,8 +189,8 @@ static t_std_error ndi_max_sai_port_get(npu_id_t npu_id, size_t *max_port)
     }
 
     sai_attr.id = SAI_SWITCH_ATTR_PORT_NUMBER;
-    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(1, &sai_attr))
-                         != SAI_STATUS_SUCCESS) {
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(ndi_switch_id_get(),
+                    1, &sai_attr)) != SAI_STATUS_SUCCESS) {
         return STD_ERR(NPU, CFG, sai_ret);
     }
 
@@ -214,8 +214,8 @@ static t_std_error ndi_sai_port_list_get(npu_id_t npu_id, size_t *max_npu_port, 
     sai_attr.id = SAI_SWITCH_ATTR_PORT_LIST;
     sai_attr.value.objlist.count = (uint32_t) *max_npu_port;
     sai_attr.value.objlist.list = sai_port_list;
-    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(1, &sai_attr))
-                         != SAI_STATUS_SUCCESS) {
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(ndi_switch_id_get(),
+                    1, &sai_attr)) != SAI_STATUS_SUCCESS) {
         NDI_PORT_LOG_ERROR("SAI SWITCH API Failure API ID %d, Error %d ",  sai_attr.id, sai_ret);
         return (STD_ERR(NPU, CFG, sai_ret));
     }
@@ -284,19 +284,27 @@ static t_std_error ndi_port_map_tbl_allocate(void) {
 }
 
 /*  Add sai port in to the port map table */
-t_std_error ndi_port_map_sai_port_add(npu_id_t npu, sai_object_id_t sai_port, npu_port_t *npu_port)
+t_std_error ndi_port_map_sai_port_add(npu_id_t npu, sai_object_id_t sai_port,
+                                      uint32_t *hw_ports, size_t count,
+                                      npu_port_t *npu_port)
 {
-    uint32_t hwport_list[NDI_MAX_HWPORT_PER_PORT];
+    uint32_t hwport_list[NDI_MAX_HWPORT_PER_PORT] = {0};
     uint32_t hwport_count = NDI_MAX_HWPORT_PER_PORT;
-    t_std_error rc = STD_ERR_OK;
     uint32_t first_hwport = 0;
     ndi_saiport_map_t sai_entry;
 
-    if ((rc = ndi_sai_port_hwport_list_get(npu, sai_port, hwport_list, &hwport_count)) != STD_ERR_OK) {
-        return(rc);
+    if (hw_ports == nullptr || count == 0) {
+        t_std_error rc = ndi_sai_port_hwport_list_get(npu, sai_port,
+                                                      hwport_list, &hwport_count);
+        if (rc != STD_ERR_OK) {
+            return rc;
+        }
+        hw_ports = hwport_list;
+        count = hwport_count;
     }
+
     /*  use first HW port as index in the port map table */
-    first_hwport = hwport_list[0];
+    first_hwport = hw_ports[0];
 
     std_rw_lock_write_guard l(&ndi_port_map_rwlock);
 
@@ -315,9 +323,9 @@ t_std_error ndi_port_map_sai_port_add(npu_id_t npu, sai_object_id_t sai_port, np
 
     /*  add the entry  */
     g_ndi_port_map_tbl[npu][first_hwport].sai_port = sai_port;
-    g_ndi_port_map_tbl[npu][first_hwport].hwport_count = hwport_count;
+    g_ndi_port_map_tbl[npu][first_hwport].hwport_count = count;
     g_ndi_port_map_tbl[npu][first_hwport].flags |= NDI_PORT_MAP_ACTIVE_MASK;
-    g_ndi_port_map_tbl[npu][first_hwport].hwport_list.resize(hwport_count);
+    g_ndi_port_map_tbl[npu][first_hwport].hwport_list.resize(count);
 
     for (uint32_t idx =0; idx < hwport_count; idx++) {
         g_ndi_port_map_tbl[npu][first_hwport].hwport_list[idx] = hwport_list[idx];
@@ -364,7 +372,8 @@ t_std_error ndi_sai_cpu_port_add(npu_id_t npu_id)
 
     /*  Fetch SAI CPU port Id  */
     sai_attr.id  = SAI_SWITCH_ATTR_CPU_PORT;
-    if ((sai_ret = sai_switch_api_tbl->get_switch_attribute(1, &sai_attr)) != SAI_STATUS_SUCCESS) {
+    if ((sai_ret = sai_switch_api_tbl->get_switch_attribute(ndi_switch_id_get(),
+                                        1, &sai_attr)) != SAI_STATUS_SUCCESS) {
         NDI_INIT_LOG_ERROR(" SAI CPU PORT Attribute get API failed for NPU %d\n", npu_id);
         ret_code = STD_ERR(NPU, CFG, sai_ret);
         return(ret_code);
@@ -482,7 +491,8 @@ static t_std_error ndi_per_npu_sai_port_map_update(npu_id_t npu_id)
         for (p_idx = 0; p_idx < port_count; p_idx++) {
             /*  Now add the sai port and hw port in the port map */
 
-            if ((rc = ndi_port_map_sai_port_add(npu_id, sai_port_list[p_idx], &npu_port) != STD_ERR_OK)) {
+            if ((rc = ndi_port_map_sai_port_add(npu_id, sai_port_list[p_idx],
+                                                nullptr, 0, &npu_port) != STD_ERR_OK)) {
                 NDI_PORT_LOG_ERROR("unable to add sai port index %d into the port map table for npu %d ",
                                     p_idx, npu_id);
                 break; /*  from the for loop */
@@ -546,7 +556,8 @@ t_std_error ndi_sai_port_id_get(npu_id_t npu_id, npu_port_t ndi_port, sai_object
     return(STD_ERR_OK);
 }
 
-t_std_error ndi_hwport_list_get(npu_id_t npu, npu_port_t ndi_port, uint32_t *hwport)
+t_std_error ndi_hwport_list_get_list(npu_id_t npu, npu_port_t ndi_port,
+                                     uint32_t *hwport, size_t *count)
 {
 
     if (ndi_port_is_valid(npu, ndi_port) == false) {
@@ -554,16 +565,34 @@ t_std_error ndi_hwport_list_get(npu_id_t npu, npu_port_t ndi_port, uint32_t *hwp
         return(STD_ERR(NPU,PARAM,0));
     }
     std_rw_lock_read_guard l(&ndi_port_map_rwlock);
-    *hwport = g_ndi_port_map_tbl[npu][ndi_port].hwport_list[0];
+    size_t hwport_count = g_ndi_port_map_tbl[npu][ndi_port].hwport_count;
+    if (hwport == nullptr) {
+        *count = hwport_count;
+        return STD_ERR_OK;
+    }
+    if (hwport_count > *count) {
+        hwport_count = *count;
+    } else {
+        *count = hwport_count;
+    }
+    for (size_t idx = 0; idx < hwport_count; idx ++) {
+        hwport[idx] = g_ndi_port_map_tbl[npu][ndi_port].hwport_list[idx];
+    }
 
     return(STD_ERR_OK);
 }
 
+t_std_error ndi_hwport_list_get(npu_id_t npu, npu_port_t ndi_port, uint32_t *hwport)
+{
+    size_t port_count = 1;
+    return ndi_hwport_list_get_list(npu, ndi_port, hwport, &port_count);
+}
+
 BASE_IF_PHY_BREAKOUT_MODE_t sai_break_to_ndi_break( int32_t sai_mode) {
     static const std::unordered_map<int32_t, BASE_IF_PHY_BREAKOUT_MODE_t> _m = {
-            { SAI_PORT_BREAKOUT_MODE_1_LANE, BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_1X1 },
-            { SAI_PORT_BREAKOUT_MODE_2_LANE, BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_2X1 },
-            { SAI_PORT_BREAKOUT_MODE_4_LANE, BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_4X1 }
+            { SAI_PORT_BREAKOUT_MODE_TYPE_1_LANE, BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_1X1 },
+            { SAI_PORT_BREAKOUT_MODE_TYPE_2_LANE, BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_2X1 },
+            { SAI_PORT_BREAKOUT_MODE_TYPE_4_LANE, BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_4X1 }
     };
     auto it = _m.find(sai_mode);
     if (it!=_m.end()) return it->second;
@@ -572,67 +601,20 @@ BASE_IF_PHY_BREAKOUT_MODE_t sai_break_to_ndi_break( int32_t sai_mode) {
 
 sai_port_breakout_mode_type_t sai_break_from_ndi_break( BASE_IF_PHY_BREAKOUT_MODE_t mode) {
     static const std::unordered_map<uint32_t,sai_port_breakout_mode_type_t> _m = {
-            { BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_1X1, SAI_PORT_BREAKOUT_MODE_1_LANE },
-            { BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_2X1, SAI_PORT_BREAKOUT_MODE_2_LANE },
-            { BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_4X1, SAI_PORT_BREAKOUT_MODE_4_LANE }
+            { BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_1X1, SAI_PORT_BREAKOUT_MODE_TYPE_1_LANE },
+            { BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_2X1, SAI_PORT_BREAKOUT_MODE_TYPE_2_LANE },
+            { BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_4X1, SAI_PORT_BREAKOUT_MODE_TYPE_4_LANE }
     };
     auto it = _m.find(mode);
     if (it!=_m.end()) return it->second;
-    return SAI_PORT_BREAKOUT_MODE_1_LANE;
+    return SAI_PORT_BREAKOUT_MODE_TYPE_1_LANE;
 }
-
 
 /*  public function for setting breakout mode for a ndi_port */
 t_std_error ndi_port_breakout_mode_set(npu_id_t npu_id, npu_port_t ndi_port,
         BASE_IF_PHY_BREAKOUT_MODE_t mode, npu_port_t *effected_ports, size_t len)
 {
-    t_std_error rc = STD_ERR_OK;
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    sai_attribute_t sai_attr_set;
-    memset(&sai_attr_set, 0, sizeof(sai_attribute_t));
-
-    if (mode != BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_1X1 &&
-            mode!=BASE_IF_PHY_BREAKOUT_MODE_BREAKOUT_4X1) {
-        return STD_ERR(NPU, PARAM, 0);
-    }
-
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    if (ndi_db_ptr == NULL) {
-        return STD_ERR(NPU, PARAM, 0);
-    }
-
-    sai_object_id_t sai_port;
-    /*  Get the sai port  */
-    if ((rc = ndi_sai_port_id_get(npu_id, ndi_port,&sai_port)) != STD_ERR_OK) {
-        EV_LOG(ERR,NDI,0,"NDI-BREAKOUT","Invaid port breakout - master port %d:%d",npu_id,ndi_port);
-        return(rc);
-    }
-
-    sai_object_id_t sai_effected_port[len];
-    size_t ix = 0;
-    for ( ; ix < len ; ++ix ) {
-        if ((rc = ndi_sai_port_id_get(npu_id, effected_ports[ix],&sai_effected_port[ix])) != STD_ERR_OK) {
-            EV_LOG(ERR,NDI,0,"NDI-BREAKOUT","Invaid port breakout - slave port %d:%d",npu_id,effected_ports[ix]);
-            return(rc);
-        }
-    }
-
-    sai_port_breakout_mode_type_t sai_mode = sai_break_from_ndi_break(mode);
-
-    /*  TODO first check if the break out mode is same  */
-    sai_attr_set.id = SAI_SWITCH_ATTR_PORT_BREAKOUT ;
-    sai_attr_set.value.portbreakout.breakout_mode =  sai_mode;
-    sai_attr_set.value.portbreakout.port_list.count = len ;
-    sai_attr_set.value.portbreakout.port_list.list =  sai_effected_port;
-
-    /*  call sai api for setting switch attribute */
-    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->set_switch_attribute(&sai_attr_set))
-                         != SAI_STATUS_SUCCESS) {
-        rc =  STD_ERR(NPU, CFG, sai_ret);
-    }
-
-    return(rc);
-
+    return SAI_STATUS_SUCCESS;
 }
 
 /*  public funtion for registering port event callback  */

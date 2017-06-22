@@ -39,6 +39,8 @@ sai_port_internal_loopback_mode_t ndi_port_get_sai_loopback_mode(BASE_CMN_LOOPBA
 BASE_CMN_LOOPBACK_TYPE_t ndi_port_get_ndi_loopback_mode(sai_port_internal_loopback_mode_t lpbk_mode);
 bool ndi_port_get_sai_speed(BASE_IF_SPEED_t speed, uint32_t *sai_speed);
 bool ndi_port_get_ndi_speed(uint32_t sai_speed, BASE_IF_SPEED_t *ndi_speed);
+sai_port_fec_mode_t ndi_port_get_sai_fec_mode(BASE_CMN_FEC_TYPE_t ndi_fec_mode);
+BASE_CMN_FEC_TYPE_t ndi_port_get_fec_mode(sai_port_fec_mode_t sai_fec_mode, bool supp_100g);
 
 #ifdef __cplusplus
 }

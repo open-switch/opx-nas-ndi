@@ -55,9 +55,9 @@ static  std::unordered_map<BASE_QOS_PORT_INGRESS_t, sai_port_attr_t, std::hash<i
     {BASE_QOS_PORT_INGRESS_FLOOD_STORM_CONTROL,     SAI_PORT_ATTR_FLOOD_STORM_CONTROL_POLICER_ID},
     {BASE_QOS_PORT_INGRESS_BROADCAST_STORM_CONTROL, SAI_PORT_ATTR_BROADCAST_STORM_CONTROL_POLICER_ID},
     {BASE_QOS_PORT_INGRESS_MULTICAST_STORM_CONTROL, SAI_PORT_ATTR_MULTICAST_STORM_CONTROL_POLICER_ID},
-    {BASE_QOS_PORT_INGRESS_FLOW_CONTROL,            SAI_PORT_ATTR_GLOBAL_FLOW_CONTROL},
-    {BASE_QOS_PORT_INGRESS_PRIORITY_GROUP_NUMBER,   SAI_PORT_ATTR_NUMBER_OF_PRIORITY_GROUPS},
-    {BASE_QOS_PORT_INGRESS_PRIORITY_GROUP_ID_LIST,  SAI_PORT_ATTR_PRIORITY_GROUP_LIST},
+    {BASE_QOS_PORT_INGRESS_FLOW_CONTROL,            SAI_PORT_ATTR_GLOBAL_FLOW_CONTROL_MODE},
+    {BASE_QOS_PORT_INGRESS_PRIORITY_GROUP_NUMBER,   SAI_PORT_ATTR_NUMBER_OF_INGRESS_PRIORITY_GROUPS},
+    {BASE_QOS_PORT_INGRESS_PRIORITY_GROUP_ID_LIST,  SAI_PORT_ATTR_INGRESS_PRIORITY_GROUP_LIST},
     {BASE_QOS_PORT_INGRESS_PER_PRIORITY_FLOW_CONTROL, SAI_PORT_ATTR_PRIORITY_FLOW_CONTROL},
     {BASE_QOS_PORT_INGRESS_DEFAULT_TRAFFIC_CLASS,   SAI_PORT_ATTR_QOS_DEFAULT_TC},
     {BASE_QOS_PORT_INGRESS_DOT1P_TO_TC_MAP,         SAI_PORT_ATTR_QOS_DOT1P_TO_TC_MAP},
@@ -68,7 +68,7 @@ static  std::unordered_map<BASE_QOS_PORT_INGRESS_t, sai_port_attr_t, std::hash<i
     {BASE_QOS_PORT_INGRESS_DSCP_TO_TC_COLOR_MAP,    SAI_PORT_ATTR_QOS_DSCP_TO_TC_AND_COLOR_MAP},
     {BASE_QOS_PORT_INGRESS_TC_TO_QUEUE_MAP,         SAI_PORT_ATTR_QOS_TC_TO_QUEUE_MAP},
     {BASE_QOS_PORT_INGRESS_TC_TO_PRIORITY_GROUP_MAP,SAI_PORT_ATTR_QOS_TC_TO_PRIORITY_GROUP_MAP},
-    {BASE_QOS_PORT_INGRESS_PRIORITY_GROUP_TO_PFC_PRIORITY_MAP, SAI_PORT_ATTR_QOS_PRIORITY_GROUP_TO_PFC_PRIORITY_MAP},
+    {BASE_QOS_PORT_INGRESS_PRIORITY_GROUP_TO_PFC_PRIORITY_MAP, SAI_PORT_ATTR_QOS_PFC_PRIORITY_TO_PRIORITY_GROUP_MAP},
     {BASE_QOS_PORT_INGRESS_BUFFER_PROFILE_ID_LIST,     SAI_PORT_ATTR_QOS_INGRESS_BUFFER_PROFILE_LIST},
     };
 
@@ -185,7 +185,7 @@ t_std_error ndi_qos_set_port_ing_profile_attr(npu_id_t npu_id,
 
     if (attr_id == BASE_QOS_PORT_INGRESS_BUFFER_PROFILE_ID_LIST &&
          p->num_buffer_profile != 0 ) {
-        attr.value.objlist.count = p->num_buffer_profile;
+         attr.value.objlist.count = p->num_buffer_profile;
          attr.value.objlist.list = (sai_object_id_t *)calloc(p->num_buffer_profile, sizeof(sai_object_id_t));
          if (attr.value.objlist.list == NULL) {
              EV_LOGGING(NDI, DEBUG, "NDI-QOS", "Out of memeory\n");
@@ -194,12 +194,13 @@ t_std_error ndi_qos_set_port_ing_profile_attr(npu_id_t npu_id,
      }
 
     _fill_port_qos_ing_attr(attr_id, p, &attr);
-    if ((sai_ret = ndi_sai_qos_port_api(ndi_db_ptr)->
-                        set_port_attribute(sai_port, &attr))
-                         != SAI_STATUS_SUCCESS) {
+    sai_ret = ndi_sai_qos_port_api(ndi_db_ptr)->
+                        set_port_attribute(sai_port, &attr);
+
+    if (sai_ret != SAI_STATUS_SUCCESS && sai_ret != SAI_STATUS_ITEM_ALREADY_EXISTS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                "port ingress qos set fails: npu_id %u, port_id %u, sai attr_id %u\n",
-                npu_id, port_id, attr.id);
+                "port ingress qos set fails: npu_id %u, port_id %u, sai attr_id %u, rc = %d\n",
+                npu_id, port_id, attr.id, sai_ret);
         rc = STD_ERR(QOS, CFG, sai_ret);
     }
 
@@ -216,10 +217,6 @@ t_std_error ndi_qos_set_port_ing_profile_attr(npu_id_t npu_id,
 static t_std_error _fill_ndi_qos_port_ing_struct(sai_attribute_t *attr_list,
                         uint_t num_attr, qos_port_ing_struct_t*p)
 {
-    // clear the input buffer size; to be filled by the actual retrieved size
-    p->num_buffer_profile = 0;
-    p->num_priority_group_id = 0;
-
     for (uint_t i = 0 ; i< num_attr; i++ ) {
         sai_attribute_t *attr = &attr_list[i];
         switch (attr->id) {
@@ -235,7 +232,7 @@ static t_std_error _fill_ndi_qos_port_ing_struct(sai_attribute_t *attr_list,
         case SAI_PORT_ATTR_MULTICAST_STORM_CONTROL_POLICER_ID:
             p->mcast_storm_control = sai2ndi_policer_id(attr->value.oid);
             break;
-        case SAI_PORT_ATTR_GLOBAL_FLOW_CONTROL:
+        case SAI_PORT_ATTR_GLOBAL_FLOW_CONTROL_MODE:
             p->flow_control = sai2ndi_flow_control_map[(sai_port_flow_control_mode_t)(attr->value.s32)];
             break;
         case SAI_PORT_ATTR_QOS_DEFAULT_TC:
@@ -265,13 +262,13 @@ static t_std_error _fill_ndi_qos_port_ing_struct(sai_attribute_t *attr_list,
         case SAI_PORT_ATTR_QOS_TC_TO_PRIORITY_GROUP_MAP:
             p->tc_to_priority_group_map = sai2ndi_qos_map_id(attr->value.oid);
             break;
-        case SAI_PORT_ATTR_QOS_PRIORITY_GROUP_TO_PFC_PRIORITY_MAP:
+        case SAI_PORT_ATTR_QOS_PFC_PRIORITY_TO_PRIORITY_GROUP_MAP:
             p->priority_group_to_pfc_priority_map = sai2ndi_qos_map_id(attr->value.oid);
             break;
-        case SAI_PORT_ATTR_NUMBER_OF_PRIORITY_GROUPS:
+        case SAI_PORT_ATTR_NUMBER_OF_INGRESS_PRIORITY_GROUPS:
             p->priority_group_number = attr->value.u32;
             break;
-        case SAI_PORT_ATTR_PRIORITY_GROUP_LIST:
+        case SAI_PORT_ATTR_INGRESS_PRIORITY_GROUP_LIST:
             p->num_priority_group_id = attr->value.objlist.count;
             for (uint_t j = 0; j < p->num_priority_group_id; j ++) {
                 p->priority_group_id_list[j] = sai2ndi_priority_group_id(attr->value.objlist.list[j]);
@@ -311,9 +308,23 @@ t_std_error ndi_qos_get_port_ing_profile(npu_id_t npu_id,
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     std::vector<sai_attribute_t> attr_list(num_attr);
+    std::vector<sai_object_id_t> priority_group_id_list;
+    std::vector<sai_object_id_t> buffer_profile_id_list;
     for (uint_t i = 0; i< num_attr; i++) {
         try {
             attr_list[i].id = ndi2sai_port_ing_attr_id_map[nas_attr_list[i]];
+
+            if (attr_list[i].id == SAI_PORT_ATTR_INGRESS_PRIORITY_GROUP_LIST) {
+                attr_list[i].value.objlist.count = p->num_priority_group_id;
+                priority_group_id_list.resize(p->num_priority_group_id);
+                attr_list[i].value.objlist.list = priority_group_id_list.data();
+            }
+
+            if (attr_list[i].id == SAI_PORT_ATTR_QOS_INGRESS_BUFFER_PROFILE_LIST) {
+                attr_list[i].value.objlist.count = p->num_buffer_profile;
+                buffer_profile_id_list.resize(p->num_buffer_profile);
+                attr_list[i].value.objlist.list = buffer_profile_id_list.data();
+            }
         }
         catch (...) {
             return STD_ERR(QOS, CFG, 0);
@@ -354,8 +365,6 @@ t_std_error ndi_qos_get_port_ing_profile(npu_id_t npu_id,
 static  std::unordered_map<BASE_QOS_PORT_EGRESS_t, sai_port_attr_t, std::hash<int>>
     ndi2sai_port_egr_attr_id_map = {
         {BASE_QOS_PORT_EGRESS_TC_TO_QUEUE_MAP,      SAI_PORT_ATTR_QOS_TC_TO_QUEUE_MAP},
-        {BASE_QOS_PORT_EGRESS_TC_TO_DOT1P_MAP,      SAI_PORT_ATTR_QOS_TC_TO_DOT1P_MAP},
-        {BASE_QOS_PORT_EGRESS_TC_TO_DSCP_MAP,       SAI_PORT_ATTR_QOS_TC_TO_DSCP_MAP},
         {BASE_QOS_PORT_EGRESS_TC_COLOR_TO_DOT1P_MAP,SAI_PORT_ATTR_QOS_TC_AND_COLOR_TO_DOT1P_MAP},
         {BASE_QOS_PORT_EGRESS_TC_COLOR_TO_DSCP_MAP, SAI_PORT_ATTR_QOS_TC_AND_COLOR_TO_DSCP_MAP},
         {BASE_QOS_PORT_EGRESS_WRED_PROFILE_ID,      SAI_PORT_ATTR_QOS_WRED_PROFILE_ID},
@@ -473,9 +482,10 @@ t_std_error ndi_qos_set_port_egr_profile_attr(npu_id_t npu_id,
     }
 
     _fill_port_qos_egr_attr(attr_id, p, &attr);
-    if ((sai_ret = ndi_sai_qos_port_api(ndi_db_ptr)->
-                        set_port_attribute(sai_port, &attr))
-                         != SAI_STATUS_SUCCESS) {
+    sai_ret = ndi_sai_qos_port_api(ndi_db_ptr)->
+                        set_port_attribute(sai_port, &attr);
+
+    if (sai_ret != SAI_STATUS_SUCCESS && sai_ret != SAI_STATUS_ITEM_ALREADY_EXISTS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "port egress qos set fails: npu_id %u, port_id %u, sai attr_id %u\n",
                 npu_id, port_id, attr.id);
@@ -495,21 +505,12 @@ t_std_error ndi_qos_set_port_egr_profile_attr(npu_id_t npu_id,
 static t_std_error _fill_ndi_qos_port_egr_struct(const sai_attribute_t *attr_list,
                         uint_t num_attr, qos_port_egr_struct_t*p)
 {
-    // clear the input buffer size; to be filled by the actual retrieved size
-    p->num_buffer_profile = 0;
-    p->num_queue_id = 0;
 
     for (uint_t i = 0 ; i< num_attr; i++ ) {
         const sai_attribute_t *attr = &attr_list[i];
         switch (attr->id) {
         case SAI_PORT_ATTR_QOS_TC_TO_QUEUE_MAP:
             p->tc_to_queue_map = sai2ndi_qos_map_id(attr->value.oid);
-            break;
-        case SAI_PORT_ATTR_QOS_TC_TO_DOT1P_MAP:
-            p->tc_to_dot1p_map = sai2ndi_qos_map_id(attr->value.oid);
-            break;
-        case SAI_PORT_ATTR_QOS_TC_TO_DSCP_MAP:
-            p->tc_to_dscp_map = sai2ndi_qos_map_id(attr->value.oid);
             break;
         case SAI_PORT_ATTR_QOS_TC_AND_COLOR_TO_DOT1P_MAP:
             p->tc_color_to_dot1p_map = sai2ndi_qos_map_id(attr->value.oid);
@@ -556,7 +557,7 @@ static t_std_error ndi_qos_update_port_queue_number(npu_id_t npu_id,
     uint_t idx;
     int rc, queue_cnt = 0, ucast_cnt = 0, mcast_cnt = 0;
     ndi_port_t ndi_port;
-    ndi_qos_queue_attribute_t queue_info;
+    ndi_qos_queue_struct_t queue_info;
 
     if (!port_egr || port_egr->num_queue_id <= 0 ||
         !port_egr->queue_id_list) {
@@ -564,10 +565,15 @@ static t_std_error ndi_qos_update_port_queue_number(npu_id_t npu_id,
     }
     ndi_port.npu_id = npu_id;
     ndi_port.npu_port = port_id;
+    nas_attr_id_t nas_attr_list[] = {
+            BASE_QOS_QUEUE_TYPE,
+    };
     for (idx = 0; idx < port_egr->num_queue_id; idx ++) {
-        rc = ndi_qos_get_queue_attribute(ndi_port,
-                                    port_egr->queue_id_list[idx],
-                                    &queue_info);
+        rc = ndi_qos_get_queue(ndi_port.npu_id,
+                               port_egr->queue_id_list[idx],
+                               nas_attr_list,
+                               sizeof(nas_attr_list)/sizeof(nas_attr_id_t),
+                               &queue_info);
         if (rc != STD_ERR_OK) {
             EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "failed to get queue attribute: npu_id %u port_id %u queue %lx\n",
@@ -607,13 +613,23 @@ t_std_error ndi_qos_get_port_egr_profile(npu_id_t npu_id,
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     std::vector<sai_attribute_t> attr_list(num_attr);
     std::vector<sai_object_id_t> queue_id_list;
+    std::vector<sai_object_id_t> buffer_profile_id_list;
+    bool queue_id_list_polled = false;
     for (uint_t i = 0; i< num_attr; i++) {
         try {
             attr_list[i].id = ndi2sai_port_egr_attr_id_map[nas_attr_list[i]];
+
             if (attr_list[i].id == SAI_PORT_ATTR_QOS_QUEUE_LIST) {
                 attr_list[i].value.objlist.count = p->num_queue_id;
                 queue_id_list.resize(p->num_queue_id);
-                attr_list[i].value.objlist.list = &queue_id_list[0];
+                attr_list[i].value.objlist.list = queue_id_list.data();
+                queue_id_list_polled = true;
+            }
+
+            if (attr_list[i].id == SAI_PORT_ATTR_QOS_EGRESS_BUFFER_PROFILE_LIST) {
+                attr_list[i].value.objlist.count = p->num_buffer_profile;
+                buffer_profile_id_list.resize(p->num_buffer_profile);
+                attr_list[i].value.objlist.list = buffer_profile_id_list.data();
             }
         }
         catch (...) {
@@ -648,7 +664,8 @@ t_std_error ndi_qos_get_port_egr_profile(npu_id_t npu_id,
     // fill the outgoing parameters
     _fill_ndi_qos_port_egr_struct(&attr_list[0], num_attr, p);
 
-    ndi_qos_update_port_queue_number(npu_id, port_id, p);
+    if (queue_id_list_polled)
+        ndi_qos_update_port_queue_number(npu_id, port_id, p);
 
     return STD_ERR_OK;
 

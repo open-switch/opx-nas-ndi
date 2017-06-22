@@ -28,10 +28,10 @@
 #include <arpa/inet.h>
 
 #define MY_ASSERT_TRUE(x) \
-    if (!x) NDI_LOG_ERROR (1, "NDI-ACL", #x " Failed"); return;
+    if (!x) NDI_LOG_ERROR ("NDI-ACL", #x " Failed"); return;
 
 #define MY_EXPECT_TRUE(x) \
-    if (!x) NDI_LOG_ERROR (1, "NDI-ACL", #x " Failed");
+    if (!x) NDI_LOG_ERROR ("NDI-ACL", #x " Failed");
 
 void my_acltest_table ()
 {

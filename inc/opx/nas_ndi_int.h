@@ -76,6 +76,7 @@ typedef struct _ndi_sai_api_tbl_t
     sai_hostif_api_t            *n_sai_hostif_api_tbl;
     sai_buffer_api_t            *n_sai_buffer_api_tbl;
     sai_hash_api_t              *n_sai_hash_api_tbl;
+    sai_udf_api_t               *n_sai_udf_api_tbl;
  } ndi_sai_api_tbl_t;
 
 typedef struct _ndi_switch_notification_t_
@@ -115,6 +116,7 @@ typedef struct _nas_ndi_db_t {
 } nas_ndi_db_t;
 
 sai_switch_api_t *ndi_sai_switch_api_tbl_get(nas_ndi_db_t *ndi_db_ptr);
+sai_object_id_t ndi_switch_id_get();
 #ifdef __cplusplus
 }
 #endif

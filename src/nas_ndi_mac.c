@@ -32,6 +32,7 @@
 #include <string.h>
 
 #define MAC_STR_LEN 20
+static const unsigned int max_fdb_attr_get = 3;
 
 static inline t_std_error sai_to_ndi_err_translate (sai_status_t sai_err)
 {
@@ -70,6 +71,7 @@ t_std_error ndi_update_mac_entry(ndi_mac_entry_t *p_mac_entry, ndi_mac_attr_flag
 
     memcpy(&(sai_mac_entry.mac_address), p_mac_entry->mac_addr, HAL_MAC_ADDR_LEN);
     sai_mac_entry.vlan_id = p_mac_entry->vlan_id;
+    sai_mac_entry.switch_id = ndi_switch_id_get();
 
     if (p_mac_entry->ndi_lag_id != 0) {
         sai_port = p_mac_entry->ndi_lag_id;
@@ -145,6 +147,7 @@ t_std_error ndi_create_mac_entry(ndi_mac_entry_t *p_mac_entry)
 
     memcpy(&(sai_mac_entry.mac_address), p_mac_entry->mac_addr, HAL_MAC_ADDR_LEN);
     sai_mac_entry.vlan_id = p_mac_entry->vlan_id;
+    sai_mac_entry.switch_id = ndi_switch_id_get();
 
     if (p_mac_entry->ndi_lag_id != 0) {
         sai_port = p_mac_entry->ndi_lag_id;
@@ -207,6 +210,7 @@ t_std_error ndi_delete_mac_entry(ndi_mac_entry_t *p_mac_entry, ndi_mac_delete_ty
         case NDI_MAC_DEL_SINGLE_ENTRY:
             memcpy(&(sai_mac_entry.mac_address), p_mac_entry->mac_addr, HAL_MAC_ADDR_LEN);
             sai_mac_entry.vlan_id = p_mac_entry->vlan_id;
+            sai_mac_entry.switch_id = ndi_switch_id_get();
             EV_LOG(INFO, NDI, ev_log_s_MINOR, "NDI-MAC", "NDI_MAC_DEL_SINGLE_ENTRY:"
                     "Before SAI call vlan=%d", sai_mac_entry.vlan_id);
             if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->remove_fdb_entry(&sai_mac_entry))
@@ -253,7 +257,8 @@ t_std_error ndi_delete_mac_entry(ndi_mac_entry_t *p_mac_entry, ndi_mac_delete_ty
             EV_LOG(INFO, NDI, ev_log_s_MINOR, "NDI-MAC", "NDI_MAC_DEL_BY_PORT: "
                     "Before SAI Call- port id=%d entry_id=%d entry_type=%d",
                     fdb_flush_attr[0].value.oid, fdb_flush_attr[1].id, fdb_flush_attr[1].value.s32);
-            if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(attr_idx, (const sai_attribute_t *)fdb_flush_attr))
+            if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(ndi_switch_id_get(),
+                                                                          attr_idx, (const sai_attribute_t *)fdb_flush_attr))
                     != SAI_STATUS_SUCCESS) {
                 EV_LOG(ERR, NDI, ev_log_s_CRITICAL, "NDI-MAC", "Failed to remove mac entry by port:%d ret:%d",
                         p_mac_entry->port_info.npu_port, sai_ret);
@@ -283,7 +288,8 @@ t_std_error ndi_delete_mac_entry(ndi_mac_entry_t *p_mac_entry, ndi_mac_delete_ty
                     "vlan_id=%d entry_id=%d entry_type=%d",
                     fdb_flush_attr[0].value.u16, fdb_flush_attr[1].id, fdb_flush_attr[1].value.s32);
 
-            if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(attr_idx, (const sai_attribute_t *)fdb_flush_attr))
+            if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(ndi_switch_id_get(),
+                                                                          attr_idx, (const sai_attribute_t *)fdb_flush_attr))
                     != SAI_STATUS_SUCCESS) {
                 EV_LOG(ERR, NDI, ev_log_s_CRITICAL, "NDI-MAC", "Failed to remove mac entry by vlan:%d ret:%d",
                         p_mac_entry->vlan_id, sai_ret);
@@ -333,7 +339,8 @@ t_std_error ndi_delete_mac_entry(ndi_mac_entry_t *p_mac_entry, ndi_mac_delete_ty
                     fdb_flush_attr[0].value.u16, fdb_flush_attr[1].value.oid,
                     fdb_flush_attr[2].id, fdb_flush_attr[2].value.s32);
 
-            if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(attr_idx, (const sai_attribute_t *)fdb_flush_attr))
+            if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(ndi_switch_id_get(),
+                                                                          attr_idx, (const sai_attribute_t *)fdb_flush_attr))
                     != SAI_STATUS_SUCCESS) {
                 EV_LOG(ERR, NDI, ev_log_s_CRITICAL, "NDI-MAC", "Failed to remove mac entry "
                         "by port:%d and vlan:%d ret:%d",
@@ -358,7 +365,8 @@ t_std_error ndi_delete_mac_entry(ndi_mac_entry_t *p_mac_entry, ndi_mac_delete_ty
             EV_LOG(INFO, NDI, ev_log_s_MINOR, "NDI-MAC", "NDI_MAC_DEL_ALL_ENTRIES Before "
                     "calling SAI - entry_id=%d entry_type=%d",
                     fdb_flush_attr[0].id, fdb_flush_attr[0].value.s32);
-            if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(attr_idx, (const sai_attribute_t *)fdb_flush_attr))
+            if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(ndi_switch_id_get(),
+                                                                          attr_idx, (const sai_attribute_t *)fdb_flush_attr))
                     != SAI_STATUS_SUCCESS) {
                 EV_LOG(ERR, NDI, ev_log_s_CRITICAL, "NDI-MAC", "Failed to remove all mac entries "
                         "for npu %d ret:%d",
@@ -400,8 +408,49 @@ t_std_error ndi_mac_event_notify_register(ndi_mac_event_notification_fn reg_fn)
 
 t_std_error ndi_get_mac_entry_attr(ndi_mac_entry_t *mac_entry)
 {
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    sai_fdb_entry_t sai_mac_entry;
+    sai_attribute_t sai_attrs[max_fdb_attr_get];
+
+    if (mac_entry == NULL) {
+        EV_LOGGING(NDI,DEBUG,"NDI-MAC", "NULL MAC entry passed");
+        return (STD_ERR(MAC,FAIL,0));
+    }
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(mac_entry->npu_id);
+
+    if (ndi_db_ptr == NULL) {
+        EV_LOGGING(NDI,DEBUG,"NDI-MAC","Not able to find NDI DB node for npu_id: %d",mac_entry->npu_id);
+        return (STD_ERR(MAC,FAIL,0));
+    }
+
+    memcpy(&(sai_mac_entry.mac_address), mac_entry->mac_addr, HAL_MAC_ADDR_LEN);
+    sai_mac_entry.vlan_id = mac_entry->vlan_id;
+    sai_mac_entry.switch_id = ndi_switch_id_get();
+    unsigned int sai_attr_ix = 0;
+    sai_attrs[sai_attr_ix++].id = SAI_FDB_ENTRY_ATTR_PORT_ID;
+    sai_attrs[sai_attr_ix++].id = SAI_FDB_ENTRY_ATTR_TYPE;
+    sai_attrs[sai_attr_ix].id = SAI_FDB_ENTRY_ATTR_PACKET_ACTION;
+
+    if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->
+            get_fdb_entry_attribute(&sai_mac_entry,max_fdb_attr_get,sai_attrs))!= SAI_STATUS_SUCCESS) {
+        EV_LOGGING(NDI, DEBUG, "NDI-MAC","Failed to fetch mac entry from NDI");
+        return sai_to_ndi_err_translate(sai_ret);
+    }
+
+    sai_attr_ix = 0;
+    if (ndi_npu_port_id_get(sai_attrs[sai_attr_ix++].value.oid,
+                            &mac_entry->port_info.npu_id, &mac_entry->port_info.npu_port) != STD_ERR_OK) {
+        EV_LOGGING(NDI,DEBUG, "NDI-MAC", "Port get failed: sai port 0x%llx", sai_attrs[sai_attr_ix++].value.oid);
+        return STD_ERR(INTERFACE, FAIL, 0);
+    }
+
+    mac_entry->is_static = (sai_attrs[sai_attr_ix++].value.s32 == SAI_FDB_ENTRY_TYPE_STATIC) ? true : false;
+    mac_entry->action = ndi_mac_packet_action_get(sai_attrs[sai_attr_ix].value.s32);
+
     return STD_ERR_OK;
 }
+
 
 t_std_error ndi_set_mac_entry_attr(ndi_mac_entry_t *mac_entry)
 {

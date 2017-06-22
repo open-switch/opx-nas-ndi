@@ -29,10 +29,12 @@
 #include "nas_ndi_mac_utl.h"
 #include "nas_ndi_int.h"
 #include "nas_ndi_utils.h"
+#include "nas_ndi_fc_init.h"
 #include "sai.h"
 #include "saistatus.h"
 #include "saitypes.h"
 #include "nas_ndi_vlan.h"
+#include "nas_ndi_sw_profile.h"
 
 #include "std_thread_tools.h"
 #include "std_socket_tools.h"
@@ -42,7 +44,6 @@
 #include<unistd.h>
 #include <inttypes.h>
 
-
 typedef enum {
     ndi_internal_event_T_SWITCH_OPER,
     ndi_internal_event_T_FDB,
@@ -51,6 +52,7 @@ typedef enum {
 } ndi_internal_event_TYPES_t;
 
 #define NDI_FDB_EV_MAX_ATTR  10
+#define NDI_SWITCH_INIT_MAX_ATTR 10
 
 /**
  * @TODO delete this structure and improve the design to use a more flexable strucutre.
@@ -70,15 +72,17 @@ typedef struct {
             sai_object_id_t port_id;
             sai_port_oper_status_t port_state;
         } port_state;
-        struct {
-            sai_object_id_t sai_port;
-            sai_port_event_t port_event;
-        } port_event;
     }u;
 }ndi_internal_event_t ;
 
 static std_thread_create_param_t _thread;
 static int _nas_fd[2];        //used with the pipe function call ([0] = read side, [1] = write)
+static sai_object_id_t ndi_switch_id = 0;
+
+sai_object_id_t ndi_switch_id_get()
+{
+    return ndi_switch_id;
+}
 
 static t_std_error nas_ndi_service_method_init(service_method_table_t **service_ptr)
 {
@@ -202,11 +206,21 @@ static t_std_error nas_ndi_sai_api_table_init(ndi_sai_api_tbl_t *n_sai_api_tbl)
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
+        sai_ret = sai_api_query(SAI_API_UDF, (void *)&(n_sai_api_tbl->n_sai_udf_api_tbl));
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            break;
+        }
     } while(0);
 
     if (sai_ret != SAI_STATUS_SUCCESS) {
        return (STD_ERR(NPU, CFG, sai_ret));
     }
+    // Initialize FC specfic APIs
+    if (ndi_sai_fc_apis_init() != STD_ERR_OK) {
+        NDI_INIT_LOG_ERROR("Failed to initialize SAI FC APIs");
+        return (STD_ERR(NPU, CFG, sai_ret));
+    }
+
     return STD_ERR_OK;
 }
 
@@ -235,7 +249,8 @@ static void send_nas_event(ndi_internal_event_t *ev) {
 /* Following are default callbacks
  * It can be changes through registration process later by any other NAS component
  */
-static void ndi_switch_state_change_cb(sai_switch_oper_status_t oper_status)
+static void ndi_switch_state_change_cb(sai_object_id_t switch_id,
+                                       sai_switch_oper_status_t oper_status)
 {
     ndi_internal_event_t ev;
     ev.type = ndi_internal_event_T_SWITCH_OPER;
@@ -385,117 +400,6 @@ static void ndi_port_state_change_cb_int( sai_object_id_t sai_port_id,
     }
 }
 
-static void ndi_port_event_cb(uint32_t count,
-                              sai_port_event_notification_t *data)
-{
-    ndi_internal_event_t ev;
-    uint32_t port_idx = 0;
-    ev.type = ndi_internal_event_T_PORT_EVENT;
-    for(port_idx = 0; port_idx < count; port_idx++) {
-        ev.u.port_event.sai_port = data[port_idx].port_id;
-        ev.u.port_event.port_event = data[port_idx].port_event;
-        send_nas_event(&ev);
-    }
-}
-
-static t_std_error ndi_delete_port_default_vlan(npu_id_t npu_id, sai_object_id_t sai_port)
-{
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    if(ndi_db_ptr == NULL){
-        return STD_ERR(NPU, PARAM, 0);
-    }
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-
-    sai_vlan_port_t vlan_port;
-    memset(&vlan_port, 0, sizeof(sai_vlan_port_t));
-
-    vlan_port.port_id = sai_port;
-    vlan_port.tagging_mode = SAI_VLAN_TAGGING_MODE_UNTAGGED;
-
-    int port_count = 1;
-    sai_vlan_id_t vlan_id = 1;
-
-    EV_LOG_INFO(ev_log_t_NDI, ev_log_s_MAJOR, "NDI_VLAN",
-                "Deleting port %d from system default vlan %d", sai_port, vlan_id);
-
-    if ((sai_ret = ndi_db_ptr->ndi_sai_api_tbl.n_sai_vlan_api_tbl->remove_ports_from_vlan(vlan_id,
-                                                port_count, &vlan_port))
-            != SAI_STATUS_SUCCESS) {
-        return STD_ERR(INTERFACE, CFG, sai_ret);
-    }
-    return STD_ERR_OK;
-}
-
-static void ndi_port_event_cb_int(sai_object_id_t sai_port,
-                              sai_port_event_t port_event)
-{
-    t_std_error rc = STD_ERR_OK;
-    npu_id_t npu_id = 0 ;
-    npu_port_t npu_port = 0;
-    uint32_t hport_list[NDI_MAX_HWPORT_PER_PORT];
-    hwport_list_t hwport_list;
-    ndi_port_t ndi_port;
-    ndi_port_event_t event;
-    uint32_t hwport = 0;
-
-    NDI_INIT_LOG_TRACE("Calling port event notification from SAI\n");
-
-    npu_id = ndi_saiport_to_npu_id_get(sai_port);
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    if (ndi_db_ptr == NULL) {
-        NDI_INIT_LOG_ERROR("invalid sai_port 0x%" PRIx64 " ", sai_port);
-        return;
-    }
-    if(port_event == SAI_PORT_EVENT_ADD) {
-        ndi_delete_port_default_vlan(npu_id, sai_port);
-    }
-    /*  Ignore PORT ADD and DELETE events until NPU status is not operationally UP */
-    if (ndi_db_ptr->npu_oper_status != NDI_SWITCH_OPER_UP) {
-        NDI_INIT_LOG_TRACE("Ignore SAI port event notification if SAI is not UP yet \n");
-        return;
-    }
-
-    switch(port_event) {
-        case SAI_PORT_EVENT_ADD:
-            hwport_list.list = hport_list;
-            hwport_list.count = NDI_MAX_HWPORT_PER_PORT;
-            if ((rc = ndi_sai_port_hwport_list_get(npu_id, sai_port, hport_list, &hwport_list.count)) != STD_ERR_OK) {
-                NDI_PORT_LOG_ERROR("could not find HW port list for the corresponding saiport 0x%"PRIx64" ", sai_port);
-                break;
-            }
-            if ((rc = ndi_port_map_sai_port_add(npu_id, sai_port, &npu_port)) != STD_ERR_OK) {
-                NDI_PORT_LOG_ERROR("Can not find HW PORT for the SAI PORT %"PRIx64" ErrorCode 0x%x",
-                                                sai_port, rc);
-                break;
-            }
-            event = ndi_port_ADD;
-            hwport = hport_list[0];
-            break;
-        case SAI_PORT_EVENT_DELETE:
-            if ((rc = ndi_port_map_sai_port_delete(npu_id, sai_port, &npu_port)) != STD_ERR_OK) {
-                NDI_PORT_LOG_ERROR("Can not find HW PORT for the SAI PORT %"PRIx64" ErrorCode 0x%x",
-                                                sai_port, rc);
-                break;
-            }
-            event = ndi_port_DELETE;
-            hwport = 0; /*  in case of port DELETE event, hwport is ignored. */
-            break;
-        default:
-            break;
-    }
-    NDI_INIT_LOG_TRACE(" SAI PORT %s event sai_port 0x%" PRIx64 " npu id %d ndi_port %d \n",
-              (port_event == SAI_PORT_EVENT_ADD) ? "ADD" : "DELETE", sai_port, npu_id, npu_port);
-
-    if (rc == STD_ERR_OK) {
-        ndi_port.npu_id = npu_id;
-        ndi_port.npu_port = npu_port;
-        if (ndi_db_ptr->switch_notification->port_event_update_cb != NULL) {
-            ndi_db_ptr->switch_notification->port_event_update_cb(&ndi_port, event,
-                                                            hwport);
-        }
-    }
-}
-
 static void * _ndi_event_push(void * param) {
     ndi_internal_event_t ev;
 
@@ -508,13 +412,10 @@ static void * _ndi_event_push(void * param) {
                 ndi_port_state_change_cb_int(ev.u.port_state.port_id,ev.u.port_state.port_state);
                 break;
 
-            case ndi_internal_event_T_PORT_EVENT:
-                ndi_port_event_cb_int(ev.u.port_event.sai_port,ev.u.port_event.port_event);
-                break;
-
             case ndi_internal_event_T_SWITCH_OPER:
                 ndi_switch_state_change_cb_int(ev.u.switch_oper_status);
                 break;
+
             default:
                 NDI_PORT_LOG_ERROR("Invalid SAI event type detected... %d",ev.type);
                 break;
@@ -523,7 +424,7 @@ static void * _ndi_event_push(void * param) {
     return NULL;
 }
 
-static void ndi_switch_shutdown_request_cb(void)
+static void ndi_switch_shutdown_request_cb(sai_object_id_t switch_id)
 {
     NDI_INIT_LOG_TRACE("Calling switch shutdown request from SAI\n");
 }
@@ -533,12 +434,14 @@ static void ndi_switch_shutdown_request_cb(void)
 t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    sai_attribute_t  sai_switch_attr_list[NDI_SWITCH_INIT_MAX_ATTR];
+    bool ndi_switch_init = 1;
+    sai_s8_list_t nil_list = {0};
+    uint32_t count = 0;
 
     sai_switch_api_t *sai_switch_api_tbl = ndi_sai_switch_api_tbl_get(ndi_db_ptr);
-    sai_switch_notification_t switch_notification;
 
-    memset(&switch_notification, 0, sizeof(switch_notification));
-
+    memset(sai_switch_attr_list,0, sizeof(sai_switch_attr_list));
     /*  Initialize SAI callbacks  with default function */
     if (ndi_db_ptr->switch_notification == NULL) {
         ndi_db_ptr->switch_notification = (ndi_switch_notification_t *) malloc(sizeof(ndi_switch_notification_t));
@@ -546,19 +449,37 @@ t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
             return (STD_ERR(NPU, NOMEM, 0));
         }
         memset(ndi_db_ptr->switch_notification, 0, sizeof(ndi_switch_notification_t));
-
-        switch_notification.on_switch_state_change =
-                                         ndi_switch_state_change_cb;
-        switch_notification.on_fdb_event =
-                                         ndi_fdb_event_cb;
-        switch_notification.on_port_state_change =
-                                         ndi_port_state_change_cb;
-        switch_notification.on_port_event =
-                                         ndi_port_event_cb;
-        switch_notification.on_switch_shutdown_request =
-                                         ndi_switch_shutdown_request_cb;
-        switch_notification.on_packet_event =
-                                         ndi_packet_rx_cb;
+        /*Fill the attribute for SWITCH Init */
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_INIT_SWITCH;
+        sai_switch_attr_list[count].value.booldata = ndi_switch_init;
+        count++;
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_SWITCH_PROFILE_ID;
+        sai_switch_attr_list[count].value.u32 = ndi_db_ptr->npu_profile_id;
+        count++;
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_SWITCH_HARDWARE_INFO;
+        sai_switch_attr_list[count].value.s8list = nil_list;
+        count++;
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_FIRMWARE_PATH_NAME;
+        sai_switch_attr_list[count].value.s8list = nil_list;
+        count++;
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_FDB_EVENT_NOTIFY;
+        sai_switch_attr_list[count].value.ptr = ndi_fdb_event_cb;
+        count++;
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_PORT_STATE_CHANGE_NOTIFY;
+        sai_switch_attr_list[count].value.ptr = ndi_port_state_change_cb;
+        count++;
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_PACKET_EVENT_NOTIFY;
+        sai_switch_attr_list[count].value.ptr = ndi_packet_rx_cb;
+        count++;
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_SWITCH_STATE_CHANGE_NOTIFY;
+        sai_switch_attr_list[count].value.ptr = ndi_switch_state_change_cb;
+        count++;
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_SHUTDOWN_REQUEST_NOTIFY;
+        sai_switch_attr_list[count].value.ptr = ndi_switch_shutdown_request_cb;
+        count++;
+        sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_SWITCH_SHELL_ENABLE;
+        sai_switch_attr_list[count].value.booldata = true;
+        count++;
     }
     /*  initialize the NPU */
     handle_profile_map(ndi_db_ptr->npu_profile_id, getenv("OPX_SAI_PROFILE_FILE"));
@@ -566,15 +487,16 @@ t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
     sai_ret = sai_switch_api_tbl->initialize_switch(ndi_db_ptr->npu_profile_id, NULL,
                                                     NULL, &switch_notification);
 
+   /*  Create the NPU */
+   sai_ret = sai_switch_api_tbl->create_switch(&ndi_switch_id,
+                                                   count,
+                                                   sai_switch_attr_list);
     if (sai_ret != SAI_STATUS_SUCCESS) {
         return (STD_ERR(NPU, CFG, sai_ret));
     }
+
     return STD_ERR_OK;
 }
-
-
-
-
 
 t_std_error nas_ndi_init(void)
 {
@@ -583,9 +505,12 @@ t_std_error nas_ndi_init(void)
     size_t no_of_npu;
     npu_id_t npu_idx = 0;
     nas_ndi_db_t *ndi_db_ptr = NULL;
+    uint32_t switch_id = 0;
 
     /*  first read NPU count and NPU type from config file.*/
     NDI_INIT_LOG_TRACE("nas ndi initialization\n");
+
+    nas_ndi_populate_cfg_key_value_pair (switch_id);
 
     /*  @todo TODO number of npus should be read from the config file */
     no_of_npu = 1;
@@ -647,11 +572,16 @@ t_std_error nas_ndi_init(void)
         /* Key-value pair is used by sai after and during sai_initialize_switch()  */
         /* call sai_initialize_switch() with profile id, switch_hardware_id, microcode, callback table */
         if ((ret_code = ndi_initialize_switch(ndi_db_ptr)) != STD_ERR_OK) {
-            NDI_INIT_LOG_ERROR("sai api table init failed\n");
+            NDI_INIT_LOG_ERROR("sai switch initialization failure\n");
             break;
         }
         NDI_INIT_LOG_TRACE("sai instance and npu # %d init passed\n", npu_idx);
     }
+    if ((ret_code = ndi_sai_fc_switch_init()) != STD_ERR_OK) {
+        NDI_INIT_LOG_ERROR("sai FC switch initialization failure\n");
+        return ret_code;
+    }
+
     /*  Now initialize the port map tables */
     if (ret_code == STD_ERR_OK) {
 

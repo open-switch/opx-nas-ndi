@@ -57,17 +57,26 @@ t_std_error ndi_packet_tx (uint8_t* buf, uint32_t len, ndi_packet_attr_t *p_attr
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(p_attr->npu_id);
     STD_ASSERT(ndi_db_ptr != NULL);
 
-    if ((ret_code = ndi_sai_port_id_get(p_attr->npu_id, p_attr->tx_port, &sai_port) != STD_ERR_OK)) {
-         return ret_code;
+    /* look up tx_port attribute only if type is not pipeline lookup */
+
+    if (p_attr->tx_type == NDI_PACKET_TX_TYPE_PIPELINE_LOOKUP) {
+
+        sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_HOSTIF_TX_TYPE;
+        sai_attr[attr_idx].value.s32 = SAI_HOSTIF_TX_TYPE_PIPELINE_LOOKUP;
+        ++attr_idx;
+    } else { /* default case is SAI_HOSTIF_TX_TYPE_PIPELINE_BYPASS */
+
+        if ((ret_code = ndi_sai_port_id_get(p_attr->npu_id, p_attr->tx_port, &sai_port) != STD_ERR_OK)) {
+             return ret_code;
+        }
+        sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_EGRESS_PORT_OR_LAG;
+        sai_attr[attr_idx].value.oid = sai_port;
+        ++attr_idx;
+
+        sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_HOSTIF_TX_TYPE;
+        sai_attr[attr_idx].value.s32 = SAI_HOSTIF_TX_TYPE_PIPELINE_BYPASS;
+        ++attr_idx;
     }
-
-    sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_EGRESS_PORT_OR_LAG;
-    sai_attr[attr_idx].value.oid = sai_port;
-    ++attr_idx;
-
-    sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_TX_TYPE;
-    sai_attr[attr_idx].value.s32 = SAI_HOSTIF_TX_TYPE_PIPELINE_BYPASS;
-    ++attr_idx;
 
     if ((sai_ret = ndi_packet_hostif_api_tbl_get(ndi_db_ptr)->send_packet(SAI_NULL_OBJECT_ID, buf,
                                              buf_len, attr_idx, sai_attr)) != SAI_STATUS_SUCCESS) {
@@ -111,11 +120,18 @@ static t_std_error ndi_packet_get_attr (const sai_attribute_t *p_attr, ndi_packe
             // @Todo - to handle trap type attr
             break;
 
-        case SAI_HOSTIF_PACKET_ATTR_USER_TRAP_ID:
-            if(p_attr->value.s32 == SAI_HOSTIF_TRAP_TYPE_SAMPLEPACKET)
+        case SAI_HOSTIF_PACKET_ATTR_HOSTIF_TRAP_ID:
+            if(p_attr->value.oid ==
+                               SAI_HOSTIF_TRAP_TYPE_SAMPLEPACKET)
                 p_ndi_attr->trap_id = NDI_PACKET_TRAP_ID_SAMPLEPACKET;
-            else if (p_attr->value.s32 == SAI_HOSTIF_TRAP_TYPE_L3_MTU_ERROR)
+            else if (p_attr->value.oid == SAI_HOSTIF_TRAP_TYPE_L3_MTU_ERROR)
                 p_ndi_attr->trap_id = NDI_PACKET_TRAP_ID_L3_MTU_ERROR;
+            else
+                p_ndi_attr->trap_id = p_attr->value.oid;
+            break;
+
+        case SAI_HOSTIF_PACKET_ATTR_HOSTIF_TX_TYPE:
+            // get attr is called only in packet rx flow
             break;
 
         default:
@@ -126,17 +142,17 @@ static t_std_error ndi_packet_get_attr (const sai_attribute_t *p_attr, ndi_packe
     return STD_ERR_OK;
 }
 
-void ndi_packet_rx_cb(const void *buffer, sai_size_t buffer_size, uint32_t attr_count,
-                                  const sai_attribute_t *attr_list)
+void ndi_packet_rx_cb(sai_object_id_t switch_id, const void *buffer, sai_size_t buffer_size,
+                      uint32_t attr_count, const sai_attribute_t *attr_list)
 {
     uint32_t attr_index = 0;
     sai_status_t sai_rc = SAI_STATUS_SUCCESS;
-    ndi_packet_attr_t n_attr;
+    ndi_packet_attr_t n_attr = {0};
 
     STD_ASSERT(buffer != NULL);
 
     if(attr_count == 0) {
-        NDI_LOG_TRACE(ev_log_t_NDI, "NDI-PKT", "Attribute count is 0");
+        NDI_LOG_TRACE("NDI-PKT", "Attribute count is 0");
         return;
     }
 

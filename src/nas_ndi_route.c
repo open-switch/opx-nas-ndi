@@ -28,10 +28,13 @@
 #include "nas_ndi_int.h"
 #include "nas_ndi_route.h"
 #include "nas_ndi_utils.h"
+#include "nas_ndi_map.h"
 #include "sai.h"
 #include "saistatus.h"
 #include "saitypes.h"
 
+/* TODO: To be removed once the SAI Switch id changes are merged */
+sai_object_id_t g_nas_ndi_switch_id = 0;
 
 /*  NDI Route/Neighbor specific APIs  */
 
@@ -193,7 +196,7 @@ t_std_error ndi_route_set_attribute (ndi_route_t *p_route_entry)
             sai_attr.id = SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID;
             break;
         default:
-            NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE", "Invalid attribute");
+            NDI_LOG_TRACE("NDI-ROUTE", "Invalid attribute");
             return STD_ERR(ROUTE, FAIL, 0);
     }
 
@@ -227,7 +230,7 @@ t_std_error ndi_route_next_hop_add (ndi_neighbor_t *p_nbr_entry, next_hop_id_t *
     sai_attr[attr_idx].id = SAI_NEXT_HOP_ATTR_ROUTER_INTERFACE_ID;
     attr_idx++;
 
-    if ((sai_ret = ndi_next_hop_api_get(ndi_db_ptr)->create_next_hop(&sai_nh_id, attr_idx, sai_attr))
+    if ((sai_ret = ndi_next_hop_api_get(ndi_db_ptr)->create_next_hop(&sai_nh_id, g_nas_ndi_switch_id, attr_idx, sai_attr))
                           != SAI_STATUS_SUCCESS) {
         return STD_ERR(ROUTE, FAIL, sai_ret);
     }
@@ -273,6 +276,13 @@ t_std_error ndi_route_neighbor_add (ndi_neighbor_t *p_nbr_entry)
     sai_attr[attr_idx].id = SAI_NEIGHBOR_ENTRY_ATTR_PACKET_ACTION;
     attr_idx++;
 
+    /* If state NDI_NEIGHBOR_ENTRY_NO_HOST_ROUTE, dont program the neighbor in the host table */
+    if (p_nbr_entry->state == NDI_NEIGHBOR_ENTRY_NO_HOST_ROUTE) {
+        sai_attr[attr_idx].value.s32 = true;
+        sai_attr[attr_idx].id = SAI_NEIGHBOR_ENTRY_ATTR_NO_HOST_ROUTE;
+        attr_idx++;
+    }
+
     if ((sai_ret = ndi_neighbor_api_get(ndi_db_ptr)->create_neighbor_entry(&sai_nbr_entry,
                                                      attr_idx, sai_attr))!= SAI_STATUS_SUCCESS) {
         return STD_ERR(ROUTE, FAIL, sai_ret);
@@ -310,11 +320,228 @@ static inline  sai_next_hop_group_api_t *ndi_next_hop_group_api_get(nas_ndi_db_t
 
 }
 
+static t_std_error ndi_route_nh_grp_members_create (nas_ndi_db_t    *ndi_db_ptr,
+                                                    sai_object_id_t  nh_grp_oid,
+                                                    uint32_t         nh_count,
+                                                    sai_object_id_t *nh_list)
+{
+    uint32_t           attr_idx;
+    uint32_t           i;
+    sai_status_t       sai_rc = SAI_STATUS_FAILURE;
+    t_std_error        ndi_rc = STD_ERR_OK;
+    sai_attribute_t    sai_attr [NDI_MAX_GROUP_NEXT_HOP_MEMBER_ATTR];
+    nas_ndi_map_data_t data [NDI_MAX_NH_ENTRIES_PER_GROUP];
+    sai_object_id_t    member_oid;
+    nas_ndi_map_key_t  key;
+    nas_ndi_map_val_t  value;
+
+    memset (&data, 0, sizeof (data));
+
+    for (i = 0; i < nh_count; i++) {
+        attr_idx = 0;
+        sai_attr[attr_idx].value.oid = nh_grp_oid;
+        sai_attr[attr_idx].id = SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_GROUP_ID;
+        attr_idx++;
+
+        sai_attr[attr_idx].value.oid = nh_list[i];
+        sai_attr[attr_idx].id = SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_ID;
+        attr_idx++;
+
+        sai_rc = ndi_next_hop_group_api_get(ndi_db_ptr)->
+            create_next_hop_group_member (&member_oid,
+                    ndi_switch_id_get(),
+                    attr_idx, sai_attr);
+
+        if (sai_rc != SAI_STATUS_SUCCESS) {
+            return STD_ERR (ROUTE, FAIL, sai_rc);
+        }
+
+        data [i].val1 = nh_list[i];
+        data [i].val2 = member_oid;
+    }
+
+    memset (&key, 0, sizeof (key));
+    key.type = NAS_NDI_MAP_TYPE_NH_GRP_MEMBER;
+    key.id1  = nh_grp_oid;
+
+    memset (&value, 0, sizeof (value));
+    value.count = nh_count;
+    value.data  = &data [0];
+
+    ndi_rc = nas_ndi_map_insert (&key, &value);
+
+    if (ndi_rc != STD_ERR_OK) {
+        return ndi_rc;
+    }
+
+    return STD_ERR_OK;
+}
+
+static t_std_error
+ndi_route_get_nh_member_oid (sai_object_id_t           nh_grp_oid,
+                             uint32_t                  count,
+                             nas_ndi_map_data_t       *in_out_data,
+                             nas_ndi_map_val_filter_t  filter)
+{
+    t_std_error       ndi_ret = STD_ERR_OK;
+    nas_ndi_map_key_t key;
+    nas_ndi_map_val_t value;
+
+    memset (&key, 0, sizeof (key));
+    key.type = NAS_NDI_MAP_TYPE_NH_GRP_MEMBER;
+    key.id1  = nh_grp_oid;
+
+    memset (&value, 0, sizeof (value));
+    value.count = count;
+    value.data  = in_out_data;
+
+    ndi_ret = nas_ndi_map_get_elements (&key, &value, filter);
+
+    if (ndi_ret != STD_ERR_OK) {
+        return (ndi_ret);
+    }
+
+    return ndi_ret;
+}
+
+static t_std_error
+nas_ndi_get_nh_id_from_member_oid (sai_object_id_t    nh_grp_id,
+                                   uint32_t           nhop_count,
+                                   sai_object_list_t *member_id_list,
+                                   sai_object_id_t   *out_nhid_list)
+{
+    nas_ndi_map_data_t data [NDI_MAX_NH_ENTRIES_PER_GROUP];
+    t_std_error        ndi_ret;
+    uint32_t           i;
+
+    memset (data, 0, sizeof (data));
+
+    if (nhop_count > NDI_MAX_NH_ENTRIES_PER_GROUP) {
+        return STD_ERR (ROUTE, TOOBIG, 0);
+    }
+
+    for (i = 0; i < nhop_count; i++) {
+        data[i].val2 = member_id_list->list [i];
+    }
+
+    /*
+     * data[i].val2 contains SAI NH member id. Retrieve NAS nhId, based on SAI
+     * NH member id. So set the filter argument to NAS_NDI_MAP_VAL_FILTER_VAL2.
+     */
+    ndi_ret = ndi_route_get_nh_member_oid (nh_grp_id, nhop_count,
+                                           data, NAS_NDI_MAP_VAL_FILTER_VAL2);
+
+    if (ndi_ret != STD_ERR_OK) {
+        return ndi_ret;
+    }
+
+    /* Copy the NAS nhId from 'val1' field. */
+    for (i = 0; i < nhop_count; i++) {
+        out_nhid_list [i] = data[i].val1;
+    }
+
+    return STD_ERR_OK;
+}
+
+static t_std_error
+ndi_route_nh_grp_all_members_remove (nas_ndi_db_t    *ndi_db_ptr,
+                                     sai_object_id_t  nh_grp_oid)
+{
+    uint32_t           i;
+    nas_ndi_map_key_t  key;
+    nas_ndi_map_val_t  value;
+    sai_status_t       sai_rc = SAI_STATUS_FAILURE;
+    t_std_error        ndi_rc = STD_ERR_OK;
+    nas_ndi_map_data_t data[NDI_MAX_NH_ENTRIES_PER_GROUP];
+
+    memset (&key, 0, sizeof (key));
+    key.type = NAS_NDI_MAP_TYPE_NH_GRP_MEMBER;
+    key.id1  = nh_grp_oid;
+
+    memset (&data, 0, sizeof (data));
+    memset (&value, 0, sizeof (value));
+    value.count = NDI_MAX_NH_ENTRIES_PER_GROUP;
+    value.data  = &data [0];
+
+    ndi_rc = nas_ndi_map_get (&key, &value);
+
+    if (ndi_rc != STD_ERR_OK) {
+        return ndi_rc;
+    }
+
+    for (i = 0; i < value.count; i++) {
+        sai_rc = ndi_next_hop_group_api_get(ndi_db_ptr)->
+            remove_next_hop_group_member (value.data [i].val2);
+
+        if (sai_rc != SAI_STATUS_SUCCESS) {
+            return STD_ERR (ROUTE, FAIL, sai_rc);
+        }
+    }
+
+    ndi_rc = nas_ndi_map_delete (&key);
+
+    if (ndi_rc != STD_ERR_OK) {
+        return ndi_rc;
+    }
+
+    return STD_ERR_OK;
+}
+
+static t_std_error ndi_route_nh_grp_members_remove (nas_ndi_db_t    *ndi_db_ptr,
+                                                    sai_object_id_t  nh_grp_oid,
+                                                    uint32_t         nh_count,
+                                                    nas_ndi_map_data_t *data)
+{
+    uint32_t          i;
+    nas_ndi_map_key_t key;
+    nas_ndi_map_val_t value;
+    sai_status_t      sai_rc = SAI_STATUS_FAILURE;
+    t_std_error       ndi_rc = STD_ERR_OK;
+
+    if (nh_count > NDI_MAX_NH_ENTRIES_PER_GROUP) {
+        return STD_ERR (ROUTE, TOOBIG, sai_rc);
+    }
+
+    for (i = 0; i < nh_count; i++) {
+        sai_rc = ndi_next_hop_group_api_get(ndi_db_ptr)->
+            remove_next_hop_group_member (data[i].val2);
+
+        if (sai_rc != SAI_STATUS_SUCCESS) {
+            return STD_ERR (ROUTE, FAIL, sai_rc);
+        }
+    }
+
+    memset (&key, 0, sizeof (key));
+    key.type = NAS_NDI_MAP_TYPE_NH_GRP_MEMBER;
+    key.id1  = nh_grp_oid;
+
+    memset (&value, 0, sizeof (value));
+    value.count = nh_count;
+    value.data  = data;
+
+    /*
+     * nas_ndi_map_data_t.val1 contains NAS nhId.
+     * nas_ndi_map_data_t.val2 contains SAI NH member Id.
+     * 'value.data' contains both NAS nhId and SAI NH member Id.
+     * So can delete the mapping either using NAS_NDI_MAP_VAL_FILTER_VAL1 or
+     * NAS_NDI_MAP_VAL_FILTER_VAL2. Using NAS_NDI_MAP_VAL_FILTER_VAL1 here.
+     */
+    ndi_rc = nas_ndi_map_delete_elements (&key, &value,
+                                          NAS_NDI_MAP_VAL_FILTER_VAL1);
+
+    if (ndi_rc != STD_ERR_OK) {
+        return ndi_rc;
+    }
+
+    return STD_ERR_OK;
+}
+
 t_std_error ndi_route_next_hop_group_create (ndi_nh_group_t *p_nh_group_entry,
                         next_hop_id_t *nh_group_handle)
 {
     uint32_t          attr_idx = 0;
     sai_status_t      sai_ret = SAI_STATUS_FAILURE;
+    t_std_error       ndi_ret = STD_ERR_OK;
     sai_object_id_t   sai_nh_group_id;
     sai_object_id_t   nexthops[NDI_MAX_NH_ENTRIES_PER_GROUP];
     sai_attribute_t   sai_attr[NDI_MAX_GROUP_NEXT_HOP_ATTR];
@@ -327,47 +554,53 @@ t_std_error ndi_route_next_hop_group_create (ndi_nh_group_t *p_nh_group_entry,
     sai_attr[attr_idx].id = SAI_NEXT_HOP_GROUP_ATTR_TYPE;
     attr_idx++;
 
+    if ((sai_ret = ndi_next_hop_group_api_get(ndi_db_ptr)->
+            create_next_hop_group(&sai_nh_group_id, g_nas_ndi_switch_id, attr_idx, sai_attr))
+            != SAI_STATUS_SUCCESS) {
+        return STD_ERR(ROUTE, FAIL, sai_ret);
+    }
 
     nhop_count = p_nh_group_entry->nhop_count;
     /*
      * Add the nexthop id list to sai_next_hop_list_t
      */
     if (nhop_count == 0) {
-        return STD_ERR(ROUTE, FAIL, sai_ret);
+        return STD_ERR_OK;
     }
-    /*
-     * Copy nexthop-id to list
-     */
+
     int i;
     for (i = 0; i <nhop_count; i++) {
         nexthops[i] = p_nh_group_entry->nh_list[i].id;
     }
-    /* sai_next_hop_list_t */
-    sai_attr[attr_idx].value.objlist.count = nhop_count;
-    sai_attr[attr_idx].value.objlist.list = nexthops;
-    sai_attr[attr_idx].id = SAI_NEXT_HOP_GROUP_ATTR_NEXT_HOP_LIST;
-    attr_idx++;
 
-    if ((sai_ret = ndi_next_hop_group_api_get(ndi_db_ptr)->
-            create_next_hop_group(&sai_nh_group_id, attr_idx, sai_attr))
-            != SAI_STATUS_SUCCESS) {
-        return STD_ERR(ROUTE, FAIL, sai_ret);
+    ndi_ret = ndi_route_nh_grp_members_create (ndi_db_ptr, sai_nh_group_id,
+                                               nhop_count, nexthops);
+    if (ndi_ret != STD_ERR_OK) {
+        return ndi_ret;
     }
 
     *nh_group_handle = sai_nh_group_id;
+
     return STD_ERR_OK;
 }
 
 t_std_error ndi_route_next_hop_group_delete (npu_id_t npu_id,
                                     next_hop_id_t nh_handle)
 {
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    sai_status_t    sai_ret = SAI_STATUS_FAILURE;
     sai_object_id_t next_hop_group_id;
+    t_std_error     ndi_ret = STD_ERR_OK;
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     STD_ASSERT(ndi_db_ptr != NULL);
 
     next_hop_group_id = nh_handle;
+
+    ndi_ret = ndi_route_nh_grp_all_members_remove (ndi_db_ptr,
+                                                   next_hop_group_id);
+    if (ndi_ret != STD_ERR_OK) {
+        return ndi_ret;
+    }
 
     if ((sai_ret = ndi_next_hop_group_api_get(ndi_db_ptr)->
         remove_next_hop_group(next_hop_group_id)) != SAI_STATUS_SUCCESS) {
@@ -379,35 +612,8 @@ t_std_error ndi_route_next_hop_group_delete (npu_id_t npu_id,
 t_std_error ndi_route_set_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_entry,
                                         next_hop_id_t nh_group_handle)
 {
-    sai_status_t      sai_ret = SAI_STATUS_FAILURE;
-    sai_object_id_t   sai_nh_group_id;
-    sai_attribute_t   sai_attr;
-
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(p_nh_group_entry->npu_id);
-    STD_ASSERT(ndi_db_ptr != NULL);
-
-
-    switch(p_nh_group_entry->flags) {
-        case NDI_ROUTE_NH_GROUP_ATTR_TYPE:
-            NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-NHGROUP",
-                                                    "Invalid attribute: Create-only");
-            return STD_ERR(ROUTE, FAIL, sai_ret);
-        case NDI_ROUTE_NH_GROUP_ATTR_NEXT_HOP_LIST:
-            NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-NHGROUP",
-                           "Invalid attribute: Create-only");
-            return STD_ERR(ROUTE, FAIL, sai_ret);
-        default:
-            NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-NHGROUP",
-                                        "Invalid attribute");
-            break;
-    }
-    sai_nh_group_id  = nh_group_handle;
-    if ((sai_ret = ndi_next_hop_group_api_get(ndi_db_ptr)->
-            set_next_hop_group_attribute(sai_nh_group_id, &sai_attr))
-            != SAI_STATUS_SUCCESS) {
-        return STD_ERR(ROUTE, FAIL, sai_ret);
-    }
-    return STD_ERR_OK;
+    /* Currently all Next Group Attributes are not settable */
+    return (STD_ERR (ROUTE, FAIL, SAI_STATUS_FAILURE));
 }
 
 t_std_error ndi_route_get_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_entry,
@@ -418,8 +624,10 @@ t_std_error ndi_route_get_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_e
     sai_attribute_t   sai_attr[NDI_MAX_GROUP_NEXT_HOP_ATTR];
     sai_object_id_t   sai_nh_group_id;
     unsigned int      attr_idx = 0;
+    sai_object_id_t   nhid_list [NDI_MAX_NH_ENTRIES_PER_GROUP];
     sai_object_id_t  *next_hops;
     uint32_t          nhop_count;
+    t_std_error       ndi_ret = STD_ERR_OK;
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(p_nh_group_entry->npu_id);
 
@@ -427,7 +635,7 @@ t_std_error ndi_route_get_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_e
     if ((sai_ret = ndi_next_hop_group_api_get(ndi_db_ptr)->
             get_next_hop_group_attribute(sai_nh_group_id,attr_count, sai_attr))
             != SAI_STATUS_SUCCESS) {
-        NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-NHGROUP",
+        NDI_LOG_TRACE("NDI-ROUTE-NHGROUP",
                       "get attribute failed");
         return STD_ERR(ROUTE, FAIL, sai_ret);
     }
@@ -443,19 +651,32 @@ t_std_error ndi_route_get_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_e
                 }
                 /* @TODO WECMP case */
                 break;
-            case SAI_NEXT_HOP_GROUP_ATTR_NEXT_HOP_LIST:
+            case SAI_NEXT_HOP_GROUP_ATTR_NEXT_HOP_MEMBER_LIST:
                 /*
                  * Get the nexthop id list from sai_next_hop_list_t
                  */
                 nhop_count = sai_attr[attr_idx].value.objlist.count;
-                if (nhop_count == 0) {
-                    NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-NHGROUP",
+                if (nhop_count > NDI_MAX_NH_ENTRIES_PER_GROUP) {
+                    NDI_LOG_TRACE("NDI-ROUTE-NHGROUP",
                                  "Invalid get nhlist attribute");
                     return STD_ERR(ROUTE, FAIL, sai_ret);
                 }
 
+                memset (nhid_list, 0, sizeof (nhid_list));
+                ndi_ret = nas_ndi_get_nh_id_from_member_oid (sai_nh_group_id,
+                                                             nhop_count,
+                                                             &sai_attr[attr_idx]
+                                                             .value.objlist,
+                                                             nhid_list);
+
+                if (ndi_ret != STD_ERR_OK) {
+                    NDI_LOG_TRACE("NDI-ROUTE-NHGROUP",
+                                  "Failed to convert Next Hop Member Oid to NH Id");
+                    return ndi_ret;
+                }
+
                 /* nexthops*/
-                next_hops = sai_attr[attr_idx].value.objlist.list;
+                next_hops = nhid_list;
                 /*
                  * Copy nexthop-id to list
                  */
@@ -466,7 +687,7 @@ t_std_error ndi_route_get_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_e
 
                 break;
             default:
-                NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-NHGROUP",
+                NDI_LOG_TRACE("NDI-ROUTE-NHGROUP",
                              "Invalid get attribute");
                 return STD_ERR(ROUTE, FAIL, 0);
         }
@@ -474,13 +695,14 @@ t_std_error ndi_route_get_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_e
 
     return STD_ERR_OK;
 }
+
 /*
  *  ndi_route_add_next_hop_to_group: t all new NH and new NH count
  */
 t_std_error ndi_route_add_next_hop_to_group (ndi_nh_group_t *p_nh_group_entry,
                                              next_hop_id_t nh_group_handle)
 {
-    sai_status_t      sai_ret = SAI_STATUS_FAILURE;
+    t_std_error       ndi_ret = STD_ERR_OK;
     sai_object_id_t   next_hop_group_id;
     sai_object_id_t   nexthops[NDI_MAX_NH_ENTRIES_PER_GROUP];
     uint32_t nhop_count;
@@ -495,7 +717,7 @@ t_std_error ndi_route_add_next_hop_to_group (ndi_nh_group_t *p_nh_group_entry,
      * Add the nexthop id list to SAI nexthps list
      */
     if (nhop_count == 0) {
-        return STD_ERR(ROUTE, FAIL, sai_ret);
+        return STD_ERR(ROUTE, FAIL, 0);
     }
     /*
      * Copy nexthop-id to list
@@ -503,50 +725,66 @@ t_std_error ndi_route_add_next_hop_to_group (ndi_nh_group_t *p_nh_group_entry,
     int i;
     for (i = 0; i <nhop_count; i++) {
         nexthops[i] = p_nh_group_entry->nh_list[i].id;
-
     }
+
     next_hop_group_id  = nh_group_handle;
 
-    if ((sai_ret = ndi_next_hop_group_api_get(ndi_db_ptr)->
-                    add_next_hop_to_group(next_hop_group_id, nhop_count,
-                    nexthops)) != SAI_STATUS_SUCCESS) {
-        return STD_ERR(ROUTE, FAIL, sai_ret);
-    }
+    ndi_ret = ndi_route_nh_grp_members_create (ndi_db_ptr, next_hop_group_id,
+                                               nhop_count, nexthops);
 
-    return STD_ERR_OK;
+    return ndi_ret;
 }
 
 t_std_error ndi_route_delete_next_hop_from_group (ndi_nh_group_t *p_nh_group_entry,
                             next_hop_id_t nh_group_handle)
 {
-    sai_status_t      sai_ret = SAI_STATUS_FAILURE;
-    sai_object_id_t   next_hop_group_id;
-    sai_object_id_t   nexthops[NDI_MAX_NH_ENTRIES_PER_GROUP];
-    uint32_t nhop_count;
+    sai_object_id_t    next_hop_group_id;
+    nas_ndi_map_data_t data [NDI_MAX_NH_ENTRIES_PER_GROUP];
+    t_std_error        ndi_ret;
+    uint32_t           nhop_count;
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(p_nh_group_entry->npu_id);
     STD_ASSERT(ndi_db_ptr != NULL);
 
+    memset (data, 0, sizeof (data));
     nhop_count = p_nh_group_entry->nhop_count;
     /*
      * Add the nexthop id list to SAI nexthps list
      */
     if (nhop_count == 0) {
-        return STD_ERR(ROUTE, FAIL, sai_ret);
+        return STD_ERR(ROUTE, FAIL, 0);
     }
+
+    if (nhop_count > NDI_MAX_NH_ENTRIES_PER_GROUP) {
+        return STD_ERR(ROUTE, NOMEM, 0);
+    }
+
     /*
      * Copy nexthop-id to list
      */
     int i;
     for (i = 0; i <nhop_count; i++) {
-        nexthops[i] = p_nh_group_entry->nh_list[i].id;
+        data[i].val1 = p_nh_group_entry->nh_list[i].id;
     }
 
     next_hop_group_id  = nh_group_handle;
-    if ((sai_ret = ndi_next_hop_group_api_get(ndi_db_ptr)->
-                    remove_next_hop_from_group(next_hop_group_id, nhop_count,
-                    nexthops)) != SAI_STATUS_SUCCESS) {
-        return STD_ERR(ROUTE, FAIL, sai_ret);
+
+    /*
+     * data[i].val1 contains NAS nhId. Retrieve the SAI NH member id, based on
+     * NAS nhId. So set the filter argument to NAS_NDI_MAP_VAL_FILTER_VAL1.
+     */
+    ndi_ret = ndi_route_get_nh_member_oid (next_hop_group_id, nhop_count,
+                                           data, NAS_NDI_MAP_VAL_FILTER_VAL1);
+
+    if (ndi_ret != STD_ERR_OK) {
+        return ndi_ret;
+    }
+
+    ndi_ret = ndi_route_nh_grp_members_remove (ndi_db_ptr, next_hop_group_id,
+                                               nhop_count, data);
+
+    if (ndi_ret != STD_ERR_OK) {
+        return ndi_ret;
     }
 
     return STD_ERR_OK;

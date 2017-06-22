@@ -27,6 +27,7 @@
 #include "nas_base_utils.h"
 #include "nas_ndi_acl.h"
 #include "nas_ndi_acl_utl.h"
+#include "nas_ndi_udf_utl.h"
 #include <vector>
 #include <unordered_map>
 #include <string.h>
@@ -50,6 +51,7 @@ t_std_error ndi_acl_table_create (npu_id_t npu_id, const ndi_acl_table_t* ndi_tb
 
     sai_attribute_t               sai_tbl_attr = {0}, nil_attr = {0};
     std::vector<sai_attribute_t>  sai_tbl_attr_list;
+    sai_attr_id_t                 sai_udf_attr_base = 0;
     nas_ndi_db_t                  *ndi_db_ptr = ndi_db_ptr_get(npu_id);
 
     if (ndi_db_ptr == NULL) return STD_ERR(ACL, FAIL, 0);
@@ -58,7 +60,7 @@ t_std_error ndi_acl_table_create (npu_id_t npu_id, const ndi_acl_table_t* ndi_tb
     sai_tbl_attr_list.reserve (2 + ndi_tbl_p->filter_count);
 
     // Table Stage
-    sai_tbl_attr.id = SAI_ACL_TABLE_ATTR_STAGE;
+    sai_tbl_attr.id = SAI_ACL_TABLE_ATTR_ACL_STAGE;
     switch (ndi_tbl_p->stage) {
         case  BASE_ACL_STAGE_INGRESS:
             sai_tbl_attr.value.u32 = SAI_ACL_STAGE_INGRESS;
@@ -86,6 +88,7 @@ t_std_error ndi_acl_table_create (npu_id_t npu_id, const ndi_acl_table_t* ndi_tb
         sai_tbl_attr_list.push_back (sai_tbl_attr);
     }
 
+    bool udf_filter_found = false;
     // Set of Filters allowed in Table
     for (uint_t count = 0; count < ndi_tbl_p->filter_count; count++) {
         sai_tbl_attr = nil_attr;
@@ -93,18 +96,41 @@ t_std_error ndi_acl_table_create (npu_id_t npu_id, const ndi_acl_table_t* ndi_tb
 
         if ((rc = ndi_acl_utl_ndi2sai_tbl_filter_type (filter_type, &sai_tbl_attr))
             != STD_ERR_OK) {
-            NDI_ACL_LOG_ERROR("ACL filter type %d is not supported in SAI",
+            NDI_ACL_LOG_ERROR("ACL Filter type %d is not supported in SAI",
                               filter_type);
             return rc;
         }
-        sai_tbl_attr_list.push_back (sai_tbl_attr);
+        if (filter_type == BASE_ACL_MATCH_TYPE_UDF) {
+            udf_filter_found = true;
+            sai_udf_attr_base = sai_tbl_attr.id;
+        } else {
+            sai_tbl_attr_list.push_back (sai_tbl_attr);
+        }
+    }
+
+    if (ndi_tbl_p->udf_grp_count > 0 && !udf_filter_found) {
+        NDI_ACL_LOG_ERROR("UDF filter type not in allowed list with UDF group list");
+        return STD_ERR(ACL, FAIL, 0);
+    }
+
+    // Set of UDF group ID associated with Table
+    for (uint idx = 0; idx < ndi_tbl_p->udf_grp_count; idx ++) {
+        sai_tbl_attr = nil_attr;
+        auto udf_grp_id = ndi_tbl_p->udf_grp_id_list[idx];
+        sai_tbl_attr.id = sai_udf_attr_base + idx;
+        if (sai_tbl_attr.id > SAI_ACL_TABLE_ATTR_USER_DEFINED_FIELD_GROUP_MAX) {
+            NDI_ACL_LOG_ERROR("Too many UDF configured in table");
+            return STD_ERR(ACL, FAIL, 0);
+        }
+        sai_tbl_attr.value.oid = ndi_udf_ndi2sai_grp_id(udf_grp_id);
+        sai_tbl_attr_list.push_back(sai_tbl_attr);
     }
 
     NDI_ACL_LOG_DETAIL ("Creating ACL Table with %d attributes",
                         sai_tbl_attr_list.size());
 
     // Call SAI API
-    if ((sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->create_acl_table (&sai_tbl_id,
+    if ((sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->create_acl_table (&sai_tbl_id, ndi_switch_id_get(),
                                                                    sai_tbl_attr_list.size(),
                                                                    sai_tbl_attr_list.data()))
         != SAI_STATUS_SUCCESS) {
@@ -235,7 +261,7 @@ t_std_error ndi_acl_entry_create (npu_id_t npu_id,
                         sai_entry_attr_list.size());
 
     // Call SAI API
-    if ((sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->create_acl_entry (&sai_entry_id,
+    if ((sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->create_acl_entry (&sai_entry_id, ndi_switch_id_get(),
                                                                    sai_entry_attr_list.size(),
                                                                    sai_entry_attr_list.data()))
         != SAI_STATUS_SUCCESS) {
@@ -469,7 +495,7 @@ t_std_error ndi_acl_counter_create (npu_id_t npu_id,
     sai_counter_attr_list.push_back (sai_counter_attr);
 
     // Call SAI API
-    if ((sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->create_acl_counter (&sai_counter_id,
+    if ((sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->create_acl_counter (&sai_counter_id, ndi_switch_id_get(),
                                                                      sai_counter_attr_list.size(),
                                                                      sai_counter_attr_list.data()))
         != SAI_STATUS_SUCCESS) {

@@ -38,7 +38,7 @@ static t_std_error ndi_qos_fill_scheduler_attr(nas_attr_id_t attr_id,
 {
     // Only the following attributes are settable
     if (attr_id == BASE_QOS_SCHEDULER_PROFILE_ALGORITHM) {
-        sai_attr.id = SAI_SCHEDULER_ATTR_SCHEDULING_ALGORITHM;
+        sai_attr.id = SAI_SCHEDULER_ATTR_SCHEDULING_TYPE;
         sai_attr.value.s32 = (p->algorithm == BASE_QOS_SCHEDULING_TYPE_SP?
                                 SAI_SCHEDULING_TYPE_STRICT:
                                 (p->algorithm == BASE_QOS_SCHEDULING_TYPE_WRR?
@@ -49,7 +49,7 @@ static t_std_error ndi_qos_fill_scheduler_attr(nas_attr_id_t attr_id,
         sai_attr.value.u8 = p->weight;
     }
     else if (attr_id == BASE_QOS_SCHEDULER_PROFILE_METER_TYPE) {
-        sai_attr.id = SAI_SCHEDULER_ATTR_SHAPER_TYPE;
+        sai_attr.id = SAI_SCHEDULER_ATTR_METER_TYPE;
         sai_attr.value.s32 = (p->meter_type == BASE_QOS_METER_TYPE_PACKET?
                 SAI_METER_TYPE_PACKETS: SAI_METER_TYPE_BYTES);
     }
@@ -80,7 +80,7 @@ static void _fill_ndi_qos_scheduler_info(const std::vector<sai_attribute_t> attr
 {
     for (auto attr: attr_list) {
         switch (attr.id) {
-        case SAI_SCHEDULER_ATTR_SCHEDULING_ALGORITHM:
+        case SAI_SCHEDULER_ATTR_SCHEDULING_TYPE:
             p->algorithm = (attr.value.s32 == SAI_SCHEDULING_TYPE_STRICT?
                             BASE_QOS_SCHEDULING_TYPE_SP:
                              (attr.value.s32 == SAI_SCHEDULING_TYPE_WRR?
@@ -89,7 +89,7 @@ static void _fill_ndi_qos_scheduler_info(const std::vector<sai_attribute_t> attr
         case SAI_SCHEDULER_ATTR_SCHEDULING_WEIGHT:
             p->weight = attr.value.u8;
             break;
-        case SAI_SCHEDULER_ATTR_SHAPER_TYPE:
+        case SAI_SCHEDULER_ATTR_METER_TYPE:
             p->meter_type = (attr.value.s32 == SAI_METER_TYPE_BYTES?
                             BASE_QOS_METER_TYPE_BYTE: BASE_QOS_METER_TYPE_PACKET);
             break;
@@ -158,6 +158,7 @@ t_std_error ndi_qos_create_scheduler_profile(npu_id_t npu_id,
     sai_object_id_t sai_scheduler_id;
     if ((sai_ret = ndi_sai_qos_scheduler_api(ndi_db_ptr)->
                     create_scheduler_profile(&sai_scheduler_id,
+                                ndi_switch_id_get(),
                                 sai_scheduler_attr_list.size(),
                                 &sai_scheduler_attr_list[0]))
                          != SAI_STATUS_SUCCESS) {

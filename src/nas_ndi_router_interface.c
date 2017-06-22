@@ -33,12 +33,12 @@
 #include "nas_ndi_port.h"
 #include "nas_ndi_router_interface.h"
 #include "nas_ndi_utils.h"
+#include "nas_ndi_vlan_util.h"
 #include "sai.h"
 #include "sairouterintf.h"
 #include "sairouter.h"
 #include "saistatus.h"
 #include "saitypes.h"
-
 
 /*  Router Interface APIs  */
 static inline  sai_router_interface_api_t *ndi_rif_api_get(nas_ndi_db_t *ndi_db_ptr)
@@ -74,7 +74,7 @@ t_std_error ndi_rif_create (ndi_rif_entry_t *rif_entry, ndi_rif_id_t *rif_id)
                 if ((rc = ndi_sai_port_id_get(rif_entry->attachment.port_id.npu_id,
                                                     rif_entry->attachment.port_id.npu_port,
                                                     &sai_port)) != STD_ERR_OK) {
-                NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-RIF", "SAI port id get "
+                NDI_LOG_TRACE("NDI-ROUTE-RIF", "SAI port id get "
                               "failed for NPU-id:%d NPU-port:%d",
                               rif_entry->attachment.port_id.npu_id,
                               rif_entry->attachment.port_id.npu_port);
@@ -93,12 +93,14 @@ t_std_error ndi_rif_create (ndi_rif_entry_t *rif_entry, ndi_rif_id_t *rif_id)
             sai_attr[attr_idx].id = SAI_ROUTER_INTERFACE_ATTR_TYPE;
             attr_idx++;
 
-            sai_attr[attr_idx].value.u16 = rif_entry->attachment.vlan_id;
+            sai_attr[attr_idx].value.oid = ndi_get_sai_vlan_obj_id(
+                    rif_entry->npu_id,
+                    rif_entry->attachment.vlan_id);
             sai_attr[attr_idx].id = SAI_ROUTER_INTERFACE_ATTR_VLAN_ID;
             attr_idx++;
             break;
         default:
-            NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-RIF", "Invalid attribute");
+            NDI_LOG_TRACE("NDI-ROUTE-RIF", "Invalid attribute");
             return STD_ERR(ROUTE, FAIL, 0);
     }
 
@@ -127,7 +129,7 @@ t_std_error ndi_rif_create (ndi_rif_entry_t *rif_entry, ndi_rif_id_t *rif_id)
 
 
     if ((sai_ret = ndi_rif_api_get(ndi_db_ptr)->create_router_interface
-                                                (rif_id, attr_idx, sai_attr))
+                                                (rif_id, ndi_switch_id_get(), attr_idx, sai_attr))
                           != SAI_STATUS_SUCCESS) {
         return STD_ERR(ROUTE, FAIL, sai_ret);
     }
@@ -176,7 +178,7 @@ t_std_error ndi_rif_set_attribute (ndi_rif_entry_t *rif_entry)
             if ((rc = ndi_sai_port_id_get(rif_entry->attachment.port_id.npu_id,
                                                 rif_entry->attachment.port_id.npu_port,
                                                 &sai_port)) != STD_ERR_OK) {
-                NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-RIF", "SAI port id get "
+                NDI_LOG_TRACE("NDI-ROUTE-RIF", "SAI port id get "
                               "failed for NPU-id:%d NPU-port:%d",
                               rif_entry->attachment.port_id.npu_id,
                               rif_entry->attachment.port_id.npu_port);
@@ -187,7 +189,9 @@ t_std_error ndi_rif_set_attribute (ndi_rif_entry_t *rif_entry)
             break;
 
         case NDI_RIF_ATTR_VLAN_ID:
-            sai_attr.value.u16 = rif_entry->attachment.vlan_id;
+            sai_attr.value.oid = ndi_get_sai_vlan_obj_id(
+                    rif_entry->npu_id,
+                    rif_entry->attachment.vlan_id);
             sai_attr.id = SAI_ROUTER_INTERFACE_ATTR_VLAN_ID;
             break;
 
@@ -213,7 +217,7 @@ t_std_error ndi_rif_set_attribute (ndi_rif_entry_t *rif_entry)
             break;
 
         default:
-            NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-RIF", "Invalid attribute");
+            NDI_LOG_TRACE("NDI-ROUTE-RIF", "Invalid attribute");
             return STD_ERR(ROUTE, FAIL, 0);
     }
 
@@ -260,7 +264,11 @@ t_std_error ndi_rif_get_attribute (ndi_rif_entry_t *rif_entry)
                  rif_entry->attachment.port_id.npu_port = ndi_port.npu_port;
                  break;
             case SAI_ROUTER_INTERFACE_ATTR_VLAN_ID:
-                 rif_entry->attachment.vlan_id = sai_attr[attr_idx].value.u16;
+                 if(ndi_get_sai_vlan_id(rif_entry->npu_id,
+                             sai_attr[attr_idx].value.oid,
+                             &rif_entry->attachment.vlan_id) != STD_ERR_OK) {
+                     return STD_ERR(ROUTE, FAIL, 0);
+                 }
                  break;
             case SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS:
                  memcpy (rif_entry->src_mac, sai_attr[attr_idx].value.mac,
@@ -276,7 +284,7 @@ t_std_error ndi_rif_get_attribute (ndi_rif_entry_t *rif_entry)
                  rif_entry->mtu = sai_attr[attr_idx].value.u32;
                  break;
             default:
-                NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-RIF", "Invalid get attribute");
+                NDI_LOG_TRACE("NDI-ROUTE-RIF", "Invalid get attribute");
                 return STD_ERR(ROUTE, FAIL, 0);
         }
     }
@@ -321,18 +329,18 @@ t_std_error ndi_route_vr_create (ndi_vr_entry_t *vr_entry, ndi_vrf_id_t *vrf_id)
 
     if (vr_entry->flags & NDI_VR_ATTR_VIOLATION_TTL1_ACTION) {
         sai_attr[attr_idx].value.s32 = (vr_entry->ttl1_action);
-        sai_attr[attr_idx].id = SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_TTL1_ACTION;
+        sai_attr[attr_idx].id = SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_TTL1_PACKET_ACTION;
         attr_idx++;
     }
 
     if (vr_entry->flags & NDI_VR_ATTR_VIOLATION_IP_OPTIONS) {
         sai_attr[attr_idx].value.s32 = (vr_entry->violation_ip_options);
-        sai_attr[attr_idx].id = SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_IP_OPTIONS;
+        sai_attr[attr_idx].id = SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_IP_OPTIONS_PACKET_ACTION;
         attr_idx++;
     }
 
     if ((sai_ret = ndi_route_vr_api_get(ndi_db_ptr)->create_virtual_router
-                       (vrf_id, attr_idx, sai_attr)) != SAI_STATUS_SUCCESS) {
+                       (vrf_id, ndi_switch_id_get(), attr_idx, sai_attr)) != SAI_STATUS_SUCCESS) {
         return STD_ERR(ROUTE, FAIL, sai_ret);
     }
 
@@ -382,15 +390,15 @@ t_std_error ndi_route_vr_set_attribute (ndi_vr_entry_t *vr_entry)
 
         case NDI_VR_ATTR_VIOLATION_TTL1_ACTION:
             sai_attr.value.s32 = vr_entry->ttl1_action;
-            sai_attr.id = SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_TTL1_ACTION;
+            sai_attr.id = SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_TTL1_PACKET_ACTION;
             break;
         case NDI_VR_ATTR_VIOLATION_IP_OPTIONS:
             sai_attr.value.s32 = vr_entry->violation_ip_options;
-            sai_attr.id = SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_IP_OPTIONS;
+            sai_attr.id = SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_IP_OPTIONS_PACKET_ACTION;
             break;
 
         default:
-            NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-RIF", "Invalid attribute");
+            NDI_LOG_TRACE("NDI-ROUTE-RIF", "Invalid attribute");
             return STD_ERR(ROUTE, FAIL, 0);
     }
 
@@ -431,14 +439,14 @@ t_std_error ndi_route_vr_get_attribute (ndi_vr_entry_t *vr_entry)
                  memcpy (vr_entry->src_mac, sai_attr[attr_idx].value.mac,
                          HAL_MAC_ADDR_LEN);
                  break;
-            case SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_TTL1_ACTION:
+            case SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_TTL1_PACKET_ACTION:
                  vr_entry->ttl1_action = sai_attr[attr_idx].value.s32;
                  break;
-            case SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_IP_OPTIONS:
+            case SAI_VIRTUAL_ROUTER_ATTR_VIOLATION_IP_OPTIONS_PACKET_ACTION:
                  vr_entry->violation_ip_options = sai_attr[attr_idx].value.s32;
                  break;
             default:
-                 NDI_LOG_TRACE(ev_log_t_NDI, "NDI-ROUTE-RIF", "Invalid get attribute");
+                 NDI_LOG_TRACE("NDI-ROUTE-RIF", "Invalid get attribute");
                  return STD_ERR(ROUTE, FAIL, 0);
         }
     }

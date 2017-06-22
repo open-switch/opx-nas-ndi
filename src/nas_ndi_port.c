@@ -32,9 +32,11 @@
 #include "saiport.h"
 #include "saistatus.h"
 #include "saitypes.h"
+#include "nas_ndi_vlan.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 
 /*  NDI Port specific APIs  */
@@ -76,9 +78,14 @@ t_std_error _sai_port_attr_set_or_get(npu_id_t npu, port_t port, SAI_SET_OR_GET_
         sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->get_port_attribute(sai_port, count, attr);
     }
 
-    return sai_ret == SAI_STATUS_SUCCESS ?
-            STD_ERR_OK :
-            STD_ERR(NPU, CFG, sai_ret);
+    if (sai_ret == SAI_STATUS_SUCCESS) {
+        return STD_ERR_OK;
+    }
+    else {
+        NDI_PORT_LOG_TRACE("Error in setting attr %d on npu %d and port %d",
+                attr,npu,port);
+        return STD_ERR(NPU, CFG, sai_ret);
+    }
 }
 
 t_std_error ndi_port_oper_state_notify_register(ndi_port_oper_status_change_fn reg_fn)
@@ -102,9 +109,9 @@ t_std_error ndi_port_supported_breakout_mode_get(npu_id_t npu_id, npu_port_t ndi
         int *mode_count, BASE_IF_PHY_BREAKOUT_MODE_t *mode_list) {
 
     sai_attribute_t sai_attr;
-    sai_attr.id = SAI_PORT_ATTR_SUPPORTED_BREAKOUT_MODE;
-    sai_attr.value.s32list.count = SAI_PORT_BREAKOUT_MODE_MAX;
-    int32_t modes[SAI_PORT_BREAKOUT_MODE_MAX];
+    sai_attr.id = SAI_PORT_ATTR_SUPPORTED_BREAKOUT_MODE_TYPE;
+    sai_attr.value.s32list.count = SAI_PORT_BREAKOUT_MODE_TYPE_MAX;
+    int32_t modes[SAI_PORT_BREAKOUT_MODE_TYPE_MAX];
     sai_attr.value.s32list.list = modes;
     if (_sai_port_attr_set_or_get(npu_id,ndi_port,SAI_SG_ACT_GET,&sai_attr,1)!=STD_ERR_OK) {
         return STD_ERR(NPU, PARAM, 0);
@@ -126,6 +133,7 @@ t_std_error ndi_port_admin_state_set(npu_id_t npu_id, npu_port_t port_id,
     sai_attr.value.booldata = admin_state;
     sai_attr.id = SAI_PORT_ATTR_ADMIN_STATE;
 
+    EV_LOGGING(NDI,DEBUG,"PORT-STAT","Port admin state for npu %d, port %d, value %d \n", npu_id, port_id, admin_state);
     return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
 }
 
@@ -211,7 +219,7 @@ t_std_error ndi_port_breakout_mode_get(npu_id_t npu, npu_port_t port,
 
     sai_attribute_t sai_attr;
     memset(&sai_attr,0,sizeof(sai_attr));
-    sai_attr.id = SAI_PORT_ATTR_CURRENT_BREAKOUT_MODE;
+    sai_attr.id = SAI_PORT_ATTR_CURRENT_BREAKOUT_MODE_TYPE;
 
     t_std_error rc ;
     if ((rc=_sai_port_attr_set_or_get(npu,port,SAI_SG_ACT_GET,&sai_attr,1))==STD_ERR_OK) {
@@ -237,14 +245,16 @@ t_std_error ndi_port_supported_speed_get(npu_id_t npu_id, npu_port_t ndi_port,
     size_t mx = (*speed_count > sai_attr.value.s32list.count) ?
             sai_attr.value.s32list.count : *speed_count;
     BASE_IF_SPEED_t *speed = speed_list;
+    size_t count = 0;
     for ( ; ix < mx ; ++ix ) {
         if (!ndi_port_get_ndi_speed(sai_attr.value.s32list.list[ix], speed)) {
-            NDI_PORT_LOG_ERROR("unsupported Speed  returned from SAI%d", sai_attr.value.s32list.list[ix]);
-            return STD_ERR(NPU, NEXIST, 0);
+            NDI_PORT_LOG_TRACE("unsupported Speed  returned from SAI%d", sai_attr.value.s32list.list[ix]);
+            continue;
         }
+        count++;
         speed++;
     }
-    *speed_count = mx;
+    *speed_count = count;
     return(STD_ERR_OK);
 }
 t_std_error ndi_port_speed_set(npu_id_t npu_id, npu_port_t port_id, BASE_IF_SPEED_t speed) {
@@ -254,13 +264,15 @@ t_std_error ndi_port_speed_set(npu_id_t npu_id, npu_port_t port_id, BASE_IF_SPEE
         /*  speed==AUTO is not supported at BASE level
          *  TODO just return ok for the time being until it is supported at application layer
          */
-        NDI_PORT_LOG_ERROR("Speed AUTO is not supported at BASE level");
+        NDI_PORT_LOG_TRACE("Speed AUTO is not supported at BASE level");
         return STD_ERR_OK;
     }
     if (!ndi_port_get_sai_speed(speed, (uint32_t *)&sai_attr.value.u32)) {
         NDI_PORT_LOG_ERROR("unsupported Speed %d", (uint32_t)speed);
         return STD_ERR(NPU, PARAM, 0);
     }
+
+    NDI_PORT_LOG_TRACE("Setting %d speed on npu %d and port %d", (uint32_t)speed,npu_id,port_id);
     return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
 }
 
@@ -285,9 +297,96 @@ t_std_error ndi_port_mtu_set(npu_id_t npu_id, npu_port_t port_id, uint_t mtu) {
     return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
 }
 
+t_std_error ndi_port_eee_set(npu_id_t npu_id, npu_port_t port_id, uint_t state)
+{
+    sai_attribute_t sai_attr;
+    sai_attr.id = SAI_PORT_ATTR_EEE_ENABLE;
+    sai_attr.value.booldata = state;
+
+    return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
+}
+
+t_std_error ndi_port_eee_get_wake_time (npu_id_t npu_id, npu_port_t port_id,
+                                        uint16_t *wake_time)
+{
+    sai_attribute_t sai_attr;
+    t_std_error     ret_code;
+
+    sai_attr.id = SAI_PORT_ATTR_EEE_WAKE_TIME;
+
+    ret_code =  _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_GET,
+                                          &sai_attr, 1);
+
+    *wake_time = sai_attr.value.u16;
+
+    return ret_code;
+}
+
+t_std_error ndi_port_eee_get_idle_time (npu_id_t npu_id, npu_port_t port_id,
+                                        uint16_t *idle_time)
+{
+    sai_attribute_t sai_attr;
+    t_std_error     ret_code;
+
+    sai_attr.id = SAI_PORT_ATTR_EEE_IDLE_TIME;
+
+    ret_code =  _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_GET,
+                                          &sai_attr, 1);
+
+    *idle_time = sai_attr.value.u16;
+
+    return ret_code;
+}
+
+t_std_error ndi_port_eee_get(npu_id_t npu_id, npu_port_t port_id, uint_t *state)
+{
+    sai_attribute_t sai_attr;
+    t_std_error     ret_code;
+
+    sai_attr.id = SAI_PORT_ATTR_EEE_ENABLE;
+
+    ret_code =  _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_GET,
+                                          &sai_attr, 1);
+
+    *state = sai_attr.value.booldata;
+
+    return ret_code;
+}
+
+t_std_error ndi_port_clear_eee_stats (npu_id_t npu_id, npu_port_t port_id)
+{
+    sai_object_id_t sai_port;
+    sai_port_stat_t sai_port_stats_id;
+
+    t_std_error ret_code = STD_ERR_OK;
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+
+    if (ndi_db_ptr == NULL) {
+        NDI_PORT_LOG_TRACE("Invalid NPU Id %d", npu_id);
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    if ((ret_code = ndi_sai_port_id_get(npu_id, port_id, &sai_port)) != STD_ERR_OK) {
+        return ret_code;
+    }
+
+    sai_port_stats_id = SAI_PORT_STAT_EEE_TX_EVENT_COUNT;
+
+    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->clear_port_stats(sai_port,
+                   &sai_port_stats_id, 1))
+                   != SAI_STATUS_SUCCESS) {
+        NDI_PORT_LOG_TRACE("Port stats Get failed for npu %d, port %d, ret %d \n", npu_id, port_id, sai_ret);
+        return STD_ERR(NPU, FAIL, sai_ret);
+    }
+
+    return ret_code;
+}
+
 t_std_error ndi_port_loopback_get(npu_id_t npu_id, npu_port_t port_id, BASE_CMN_LOOPBACK_TYPE_t *loopback) {
     sai_attribute_t sai_attr;
-    sai_attr.id = SAI_PORT_ATTR_INTERNAL_LOOPBACK;
+    sai_attr.id = SAI_PORT_ATTR_INTERNAL_LOOPBACK_MODE;
 
     t_std_error rc =  _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_GET,&sai_attr,1);
     if (rc==STD_ERR_OK) {
@@ -298,7 +397,7 @@ t_std_error ndi_port_loopback_get(npu_id_t npu_id, npu_port_t port_id, BASE_CMN_
 
 t_std_error ndi_port_loopback_set(npu_id_t npu_id, npu_port_t port_id, BASE_CMN_LOOPBACK_TYPE_t loopback) {
     sai_attribute_t sai_attr;
-    sai_attr.id = SAI_PORT_ATTR_INTERNAL_LOOPBACK;
+    sai_attr.id = SAI_PORT_ATTR_INTERNAL_LOOPBACK_MODE;
     sai_attr.value.s32 = ndi_port_get_sai_loopback_mode(loopback);
 
     return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
@@ -314,6 +413,7 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_AR_POPTICS_UNKNOWN:
            sal_media_type = SAI_PORT_MEDIA_TYPE_UNKNONWN;
             break;
+
         case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_USR:
         case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_SR:
         case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_LR:
@@ -325,22 +425,28 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_DWDM_80KM:
         case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_ZR_TUNABLE:
         case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_SR_AOCXXM:
-            sal_media_type = SAI_PORT_MEDIA_TYPE_SFP_FIBER;
-            break;
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_T:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CUHALFM:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU1M:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU2M:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU3M:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU5M:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU7M:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU10M:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_ACU7M:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_ACU10M:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_ACU15M:
-        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CX4:
-            sal_media_type = SAI_PORT_MEDIA_TYPE_SFP_COPPER;
-            break;
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_8GBASE_FC_SW:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_8GBASE_FC_LW:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_16GBASE_FC_SW:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_16GBASE_FC_LW:
+        case PLATFORM_MEDIA_TYPE_SFP_SX:
+        case PLATFORM_MEDIA_TYPE_SFP_LX:
+        case PLATFORM_MEDIA_TYPE_SFP_ZX:
+        case PLATFORM_MEDIA_TYPE_SFP_DX:
+        case PLATFORM_MEDIA_TYPE_SFP_FX:
+        case PLATFORM_MEDIA_TYPE_SFP_CWDM:
+        case PLATFORM_MEDIA_TYPE_SFP_IR1:
+        case PLATFORM_MEDIA_TYPE_SFP_LR1:
+        case PLATFORM_MEDIA_TYPE_SFP_LR2:
+        case PLATFORM_MEDIA_TYPE_SFP_BX10:
+        case PLATFORM_MEDIA_TYPE_SFP_PX:
+        case PLATFORM_MEDIA_TYPE_SFP_BX10_UP:
+        case PLATFORM_MEDIA_TYPE_SFP_BX10_DOWN:
+        case PLATFORM_MEDIA_TYPE_SFP_BX40_UP:
+        case PLATFORM_MEDIA_TYPE_SFP_BX40_DOWN:
+        case PLATFORM_MEDIA_TYPE_SFP_BX80_UP:
+        case PLATFORM_MEDIA_TYPE_SFP_BX80_DOWN:
+
         case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_SR4:
         case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_SR4_EXT:
         case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_LR4:
@@ -355,30 +461,11 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_QSFP_40GBASE_BIDI:
         case PLATFORM_MEDIA_TYPE_QSFP_40GBASE_AOC:
         case PLATFORM_MEDIA_TYPE_QSFP_40GBASE_PSM4_PIGTAIL:
-            sal_media_type = SAI_PORT_MEDIA_TYPE_QSFP_FIBER;
-            break;
-        case PLATFORM_MEDIA_TYPE_AR_4X1_1000BASE_T:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_1M:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_HAL_M:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_2M:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_3M:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_5M:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_7M:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_10M:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_50M:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4:
-        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_HAL_M:
-        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_1M:
-        case PLATFORM_MEDIA_TYPE_QSFP_4X10_10GBASE_CR1_2M:
-        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_3M:
-        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_5M:
-        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_7M:
-        case PLATFORM_MEDIA_TYPE_QSFPPLUS_50GBASE_CR2:
-        case PLATFORM_MEDIA_TYPE_QSFPPLUS_50GBASE_CR2_1M:
-        case PLATFORM_MEDIA_TYPE_QSFPPLUS_50GBASE_CR2_2M:
-        case PLATFORM_MEDIA_TYPE_QSFPPLUS_50GBASE_CR2_3M:
-            sal_media_type = SAI_PORT_MEDIA_TYPE_QSFP_COPPER;
-            break;
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_64GBASE_FC_SW4:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_4X16_16GBASE_FC_SW:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_64GBASE_FC_LW4:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_4X16_16GBASE_FC_LW:
+
         case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_SR4:
         case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_LR4:
         case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_PSM4_IR:
@@ -388,10 +475,66 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_ER4:
         case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_PSM4_PIGTAIL:
         case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_SWDM4:
-            sal_media_type = SAI_PORT_MEDIA_TYPE_QSFP28_FIBER;
+        case PLATFORM_MEDIA_TYPE_QSFP28_128GBASE_FC_SW4:
+        case PLATFORM_MEDIA_TYPE_QSFP28_4X32_32GBASE_FC_SW:
+        case PLATFORM_MEDIA_TYPE_QSFP28_128GBASE_FC_LW4:
+        case PLATFORM_MEDIA_TYPE_QSFP28_4X32_32GBASE_FC_LW:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_1M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_1_HALFM:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_2M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_2_HALFM:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_3M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_5M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_HALFM:
+            sal_media_type = SAI_PORT_MEDIA_TYPE_FIBER;
             break;
+
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_T:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CUHALFM:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU1M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_CR_1_HALFM:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU2M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_CR_2_HALFM:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU3M:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU5M:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU7M:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CU10M:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_ACU7M:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_ACU10M:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_ACU15M:
+        case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_CX4:
+        case PLATFORM_MEDIA_TYPE_SFP_CX:
+        case PLATFORM_MEDIA_TYPE_SFP_T:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_CR_1M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_CR_2M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_CR_3M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_CR_4M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_CR_5M:
+
+        case PLATFORM_MEDIA_TYPE_AR_4X1_1000BASE_T:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_1M:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_HALFM:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_2M:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_3M:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_5M:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_7M:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_10M:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4_50M:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP_40GBASE_CR4:
+        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_HALFM:
+        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_1M:
+        case PLATFORM_MEDIA_TYPE_QSFP_4X10_10GBASE_CR1_2M:
+        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_3M:
+        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_5M:
+        case PLATFORM_MEDIA_TYPE_AR_4X10_10GBASE_CR1_7M:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_50GBASE_CR2:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_50GBASE_CR2_1M:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_50GBASE_CR2_2M:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_50GBASE_CR2_3M:
+
         case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_CR4:
-        case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_CR4_HAL_M:
+        case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_CR4_HALFM:
         case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_CR4_1M:
         case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_CR4_2M:
         case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_CR4_3M:
@@ -400,19 +543,19 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_CR4_7M:
         case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_CR4_10M:
         case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_CR4_50M:
-        case PLATFORM_MEDIA_TYPE_4X25_25GBASE_CR1_HALF_M:
+        case PLATFORM_MEDIA_TYPE_4X25_25GBASE_CR1_HALFM:
         case PLATFORM_MEDIA_TYPE_4X25_25GBASE_CR1_1M:
         case PLATFORM_MEDIA_TYPE_4X25_25GBASE_CR1_2M:
         case PLATFORM_MEDIA_TYPE_4X25_25GBASE_CR1_3M:
         case PLATFORM_MEDIA_TYPE_4X25_25GBASE_CR1_4M:
         case PLATFORM_MEDIA_TYPE_4X25_25GBASE_CR1:
-        case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2_HALF_M:
+        case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2_HALFM:
         case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2_1M:
         case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2_2M:
         case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2_3M:
         case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2_4M:
         case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2:
-            sal_media_type = SAI_PORT_MEDIA_TYPE_QSFP28_COPPER;
+            sal_media_type = SAI_PORT_MEDIA_TYPE_COPPER;
             break;
         default:
             NDI_PORT_LOG_ERROR("media type is not recognized %d \n", hal_media_type);
@@ -441,6 +584,7 @@ t_std_error ndi_port_media_type_set(npu_id_t npu_id, npu_port_t port_id, PLATFOR
     sai_attr.value.s32 = ndi_sai_port_media_type_translate(media);
     sai_attr.id = SAI_PORT_ATTR_MEDIA_TYPE;
 
+    NDI_PORT_LOG_TRACE("Setting media type %d on npu %d and port %d", sai_attr.value.s32,npu_id,port_id);
     if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->set_port_attribute(sai_port, &sai_attr))
                          != SAI_STATUS_SUCCESS) {
         return STD_ERR(NPU, CFG, sai_ret);
@@ -449,18 +593,52 @@ t_std_error ndi_port_media_type_set(npu_id_t npu_id, npu_port_t port_id, PLATFOR
     return ret_code;
 }
 
+t_std_error ndi_port_identification_led_set (npu_id_t npu_id, npu_port_t port_id, bool state)
+{
+    t_std_error ret_code = STD_ERR_OK;
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
 
-t_std_error ndi_port_speed_get(npu_id_t npu_id, npu_port_t port_id, BASE_IF_SPEED_t *speed) {
+    sai_attribute_t sai_attr;
+    sai_object_id_t sai_port;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    if ((ret_code = ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK)) {
+        return ret_code;
+    }
+
+    sai_attr.value.booldata = state;
+    sai_attr.id = SAI_PORT_ATTR_LOCATION_LED;
+
+    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->set_port_attribute(sai_port, &sai_attr))
+            != SAI_STATUS_SUCCESS) {
+        return STD_ERR(NPU, CFG, sai_ret);
+    }
+
+    return ret_code;
+}
+
+
+static t_std_error ndi_port_speed_get_int(npu_id_t npu_id, npu_port_t port_id,
+                                          BASE_IF_SPEED_t *speed,
+                                          bool check_link)
+{
+    t_std_error rc = STD_ERR_OK;
     STD_ASSERT(speed!=NULL);
 
-    /*  in case if link is not UP then return speed = 0 Mbps */
-    ndi_intf_link_state_t link_state;
-    t_std_error rc = ndi_port_link_state_get(npu_id, port_id, &link_state);
-    if ((rc != STD_ERR_OK) || /* unable to read link state */
-        ((rc == STD_ERR_OK) && (link_state.oper_status != ndi_port_OPER_UP)))  /*  Link is not UP */
-    {
-        *speed = BASE_IF_SPEED_0MBPS;
-        return rc;
+    if (check_link) {
+        /*  in case if link is not UP then return speed = 0 Mbps */
+        ndi_intf_link_state_t link_state;
+        rc = ndi_port_link_state_get(npu_id, port_id, &link_state);
+        if ((rc != STD_ERR_OK) || /* unable to read link state */
+            ((rc == STD_ERR_OK) && (link_state.oper_status != ndi_port_OPER_UP))) {
+            /*  Link is not UP */
+            *speed = BASE_IF_SPEED_0MBPS;
+            return rc;
+        }
     }
 
     sai_attribute_t sai_attr;
@@ -468,10 +646,22 @@ t_std_error ndi_port_speed_get(npu_id_t npu_id, npu_port_t port_id, BASE_IF_SPEE
 
     rc = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_GET,&sai_attr,1);
     if (rc==STD_ERR_OK) {
-        if (!ndi_port_get_ndi_speed((uint32_t)sai_attr.value.u32, speed)) return STD_ERR(NPU, PARAM, 0);
+        if (!ndi_port_get_ndi_speed((uint32_t)sai_attr.value.u32, speed)) {
+            return STD_ERR(NPU, PARAM, 0);
+        }
     }
 
     return rc;
+}
+
+t_std_error ndi_port_speed_get(npu_id_t npu_id, npu_port_t port_id, BASE_IF_SPEED_t *speed)
+{
+    return ndi_port_speed_get_int(npu_id, port_id, speed, true);
+}
+
+t_std_error ndi_port_speed_get_nocheck(npu_id_t npu_id, npu_port_t port_id, BASE_IF_SPEED_t *speed)
+{
+    return ndi_port_speed_get_int(npu_id, port_id, speed, false);
 }
 
 t_std_error ndi_port_stats_get(npu_id_t npu_id, npu_port_t port_id,
@@ -528,7 +718,7 @@ t_std_error ndi_port_stats_clear(npu_id_t npu_id, npu_port_t port_id,
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
 
     if (ndi_db_ptr == NULL) {
-        EV_LOGGING(NDI,DEBUG,"PORT-STAT","Invalid NPU Id %d", npu_id);
+        NDI_PORT_LOG_TRACE("Invalid NPU Id %d", npu_id);
         return STD_ERR(NPU, PARAM, 0);
     }
 
@@ -546,8 +736,7 @@ t_std_error ndi_port_stats_clear(npu_id_t npu_id, npu_port_t port_id,
     if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->clear_port_stats(sai_port,
                    sai_port_stats_ids, len))
                    != SAI_STATUS_SUCCESS) {
-        EV_LOGGING(NDI,DEBUG,"PORT-STAT","Port stats Get failed for npu %d, port %d, ret %d \n",
-                            npu_id, port_id, sai_ret);
+        NDI_PORT_LOG_TRACE("Port stats Get failed for npu %d, port %d, ret %d \n", npu_id, port_id, sai_ret);
         return STD_ERR(NPU, FAIL, sai_ret);
     }
 
@@ -647,7 +836,7 @@ t_std_error ndi_port_mac_learn_mode_set(npu_id_t npu_id, npu_port_t port_id,
                                         BASE_IF_PHY_MAC_LEARN_MODE_t mode){
     sai_attribute_t sai_attr;
     sai_attr.value.u32 = (sai_port_fdb_learning_mode_t )ndi_port_get_sai_mac_learn_mode(mode);
-    sai_attr.id = SAI_PORT_ATTR_FDB_LEARNING;
+    sai_attr.id = SAI_PORT_ATTR_FDB_LEARNING_MODE;
 
     return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
 }
@@ -655,7 +844,7 @@ t_std_error ndi_port_mac_learn_mode_set(npu_id_t npu_id, npu_port_t port_id,
 t_std_error ndi_port_mac_learn_mode_get(npu_id_t npu_id, npu_port_t port_id,
                                         BASE_IF_PHY_MAC_LEARN_MODE_t * mode){
     sai_attribute_t sai_attr;
-    sai_attr.id = SAI_PORT_ATTR_FDB_LEARNING;
+    sai_attr.id = SAI_PORT_ATTR_FDB_LEARNING_MODE;
 
     t_std_error rc;
     if((rc = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_GET,&sai_attr,1)) != STD_ERR_OK){
@@ -710,6 +899,8 @@ t_std_error ndi_port_auto_neg_set(npu_id_t npu_id, npu_port_t port_id,
     sai_attr.value.booldata = enable;
     sai_attr.id = SAI_PORT_ATTR_AUTO_NEG_MODE;
 
+    NDI_PORT_LOG_TRACE("Setting autoneg %d on npu %d and port %d",
+                sai_attr.value.booldata, npu_id, port_id);
     return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
 }
 
@@ -749,4 +940,223 @@ t_std_error ndi_port_duplex_get(npu_id_t npu_id, npu_port_t port_id,  BASE_CMN_D
                           BASE_CMN_DUPLEX_TYPE_FULL : BASE_CMN_DUPLEX_TYPE_HALF ;
     }
     return rc;
+}
+
+t_std_error ndi_port_fec_set(npu_id_t npu_id, npu_port_t port_id,
+        BASE_CMN_FEC_TYPE_t fec_mode) {
+
+    sai_attribute_t sai_attr;
+    sai_attr.value.u32 = (uint32_t)ndi_port_get_sai_fec_mode(fec_mode);
+    sai_attr.id = SAI_PORT_ATTR_FEC_MODE;
+
+    return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
+}
+
+static bool ndi_port_support_100g(npu_id_t npu, npu_port_t port)
+{
+    size_t speed_count = NDI_PORT_SUPPORTED_SPEED_MAX;
+    BASE_IF_SPEED_t speed_list[NDI_PORT_SUPPORTED_SPEED_MAX];
+    if (ndi_port_supported_speed_get(npu, port, &speed_count, speed_list) != STD_ERR_OK) {
+        return false;
+    }
+    size_t idx;
+    for (idx = 0; idx < speed_count; idx ++) {
+        if (speed_list[idx] == BASE_IF_SPEED_100GIGE) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+t_std_error ndi_port_fec_get(npu_id_t npu_id, npu_port_t port_id,  BASE_CMN_FEC_TYPE_t *fec_mode)
+{
+    if (fec_mode == NULL) {
+        NDI_PORT_LOG_ERROR("NULL pointer is not allowed as input");
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    sai_attribute_t sai_attr;
+
+    sai_attr.id = SAI_PORT_ATTR_FEC_MODE;
+    t_std_error rc = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_GET,&sai_attr,1);
+    if (rc==STD_ERR_OK) {
+        *fec_mode  = ndi_port_get_fec_mode(sai_attr.value.u32,
+                                           ndi_port_support_100g(npu_id, port_id));
+    }
+    return rc;
+}
+
+t_std_error ndi_port_supported_fec_get(npu_id_t npu_id, npu_port_t port_id,
+        int *fec_count, BASE_CMN_FEC_TYPE_t *fec_list)
+{
+    if (fec_list == NULL) {
+        NDI_PORT_LOG_ERROR("NULL pointer is not allowed as input");
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    sai_attribute_t sai_attr;
+    sai_attr.id = SAI_PORT_ATTR_SUPPORTED_FEC_MODE;
+    sai_attr.value.s32list.count = NDI_PORT_SUPPORTED_FEC_MAX;
+    int32_t modes[NDI_PORT_SUPPORTED_FEC_MAX];
+    sai_attr.value.s32list.list = modes;
+    t_std_error rc = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_GET,&sai_attr,1);
+    if (rc != STD_ERR_OK) {
+        return rc;
+    }
+
+    bool supp_100g = ndi_port_support_100g(npu_id, port_id);
+    size_t ix = 0;
+    size_t mx = (*fec_count > sai_attr.value.s32list.count) ?
+            sai_attr.value.s32list.count : *fec_count;
+    for (ix = 0; ix < mx ; ++ix) {
+        fec_list[ix] = ndi_port_get_fec_mode(sai_attr.value.u32list.list[ix], supp_100g);
+    }
+    *fec_count = mx;
+
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_port_oui_set(npu_id_t npu_id, npu_port_t port_id, uint32_t oui) {
+    sai_attribute_t sai_attr;
+    sai_attr.value.u32 = oui;
+    sai_attr.id = SAI_PORT_ATTR_ADVERTISED_OUI_CODE;
+
+    return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
+}
+
+t_std_error ndi_port_oui_get(npu_id_t npu_id, npu_port_t port_id, uint32_t *oui) {
+    if (oui == NULL) {
+        NDI_PORT_LOG_ERROR("NULL pointer is not allowed as input");
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    sai_attribute_t sai_attr;
+    sai_attr.id = SAI_PORT_ATTR_ADVERTISED_OUI_CODE;
+
+    t_std_error rc;
+    if((rc = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_GET,&sai_attr,1)) != STD_ERR_OK){
+        return rc;
+    }
+
+    *oui = sai_attr.value.u32;
+    return STD_ERR_OK;
+}
+
+#define MAX_PORT_ATTR_NUM   10
+t_std_error ndi_phy_port_create(npu_id_t npu_id, BASE_IF_SPEED_t speed,
+                                uint32_t *hwport_list, size_t len,
+                                npu_port_t *port_id_p)
+{
+    t_std_error rc = STD_ERR_OK;
+    sai_attribute_t port_attr_list[MAX_PORT_ATTR_NUM];
+    size_t port_attr_cnt = 0;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        NDI_PORT_LOG_ERROR("Invalid NPU Id %d", npu_id);
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    uint32_t sai_speed;
+    port_attr_list[port_attr_cnt].id = SAI_PORT_ATTR_SPEED;
+    if (!ndi_port_get_sai_speed(speed, &sai_speed)) {
+        NDI_PORT_LOG_ERROR("Invalid port speed %d", speed);
+        return STD_ERR(NPU, FAIL, 0);
+    }
+    port_attr_list[port_attr_cnt].value.u32 = sai_speed;
+    port_attr_cnt ++;
+
+    port_attr_list[port_attr_cnt].id = SAI_PORT_ATTR_HW_LANE_LIST;
+    port_attr_list[port_attr_cnt].value.u32list.count = len;
+    port_attr_list[port_attr_cnt].value.u32list.list = hwport_list;
+    port_attr_cnt ++;
+
+    sai_object_id_t sai_port;
+    sai_status_t sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->
+                            create_port(&sai_port,ndi_switch_id_get(),port_attr_cnt, port_attr_list);
+    if (sai_ret != SAI_STATUS_SUCCESS) {
+        NDI_PORT_LOG_TRACE("Physical port create failed for npu %d, ret %d ",
+                            npu_id, sai_ret);
+        return STD_ERR(NPU, FAIL, sai_ret);
+    }
+
+    npu_port_t npu_port;
+    rc = ndi_port_map_sai_port_add(npu_id, sai_port, hwport_list, len, &npu_port);
+    if (rc != STD_ERR_OK) {
+        return rc;
+    }
+
+    ndi_del_new_member_from_default_vlan(npu_id,npu_port,false);
+
+    if (port_id_p != NULL) {
+        *port_id_p = npu_port;
+    }
+
+    if (ndi_db_ptr->switch_notification->port_event_update_cb != NULL) {
+        ndi_port_t ndi_port;
+        ndi_port.npu_id = npu_id;
+        ndi_port.npu_port = npu_port;
+        ndi_db_ptr->switch_notification->port_event_update_cb(&ndi_port,
+                                                ndi_port_ADD, hwport_list[0]);
+    }
+
+    rc = ndi_port_admin_state_set(npu_id, npu_port, false);
+    if (rc != STD_ERR_OK) {
+        return rc;
+    }
+    NDI_PORT_LOG_TRACE("Physical Port create is successful for port %d", npu_port);
+
+    return rc;
+}
+
+t_std_error ndi_phy_port_delete(npu_id_t npu_id, npu_port_t port_id)
+{
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        NDI_PORT_LOG_ERROR("Invalid NPU Id %d", npu_id);
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    sai_object_id_t sai_port;
+    t_std_error rc = ndi_sai_port_id_get(npu_id, port_id, &sai_port);
+    if (rc != STD_ERR_OK) {
+        return rc;
+    }
+
+    sai_status_t sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->
+                            remove_port(sai_port);
+    if (sai_ret != SAI_STATUS_SUCCESS) {
+        NDI_PORT_LOG_TRACE("Physical port removal failed for npu %d port %d, ret %d ",
+                            npu_id, port_id, sai_ret);
+        return STD_ERR(NPU, FAIL, sai_ret);
+    }
+
+    npu_port_t deleted_port;
+    rc = ndi_port_map_sai_port_delete(npu_id, sai_port, &deleted_port);
+    if (rc != STD_ERR_OK) {
+        return rc;
+    }
+
+    if (ndi_db_ptr->switch_notification->port_event_update_cb != NULL) {
+        ndi_port_t ndi_port;
+        ndi_port.npu_id = npu_id;
+        ndi_port.npu_port = deleted_port;
+        ndi_db_ptr->switch_notification->port_event_update_cb(&ndi_port,
+                                                ndi_port_DELETE, 0);
+    }
+
+    return STD_ERR_OK;
+}
+
+void nas_ndi_port_map_dump(npu_id_t npu_id,npu_port_t port_id)
+{
+    sai_object_id_t sai_port;
+    t_std_error ret_code = STD_ERR_OK;
+
+    if ((ret_code = ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK)) {
+        printf("Interface Error    : Invalid port %d", port_id);
+    } else {
+        printf("Interface SAI OId  : 0x%"PRIx64" \r\n",sai_port);
+    }
 }

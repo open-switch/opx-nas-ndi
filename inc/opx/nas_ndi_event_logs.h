@@ -58,6 +58,9 @@
 #define NDI_ACL_LOG_ERROR(msg, ...) \
                    NDI_LOG_ERROR("NDI-ACL", msg, ##__VA_ARGS__)
 
+#define NDI_UDF_LOG_ERROR(msg, ...) \
+                   NDI_LOG_ERROR("NDI-UDF", msg, ##__VA_ARGS__)
+
 /******************NDI INFO log macros************************/
 
 #define NDI_LOG_INFO(ID, msg, ...) \
@@ -74,6 +77,12 @@
 
 #define NDI_ACL_LOG_DETAIL(msg, ...) \
                    NDI_LOG_INFO("NDI-ACL", msg, ##__VA_ARGS__)
+
+#define NDI_UDF_LOG_INFO(msg, ...) \
+                   NDI_LOG_INFO("NDI-UDF", msg, ##__VA_ARGS__)
+
+#define NDI_UDF_LOG_DETAIL(msg, ...) \
+                   NDI_LOG_INFO("NDI-UDF", msg, ##__VA_ARGS__)
 
 
 

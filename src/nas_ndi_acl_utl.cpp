@@ -77,8 +77,8 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
             {BASE_ACL_MATCH_TYPE_TOS,                SAI_ACL_ENTRY_ATTR_FIELD_TOS},
             {BASE_ACL_MATCH_TYPE_IP_FLAGS,           SAI_ACL_ENTRY_ATTR_FIELD_IP_FLAGS},
             {BASE_ACL_MATCH_TYPE_TCP_FLAGS,          SAI_ACL_ENTRY_ATTR_FIELD_TCP_FLAGS},
-            {BASE_ACL_MATCH_TYPE_IP_TYPE,            SAI_ACL_ENTRY_ATTR_FIELD_IP_TYPE},
-            {BASE_ACL_MATCH_TYPE_IP_FRAG,            SAI_ACL_ENTRY_ATTR_FIELD_IP_FRAG},
+            {BASE_ACL_MATCH_TYPE_IP_TYPE,            SAI_ACL_ENTRY_ATTR_FIELD_ACL_IP_TYPE},
+            {BASE_ACL_MATCH_TYPE_IP_FRAG,            SAI_ACL_ENTRY_ATTR_FIELD_ACL_IP_FRAG},
             {BASE_ACL_MATCH_TYPE_IPV6_FLOW_LABEL,    SAI_ACL_ENTRY_ATTR_FIELD_IPv6_FLOW_LABEL},
             {BASE_ACL_MATCH_TYPE_TC,                 SAI_ACL_ENTRY_ATTR_FIELD_TC},
             {BASE_ACL_MATCH_TYPE_ICMP_TYPE,          SAI_ACL_ENTRY_ATTR_FIELD_ICMP_TYPE},
@@ -91,6 +91,7 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
             {BASE_ACL_MATCH_TYPE_IN_INTF,            SAI_ACL_ENTRY_ATTR_FIELD_IN_PORT},
             {BASE_ACL_MATCH_TYPE_OUT_INTF,           SAI_ACL_ENTRY_ATTR_FIELD_OUT_PORT},
             {BASE_ACL_MATCH_TYPE_SRC_INTF,           SAI_ACL_ENTRY_ATTR_FIELD_SRC_PORT},
+            {BASE_ACL_MATCH_TYPE_UDF,                SAI_ACL_ENTRY_ATTR_USER_DEFINED_FIELD_MIN},
         };
 
     auto type_map_itr = _nas2sai_entry_filter_type_map.find (ndi_filter_type);
@@ -143,6 +144,7 @@ t_std_error ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_t ndi_action_t
             {BASE_ACL_ACTION_TYPE_REDIRECT_INTF,        SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT},
             {BASE_ACL_ACTION_TYPE_REDIRECT_INTF_LIST,   SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT_LIST},
             {BASE_ACL_ACTION_TYPE_EGRESS_INTF_MASK,     SAI_ACL_ENTRY_ATTR_ACTION_EGRESS_BLOCK_PORT_LIST},
+            {BASE_ACL_ACTION_TYPE_SET_USER_TRAP_ID,     SAI_ACL_ENTRY_ATTR_ACTION_SET_USER_TRAP_ID},
         };
 
     auto type_map_itr = _nas2sai_entry_action_type_map.find (ndi_action_type);
@@ -193,8 +195,8 @@ t_std_error ndi_acl_utl_ndi2sai_tbl_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filte
             {BASE_ACL_MATCH_TYPE_TOS,                SAI_ACL_TABLE_ATTR_FIELD_TOS},
             {BASE_ACL_MATCH_TYPE_IP_FLAGS,           SAI_ACL_TABLE_ATTR_FIELD_IP_FLAGS},
             {BASE_ACL_MATCH_TYPE_TCP_FLAGS,          SAI_ACL_TABLE_ATTR_FIELD_TCP_FLAGS},
-            {BASE_ACL_MATCH_TYPE_IP_TYPE,            SAI_ACL_TABLE_ATTR_FIELD_IP_TYPE},
-            {BASE_ACL_MATCH_TYPE_IP_FRAG,            SAI_ACL_TABLE_ATTR_FIELD_IP_FRAG},
+            {BASE_ACL_MATCH_TYPE_IP_TYPE,            SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE},
+            {BASE_ACL_MATCH_TYPE_IP_FRAG,            SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_FRAG},
             {BASE_ACL_MATCH_TYPE_IPV6_FLOW_LABEL,    SAI_ACL_TABLE_ATTR_FIELD_IPv6_FLOW_LABEL},
             {BASE_ACL_MATCH_TYPE_TC,                 SAI_ACL_TABLE_ATTR_FIELD_TC},
             {BASE_ACL_MATCH_TYPE_ICMP_TYPE,          SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE},
@@ -207,6 +209,7 @@ t_std_error ndi_acl_utl_ndi2sai_tbl_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filte
             {BASE_ACL_MATCH_TYPE_IN_INTF,            SAI_ACL_TABLE_ATTR_FIELD_IN_PORT},
             {BASE_ACL_MATCH_TYPE_OUT_INTF,           SAI_ACL_TABLE_ATTR_FIELD_OUT_PORT},
             {BASE_ACL_MATCH_TYPE_SRC_INTF,           SAI_ACL_TABLE_ATTR_FIELD_SRC_PORT},
+            {BASE_ACL_MATCH_TYPE_UDF,                SAI_ACL_TABLE_ATTR_USER_DEFINED_FIELD_GROUP_MIN},
         };
 
     auto filter_type_itr = _nas2sai_tbl_filter_type_map.find (ndi_filter_type);
@@ -327,6 +330,24 @@ static void _fill_sai_filter_u8 (sai_attribute_t *sai_attr_p,
     sai_attr_p->value.aclfield.mask.u8 = f->mask.values.u8;
 }
 
+static void _fill_sai_filter_u8list (sai_attribute_t *sai_attr_p,
+                                     const ndi_acl_entry_filter_t* f,
+                                     nas::mem_alloc_helper_t& mem_helper)
+{
+    size_t bytecount = f->data.values.ndi_u8list.byte_count;
+    uint8_t* datalist = mem_helper.alloc <uint8_t> (bytecount);
+    uint8_t* masklist = mem_helper.alloc <uint8_t> (bytecount);
+
+    for (uint_t count = 0; count < bytecount; count ++) {
+        datalist[count] = f->data.values.ndi_u8list.byte_list[count];
+        masklist[count] = f->mask.values.ndi_u8list.byte_list[count];
+    }
+    sai_attr_p->value.aclfield.data.u8list.count = bytecount;
+    sai_attr_p->value.aclfield.data.u8list.list = datalist;
+    sai_attr_p->value.aclfield.mask.u8list.count = bytecount;
+    sai_attr_p->value.aclfield.mask.u8list.list = masklist;
+}
+
 static void _fill_sai_filter_ip_type (sai_attribute_t *sai_attr_p,
                                       const ndi_acl_entry_filter_t* f,
                                       nas::mem_alloc_helper_t& mem_helper)
@@ -430,6 +451,7 @@ t_std_error ndi_acl_utl_fill_sai_filter (sai_attribute_t *sai_attr_p,
             {NDI_ACL_FILTER_U8,                 _fill_sai_filter_u8},
             {NDI_ACL_FILTER_OBJ_ID,             _fill_sai_filter_oid},
             {NDI_ACL_FILTER_BOOL,               _fill_sai_filter_bool},
+            {NDI_ACL_FILTER_U8LIST,             _fill_sai_filter_u8list},
         };
 
     BASE_ACL_MATCH_TYPE_t filter_type        = ndi_filter_p->filter_type;
@@ -440,6 +462,9 @@ t_std_error ndi_acl_utl_fill_sai_filter (sai_attribute_t *sai_attr_p,
         NDI_ACL_LOG_ERROR ("ACL filter type %d is not supported in SAI",
                            filter_type);
         return rc;
+    }
+    if (filter_type == BASE_ACL_MATCH_TYPE_UDF) {
+        sai_attr_p->id += ndi_filter_p->udf_seq_no;
     }
 
     try {

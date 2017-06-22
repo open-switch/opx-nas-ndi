@@ -51,7 +51,9 @@ t_std_error ndi_create_lag(npu_id_t npu_id,ndi_obj_id_t *ndi_lag_id)
         return STD_ERR(INTERFACE, CFG,0);
     }
 
-    if((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->create_lag(&sai_local_lag_id,0,NULL))
+    if((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->create_lag(&sai_local_lag_id,
+                                                          ndi_switch_id_get(),
+                                                          0,NULL))
             != SAI_STATUS_SUCCESS) {
         NDI_LAG_LOG_ERROR("SAI_LAG_CREATE Failure");
         return STD_ERR(INTERFACE, CFG, sai_ret);
@@ -116,7 +118,8 @@ t_std_error ndi_add_ports_to_lag(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
     sai_lag_attr_list [count].value.oid = sai_port;
     count++;
 
-    if((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->create_lag_member(ndi_lag_member_id,count,
+    if((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->create_lag_member(ndi_lag_member_id,
+                    ndi_switch_id_get(), count,
                     sai_lag_attr_list)) != SAI_STATUS_SUCCESS) {
         NDI_LAG_LOG_ERROR("Add ports to LAG Group Failure");
         return STD_ERR(INTERFACE, CFG, sai_ret);

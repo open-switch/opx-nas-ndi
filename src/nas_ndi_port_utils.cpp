@@ -119,9 +119,15 @@ ndi2sai_speed =
     {BASE_IF_SPEED_100MBPS,     100},
     {BASE_IF_SPEED_1GIGE,      1000},
     {BASE_IF_SPEED_10GIGE,    10000},
+    {BASE_IF_SPEED_20GIGE,    20000},
     {BASE_IF_SPEED_25GIGE,    25000},
     {BASE_IF_SPEED_40GIGE,    40000},
+    {BASE_IF_SPEED_50GIGE,    50000},
     {BASE_IF_SPEED_100GIGE,  100000},
+    {BASE_IF_SPEED_4GFC,       4000},
+    {BASE_IF_SPEED_8GFC,       8000},
+    {BASE_IF_SPEED_16GFC,     16000},
+    {BASE_IF_SPEED_32GFC,     32000},
 };
 
 bool ndi_port_get_sai_speed(BASE_IF_SPEED_t speed, uint32_t *sai_speed){
@@ -139,3 +145,39 @@ bool ndi_port_get_ndi_speed(uint32_t sai_speed, BASE_IF_SPEED_t *ndi_speed) {
     return true;
 }
 
+static std::unordered_map<BASE_CMN_FEC_TYPE_t, sai_port_fec_mode_t, std::hash<int>>
+ndi2sai_int_fec_mode =
+{
+    {BASE_CMN_FEC_TYPE_OFF, SAI_PORT_FEC_MODE_NONE},
+    {BASE_CMN_FEC_TYPE_CL74_FC, SAI_PORT_FEC_MODE_FC},
+    {BASE_CMN_FEC_TYPE_CL91_RS, SAI_PORT_FEC_MODE_RS},
+    {BASE_CMN_FEC_TYPE_CL108_RS, SAI_PORT_FEC_MODE_RS}
+};
+
+sai_port_fec_mode_t ndi_port_get_sai_fec_mode(BASE_CMN_FEC_TYPE_t ndi_fec_mode)
+{
+    auto it = ndi2sai_int_fec_mode.find(ndi_fec_mode);
+    if (it == ndi2sai_int_fec_mode.end()) {
+        return SAI_PORT_FEC_MODE_NONE;
+    }
+
+    return ndi2sai_int_fec_mode[ndi_fec_mode];
+}
+
+BASE_CMN_FEC_TYPE_t ndi_port_get_fec_mode(sai_port_fec_mode_t sai_fec_mode,
+                                          bool supp_100g)
+{
+    if (sai_fec_mode == SAI_PORT_FEC_MODE_NONE) {
+        return BASE_CMN_FEC_TYPE_OFF;
+    }
+    if (sai_fec_mode == SAI_PORT_FEC_MODE_FC) {
+        return BASE_CMN_FEC_TYPE_CL74_FC;
+    }
+
+    //RS mode depends on port speed
+    if (supp_100g) {
+        return BASE_CMN_FEC_TYPE_CL91_RS;
+    } else {
+        return BASE_CMN_FEC_TYPE_CL108_RS;
+    }
+}

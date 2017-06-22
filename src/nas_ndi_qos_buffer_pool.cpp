@@ -37,7 +37,7 @@ const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
     {BASE_QOS_BUFFER_POOL_SHARED_SIZE,        SAI_BUFFER_POOL_ATTR_SHARED_SIZE},
     {BASE_QOS_BUFFER_POOL_POOL_TYPE,          SAI_BUFFER_POOL_ATTR_TYPE},
     {BASE_QOS_BUFFER_POOL_SIZE,               SAI_BUFFER_POOL_ATTR_SIZE},
-    {BASE_QOS_BUFFER_POOL_THRESHOLD_MODE,     SAI_BUFFER_POOL_ATTR_TH_MODE},
+    {BASE_QOS_BUFFER_POOL_THRESHOLD_MODE,     SAI_BUFFER_POOL_ATTR_THRESHOLD_MODE},
 
 };
 
@@ -125,6 +125,7 @@ t_std_error ndi_qos_create_buffer_pool(npu_id_t npu_id,
     sai_object_id_t sai_qos_buffer_pool_id;
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
             create_buffer_pool(&sai_qos_buffer_pool_id,
+                                ndi_switch_id_get(),
                                 attr_list.size(),
                                 &attr_list[0]))
                          != SAI_STATUS_SUCCESS) {
@@ -216,7 +217,7 @@ static t_std_error _fill_ndi_qos_buffer_pool_struct(sai_attribute_t *attr_list,
                           BASE_QOS_BUFFER_POOL_TYPE_INGRESS: BASE_QOS_BUFFER_POOL_TYPE_EGRESS);
         else if (attr->id == SAI_BUFFER_POOL_ATTR_SIZE)
             p->size = attr->value.u32;
-        else if (attr->id == SAI_BUFFER_POOL_ATTR_TH_MODE)
+        else if (attr->id == SAI_BUFFER_POOL_ATTR_THRESHOLD_MODE)
             p->threshold_mode = (attr->value.s32 == SAI_BUFFER_POOL_THRESHOLD_MODE_STATIC?
                                      BASE_QOS_BUFFER_THRESHOLD_MODE_STATIC: BASE_QOS_BUFFER_THRESHOLD_MODE_DYNAMIC);
     }

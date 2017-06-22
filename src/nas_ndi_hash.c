@@ -193,7 +193,8 @@ t_std_error nas_ndi_create_hash_object (uint32_t sai_traffic,
     sai_attribute_t switch_attr;
     sai_status_t    status;
 
-    status = sai_hash_api->create_hash(&obj_id, attr_count, hash_attr);
+    status = sai_hash_api->create_hash(&obj_id, ndi_switch_id_get(),
+                                       attr_count, hash_attr);
     if (status == SAI_STATUS_NOT_SUPPORTED) {
         /* Log it and keep going */
         EV_LOGGING(NDI, INFO, "NAS-HASH", "Not supported in hardware");
@@ -209,7 +210,7 @@ t_std_error nas_ndi_create_hash_object (uint32_t sai_traffic,
     switch_attr.id = sai_traffic;
     switch_attr.value.oid = obj_id;
 
-    status = sai_switch_api->set_switch_attribute(&switch_attr);
+    status = sai_switch_api->set_switch_attribute(ndi_switch_id_get(),&switch_attr);
     if (status != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, ERR, "NAS-HASH", "Failed to set switch attribute");
         return STD_ERR(NPU, PARAM, 0);
@@ -256,7 +257,7 @@ t_std_error nas_ndi_create_all_hash_objects (void)
         return STD_ERR(NPU, PARAM, 0);
     }
 
-    hash_attr.id = SAI_HASH_ATTR_NATIVE_FIELD_LIST;
+    hash_attr.id = SAI_HASH_ATTR_NATIVE_HASH_FIELD_LIST;
     hash_attr.value.s32list.count = NAS_SWITCH_DEFAULT_HASH_FIELDS_COUNT;
     hash_attr.value.s32list.list = s32list;
 
@@ -323,7 +324,8 @@ t_std_error nas_ndi_set_hash_obj (uint32_t nas_traffic, uint32_t count,
     switch_attr.value.oid = SAI_NULL_OBJECT_ID;
     switch_attr.id = nas_ndi_translate_traffic(nas_traffic);
 
-    status = sai_switch_api_tbl->get_switch_attribute(attr_count, &switch_attr);
+    status = sai_switch_api_tbl->get_switch_attribute(ndi_switch_id_get(),
+                                                    attr_count, &switch_attr);
     if (status != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, ERR, "NAS-HASH", "Failed to get hash object ID");
         return STD_ERR(NPU, PARAM, 0);
@@ -338,7 +340,7 @@ t_std_error nas_ndi_set_hash_obj (uint32_t nas_traffic, uint32_t count,
         }
     }
 
-    hash_attr.id = SAI_HASH_ATTR_NATIVE_FIELD_LIST;
+    hash_attr.id = SAI_HASH_ATTR_NATIVE_HASH_FIELD_LIST;
     hash_attr.value.s32list.count = j;
     hash_attr.value.s32list.list = s32list;
 
@@ -391,7 +393,8 @@ t_std_error nas_ndi_get_hash (uint64_t nas_traffic, uint32_t *count, uint32_t *l
     switch_attr.value.oid = SAI_NULL_OBJECT_ID;
     switch_attr.id = nas_ndi_translate_traffic(nas_traffic);
 
-    status = sai_switch_api_tbl->get_switch_attribute(attr_count, &switch_attr);
+    status = sai_switch_api_tbl->get_switch_attribute(ndi_switch_id_get(),
+                                                    attr_count, &switch_attr);
     if (status != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, ERR, "NAS-HASH", "Failed to get hash object's ID");
         return STD_ERR(NPU, PARAM, 0);
@@ -400,7 +403,7 @@ t_std_error nas_ndi_get_hash (uint64_t nas_traffic, uint32_t *count, uint32_t *l
     /*
      * Call the SAI GET_ATTRIBUTE function for the standard fields
      */
-    hash_attr.id = SAI_HASH_ATTR_NATIVE_FIELD_LIST;
+    hash_attr.id = SAI_HASH_ATTR_NATIVE_HASH_FIELD_LIST;
     hash_attr.value.s32list.count = BASE_TRAFFIC_HASH_FIELD_MAX;
     hash_attr.value.s32list.list = s32list;
 

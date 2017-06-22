@@ -2,7 +2,9 @@ Source: opx-nas-ndi
 Section: net
 Priority: optional
 Maintainer: Dell EMC <ops-dev@lists.openswitch.net>
-Build-Depends: debhelper (>= 9),dh-autoreconf,autotools-dev,libopx-common-dev,libopx-nas-common-dev,libopx-logging-dev,opx-ndi-api-dev,opx-sai-api-dev,libopx-sai-common-dev
+Build-Depends: debhelper (>= 9),dh-autoreconf,autotools-dev,libopx-common-dev (>= 1.3.0),
+               libopx-nas-common-dev (>= 3.3.0),libopx-logging-dev (>= 2.0.0),opx-ndi-api-dev (>= 5.5.0),
+               opx-sai-api-dev (>= 26.1.0),libopx-sai-common-dev (>= 21.0.0)
 Standards-Version: 3.9.3
 Vcs-Browser: https://github.com/open-switch/opx-nas-ndi
 Vcs-Git: https://github.com/open-switch/opx-nas-ndi.git
@@ -14,5 +16,7 @@ Description: This package contains nas-ndi code
 
 Package: libopx-nas-ndi-dev
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends},libopx-nas-ndi1 (=${binary:Version}),libopx-common-dev,libopx-logging-dev,libopx-nas-common-dev,opx-ndi-api-dev,libopx-base-model-dev,opx-sai-api-dev,libopx-sai-common1
+Depends: ${shlibs:Depends}, ${misc:Depends},libopx-nas-ndi1 (=${binary:Version}),libopx-common-dev (>= 1.3.0),
+         libopx-logging-dev (>= 2.0.0),libopx-nas-common-dev (>= 3.3.0),opx-ndi-api-dev (>= 5.5.0),
+         libopx-base-model-dev (>= 3.55.0),opx-sai-api-dev (>=26.1.0),libopx-sai-common1
 Description: This package contains nas-ndi code

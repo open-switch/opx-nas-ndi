@@ -70,19 +70,19 @@ ndi_mirror_dir_to_sai_map = {
 };
 
 
-static std::unordered_map<BASE_MIRROR_MODE_t, sai_mirror_type_t, std::hash<int>>
+static std::unordered_map<BASE_MIRROR_MODE_t, sai_mirror_session_type_t, std::hash<int>>
 ndi_mirror_type_to_sai_map = {
-    {BASE_MIRROR_MODE_SPAN,SAI_MIRROR_TYPE_LOCAL},
-    {BASE_MIRROR_MODE_RSPAN,SAI_MIRROR_TYPE_REMOTE},
-    {BASE_MIRROR_MODE_ERSPAN,SAI_MIRROR_TYPE_ENHANCED_REMOTE}
+    {BASE_MIRROR_MODE_SPAN,SAI_MIRROR_SESSION_TYPE_LOCAL},
+    {BASE_MIRROR_MODE_RSPAN,SAI_MIRROR_SESSION_TYPE_REMOTE},
+    {BASE_MIRROR_MODE_ERSPAN,SAI_MIRROR_SESSION_TYPE_ENHANCED_REMOTE}
 };
 
 
-static std::unordered_map<sai_mirror_type_t, BASE_MIRROR_MODE_t, std::hash<int>>
+static std::unordered_map<sai_mirror_session_type_t, BASE_MIRROR_MODE_t, std::hash<int>>
 ndi_mirror_type_from_sai_map = {
-    {SAI_MIRROR_TYPE_LOCAL,BASE_MIRROR_MODE_SPAN},
-    {SAI_MIRROR_TYPE_REMOTE,BASE_MIRROR_MODE_RSPAN},
-    {SAI_MIRROR_TYPE_ENHANCED_REMOTE,BASE_MIRROR_MODE_ERSPAN}
+    {SAI_MIRROR_SESSION_TYPE_LOCAL,BASE_MIRROR_MODE_SPAN},
+    {SAI_MIRROR_SESSION_TYPE_REMOTE,BASE_MIRROR_MODE_RSPAN},
+    {SAI_MIRROR_SESSION_TYPE_ENHANCED_REMOTE,BASE_MIRROR_MODE_ERSPAN}
 };
 
 
@@ -168,7 +168,7 @@ static void ndi_mirror_fill_erspan_attr(ndi_mirror_entry_t * entry, sai_attribut
     attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_GRE_PROTOCOL_TYPE;
     attr_list[attr_ix++].value.u16 = NDI_GRE_TYPE;
 
-    attr_list[attr_ix].id= SAI_MIRROR_SESSION_ATTR_ENCAP_TYPE;
+    attr_list[attr_ix].id= SAI_MIRROR_SESSION_ATTR_ERSPAN_ENCAPSULATION_TYPE;
     attr_list[attr_ix++].value.s32 = SAI_ERSPAN_ENCAPSULATION_TYPE_MIRROR_L3_GRE_TUNNEL;
 
 }
@@ -201,7 +201,7 @@ t_std_error ndi_mirror_create_session(ndi_mirror_entry_t * entry){
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(entry->dst_port.npu_id);
 
     if ((sai_ret = ndi_mirror_api_get(ndi_db_ptr)->create_mirror_session((sai_object_id_t *)
-                &entry->ndi_mirror_id,ndi_mirror_attr_count,sai_mirror_attr_list))
+                &entry->ndi_mirror_id,ndi_switch_id_get(),ndi_mirror_attr_count,sai_mirror_attr_list))
                 != SAI_STATUS_SUCCESS) {
         NDI_MIRROR_LOG(ERR,0,"Failed to create a new Mirroring Session");
         return STD_ERR(MIRROR, FAIL, sai_ret);

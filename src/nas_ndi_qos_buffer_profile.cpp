@@ -31,12 +31,23 @@
 #include <vector>
 #include <unordered_map>
 
+#define NAS_BUFFER_SHARED_DYNAMIC_THRESHOLD_START 0
+#define SAI_BUFFER_SHARED_DYNAMIC_THRESHOLD_START (-7)
+
+#define NAS_TO_SAI_BUFFER_SHARED_DYNAMIC_THESHOLD(x) \
+           ((x) - NAS_BUFFER_SHARED_DYNAMIC_THRESHOLD_START \
+        + SAI_BUFFER_SHARED_DYNAMIC_THRESHOLD_START)
+
+#define SAI_TO_NAS_BUFFER_SHARED_DYNAMIC_THESHOLD(x) \
+           ((x) + NAS_BUFFER_SHARED_DYNAMIC_THRESHOLD_START \
+        - SAI_BUFFER_SHARED_DYNAMIC_THRESHOLD_START)
+
 
 const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
     ndi2sai_buffer_profile_attr_id_map = {
     {BASE_QOS_BUFFER_PROFILE_POOL_ID,                   SAI_BUFFER_PROFILE_ATTR_POOL_ID},
     {BASE_QOS_BUFFER_PROFILE_BUFFER_SIZE,               SAI_BUFFER_PROFILE_ATTR_BUFFER_SIZE},
-    {BASE_QOS_BUFFER_PROFILE_THRESHOLD_MODE,            SAI_BUFFER_PROFILE_ATTR_TH_MODE},
+    {BASE_QOS_BUFFER_PROFILE_THRESHOLD_MODE,            SAI_BUFFER_PROFILE_ATTR_THRESHOLD_MODE},
     {BASE_QOS_BUFFER_PROFILE_SHARED_DYNAMIC_THRESHOLD,  SAI_BUFFER_PROFILE_ATTR_SHARED_DYNAMIC_TH},
     {BASE_QOS_BUFFER_PROFILE_SHARED_STATIC_THRESHOLD,   SAI_BUFFER_PROFILE_ATTR_SHARED_STATIC_TH},
     {BASE_QOS_BUFFER_PROFILE_XOFF_THRESHOLD,            SAI_BUFFER_PROFILE_ATTR_XOFF_TH},
@@ -64,10 +75,12 @@ static t_std_error ndi_qos_fill_buffer_profile_attr(nas_attr_id_t attr_id,
     else if (attr_id == BASE_QOS_BUFFER_PROFILE_BUFFER_SIZE)
         sai_attr.value.u32 = p->buffer_size;
     else if (attr_id == BASE_QOS_BUFFER_PROFILE_THRESHOLD_MODE)
-        sai_attr.value.u32 = (p->threshold_mode == BASE_QOS_BUFFER_THRESHOLD_MODE_STATIC?
-                                  SAI_BUFFER_PROFILE_THRESHOLD_MODE_STATIC: SAI_BUFFER_PROFILE_THRESHOLD_MODE_DYNAMIC);
+        sai_attr.value.s32 = (p->threshold_mode == BASE_QOS_BUFFER_THRESHOLD_MODE_STATIC?
+                                  SAI_BUFFER_PROFILE_THRESHOLD_MODE_STATIC:
+                                  SAI_BUFFER_PROFILE_THRESHOLD_MODE_DYNAMIC);
     else if (attr_id == BASE_QOS_BUFFER_PROFILE_SHARED_DYNAMIC_THRESHOLD)
-        sai_attr.value.u8 = (uint8_t)(p->shared_dynamic_th);
+        // Convert NAS range [0..10] to SAI-API range [-7 .. 3]
+        sai_attr.value.s8 = NAS_TO_SAI_BUFFER_SHARED_DYNAMIC_THESHOLD(p->shared_dynamic_th);
     else if (attr_id == BASE_QOS_BUFFER_PROFILE_SHARED_STATIC_THRESHOLD)
         sai_attr.value.u32 = p->shared_static_th;
     else if (attr_id == BASE_QOS_BUFFER_PROFILE_XOFF_THRESHOLD)
@@ -132,7 +145,7 @@ t_std_error ndi_qos_create_buffer_profile(npu_id_t npu_id,
 
     sai_object_id_t sai_qos_buffer_profile_id;
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-            create_buffer_profile(&sai_qos_buffer_profile_id,
+            create_buffer_profile(&sai_qos_buffer_profile_id,ndi_switch_id_get(),
                                 attr_list.size(),
                                 &attr_list[0]))
                          != SAI_STATUS_SUCCESS) {
@@ -224,11 +237,12 @@ static t_std_error _fill_ndi_qos_buffer_profile_struct(sai_attribute_t *attr_lis
             p->pool_id = (attr->value.u64 == SAI_NULL_OBJECT_ID? NDI_QOS_NULL_OBJECT_ID: attr->value.u64);
         else if (attr->id == SAI_BUFFER_PROFILE_ATTR_BUFFER_SIZE)
             p->buffer_size = attr->value.u32;
-        else if (attr->id == SAI_BUFFER_PROFILE_ATTR_TH_MODE)
+        else if (attr->id == SAI_BUFFER_PROFILE_ATTR_THRESHOLD_MODE)
             p->threshold_mode = (attr->value.s32 == SAI_BUFFER_PROFILE_THRESHOLD_MODE_STATIC?
                                  BASE_QOS_BUFFER_THRESHOLD_MODE_STATIC: BASE_QOS_BUFFER_THRESHOLD_MODE_DYNAMIC);
         else if (attr->id == SAI_BUFFER_PROFILE_ATTR_SHARED_DYNAMIC_TH)
-            p->shared_dynamic_th = attr->value.u8;
+            // convert SAI range [-7 .. 3] to NAS range [0 .. 10]
+            p->shared_dynamic_th = SAI_TO_NAS_BUFFER_SHARED_DYNAMIC_THESHOLD(attr->value.s8);
         else if (attr->id == SAI_BUFFER_PROFILE_ATTR_SHARED_STATIC_TH)
             p->shared_static_th = attr->value.u32;
         else if (attr->id == SAI_BUFFER_PROFILE_ATTR_XOFF_TH)
