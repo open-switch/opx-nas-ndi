@@ -34,11 +34,17 @@ static const char* ndi_profile_set_value(int profile_id,
 }
 static inline void nas_ndi_get_file_name_from_profile(char *profile, char *file_name)
 {
-#define NAS_NDI_FILE_PATH "/etc/opt/dell/os10/sai/"
-    int size = 0;
-    size = strlen(NAS_NDI_FILE_PATH) + strlen(profile) + strlen("-init.xmli");
 
-    snprintf(file_name, size, "%s%s%s",NAS_NDI_FILE_PATH, profile,"-init.xml");
+    char *profile_file_name = getenv("OPX_SAI_PROFILE_FILE");
+    if (profile_file_name  != NULL) {
+        snprintf(file_name, strlen(profile_file_name)+1, "%s", profile_file_name );
+    }
+    else {
+#define NAS_NDI_FILE_PATH "/etc/opx/sai/"
+        int size = 0;
+        size = strlen(NAS_NDI_FILE_PATH) + strlen(profile) + strlen("-init.xmli");
+        snprintf(file_name, size, "%s%s%s",NAS_NDI_FILE_PATH, profile,"-init.xml");
+    }
 }
 
 

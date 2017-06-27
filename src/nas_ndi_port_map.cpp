@@ -327,8 +327,8 @@ t_std_error ndi_port_map_sai_port_add(npu_id_t npu, sai_object_id_t sai_port,
     g_ndi_port_map_tbl[npu][first_hwport].flags |= NDI_PORT_MAP_ACTIVE_MASK;
     g_ndi_port_map_tbl[npu][first_hwport].hwport_list.resize(count);
 
-    for (uint32_t idx =0; idx < hwport_count; idx++) {
-        g_ndi_port_map_tbl[npu][first_hwport].hwport_list[idx] = hwport_list[idx];
+    for (uint32_t idx =0; idx < count; idx++) {
+       g_ndi_port_map_tbl[npu][first_hwport].hwport_list[idx] = hw_ports[idx];
     }
 
     /*  Now add an entry in the sai port map   */

@@ -44,8 +44,6 @@
 extern "C"{
 #endif
 
-#define DEFAULT_SAI_PROFILE_FILE "/etc/opx/sai/sai-profile.ini"
-
 /**
  * @class SAI API Table
  * @brief Contains pointer to the SAI API tables for L2 and L3 feature-set.

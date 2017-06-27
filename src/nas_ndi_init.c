@@ -481,11 +481,6 @@ t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
         sai_switch_attr_list[count].value.booldata = true;
         count++;
     }
-    /*  initialize the NPU */
-    handle_profile_map(ndi_db_ptr->npu_profile_id, getenv("OPX_SAI_PROFILE_FILE"));
-
-    sai_ret = sai_switch_api_tbl->initialize_switch(ndi_db_ptr->npu_profile_id, NULL,
-                                                    NULL, &switch_notification);
 
    /*  Create the NPU */
    sai_ret = sai_switch_api_tbl->create_switch(&ndi_switch_id,
