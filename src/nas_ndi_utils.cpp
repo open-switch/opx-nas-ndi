@@ -36,12 +36,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include <set>
-#include <sstream>
-#include <vector>
-#include <iostream>
-#include <fstream>
-
 #define NDI_SAI_PORT_OBJECT_TYPE_BITPOS     48
 #define NDI_SAI_PORT_OBJECT_ID_BITPOS     0
 
