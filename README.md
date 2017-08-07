@@ -7,4 +7,4 @@ This repository contains a mediation layer between the NAS software and the SAI 
 
 See [Network device interface](https://github.com/open-switch/opx-docs/wiki/Network-device-interface) for more information on the NAS L3 module.
 
-(c) 2017 Dell
+© 2017 Dell EMC
