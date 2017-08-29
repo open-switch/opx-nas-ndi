@@ -83,7 +83,7 @@ t_std_error _sai_port_attr_set_or_get(npu_id_t npu, port_t port, SAI_SET_OR_GET_
     }
     else {
         NDI_PORT_LOG_TRACE("Error in setting attr %d on npu %d and port %d",
-                attr,npu,port);
+                attr->id,npu,port);
         return STD_ERR(NPU, CFG, sai_ret);
     }
 }

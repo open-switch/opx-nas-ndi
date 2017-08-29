@@ -78,7 +78,7 @@ t_std_error ndi_packet_tx (uint8_t* buf, uint32_t len, ndi_packet_attr_t *p_attr
         ++attr_idx;
     }
 
-    if ((sai_ret = ndi_packet_hostif_api_tbl_get(ndi_db_ptr)->send_packet(SAI_NULL_OBJECT_ID, buf,
+    if ((sai_ret = ndi_packet_hostif_api_tbl_get(ndi_db_ptr)->send_packet(ndi_switch_id_get(), buf,
                                              buf_len, attr_idx, sai_attr)) != SAI_STATUS_SUCCESS) {
         return STD_ERR(INTERFACE, FAIL, sai_ret);
     }
