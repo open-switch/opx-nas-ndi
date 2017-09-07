@@ -208,18 +208,6 @@ t_std_error ndi_qos_delete_scheduler_group(npu_id_t npu_id,
 
 }
 
-const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
-    ndi2sai_scheduler_group_attr_id_map = {
-        {BASE_QOS_SCHEDULER_GROUP_CHILD_COUNT,    SAI_SCHEDULER_GROUP_ATTR_CHILD_COUNT},
-        {BASE_QOS_SCHEDULER_GROUP_CHILD_LIST,     SAI_SCHEDULER_GROUP_ATTR_CHILD_LIST},
-        {BASE_QOS_SCHEDULER_GROUP_PORT_ID,        SAI_SCHEDULER_GROUP_ATTR_PORT_ID},
-        {BASE_QOS_SCHEDULER_GROUP_LEVEL,          SAI_SCHEDULER_GROUP_ATTR_LEVEL},
-        {BASE_QOS_SCHEDULER_GROUP_SCHEDULER_PROFILE_ID, SAI_SCHEDULER_GROUP_ATTR_SCHEDULER_PROFILE_ID},
-        {BASE_QOS_SCHEDULER_GROUP_MAX_CHILD,      SAI_SCHEDULER_GROUP_ATTR_MAX_CHILDS},
-        {BASE_QOS_SCHEDULER_GROUP_PARENT,         SAI_SCHEDULER_GROUP_ATTR_PARENT_NODE},
-
-};
-
 static t_std_error _fill_ndi_qos_scheduler_group_struct(sai_attribute_t *attr_list,
                         uint_t num_attr, ndi_qos_scheduler_group_struct_t *p)
 {
@@ -290,6 +278,19 @@ t_std_error ndi_qos_get_scheduler_group(npu_id_t npu_id,
                             uint_t num_attr,
                             ndi_qos_scheduler_group_struct_t *p)
 {
+    static const auto & ndi2sai_scheduler_group_attr_id_map =
+        * new std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
+    {
+        {BASE_QOS_SCHEDULER_GROUP_CHILD_COUNT,    SAI_SCHEDULER_GROUP_ATTR_CHILD_COUNT},
+        {BASE_QOS_SCHEDULER_GROUP_CHILD_LIST,     SAI_SCHEDULER_GROUP_ATTR_CHILD_LIST},
+        {BASE_QOS_SCHEDULER_GROUP_PORT_ID,        SAI_SCHEDULER_GROUP_ATTR_PORT_ID},
+        {BASE_QOS_SCHEDULER_GROUP_LEVEL,          SAI_SCHEDULER_GROUP_ATTR_LEVEL},
+        {BASE_QOS_SCHEDULER_GROUP_SCHEDULER_PROFILE_ID, SAI_SCHEDULER_GROUP_ATTR_SCHEDULER_PROFILE_ID},
+        {BASE_QOS_SCHEDULER_GROUP_MAX_CHILD,      SAI_SCHEDULER_GROUP_ATTR_MAX_CHILDS},
+        {BASE_QOS_SCHEDULER_GROUP_PARENT,         SAI_SCHEDULER_GROUP_ATTR_PARENT_NODE},
+
+    };
+
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     std::vector<sai_attribute_t> attr_list;
     std::vector<sai_object_id_t> child_id_list;
@@ -316,7 +317,7 @@ t_std_error ndi_qos_get_scheduler_group(npu_id_t npu_id,
     }
     catch(...) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                    "Unexpected error.\n", npu_id);
+                    "Unexpected error.\n");
         return STD_ERR(QOS, CFG, 0);
     }
 

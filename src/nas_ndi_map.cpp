@@ -57,11 +57,12 @@ static inline bool operator==(const nas_ndi_map_key_t& key1, const nas_ndi_map_k
 
 std_mutex_lock_create_static_init_fast (nas_ndi_map_mutex);
 
-static std::unordered_map<nas_ndi_map_key_t, std::vector <nas_ndi_map_data_t>, _nas_ndi_map_hash, _nas_ndi_map_equal> g_nas_ndi_map;
+static auto g_nas_ndi_map = new std::unordered_map<nas_ndi_map_key_t,
+                                std::vector <nas_ndi_map_data_t>, _nas_ndi_map_hash, _nas_ndi_map_equal>;
 
 static bool nas_ndi_map_apply_filter (nas_ndi_map_data_t       *arg1,
                                       nas_ndi_map_data_t       *arg2,
-                                      nas_ndi_map_val_filter_t  filter)
+                                      nas_ndi_map_val_filter_type_t  filter)
 {
     if ((filter & NAS_NDI_MAP_VAL_FILTER_NONE) == NAS_NDI_MAP_VAL_FILTER_NONE) {
         return true;
@@ -82,24 +83,6 @@ static bool nas_ndi_map_apply_filter (nas_ndi_map_data_t       *arg1,
     return true;
 }
 
-static void nas_ndi_map_copy_value (nas_ndi_map_data_t       *dst,
-                                    nas_ndi_map_data_t       *src,
-                                    nas_ndi_map_val_filter_t  filter)
-{
-    if ((filter & NAS_NDI_MAP_VAL_FILTER_NONE) == NAS_NDI_MAP_VAL_FILTER_NONE) {
-        *dst = *src;
-        return;
-    }
-
-    if ((filter & NAS_NDI_MAP_VAL_FILTER_VAL1) == NAS_NDI_MAP_VAL_FILTER_VAL1) {
-        dst->val1 = src->val1;
-    }
-
-    if ((filter & NAS_NDI_MAP_VAL_FILTER_VAL2) == NAS_NDI_MAP_VAL_FILTER_VAL2) {
-        dst->val2 = src->val2;
-    }
-}
-
 extern "C" {
 
 t_std_error nas_ndi_map_insert (nas_ndi_map_key_t *key, nas_ndi_map_val_t *value)
@@ -110,9 +93,9 @@ t_std_error nas_ndi_map_insert (nas_ndi_map_key_t *key, nas_ndi_map_val_t *value
     std_mutex_lock (&nas_ndi_map_mutex);
 
     try {
-        auto map_it = g_nas_ndi_map.find (*key);
+        auto map_it = g_nas_ndi_map->find (*key);
 
-        if (map_it != g_nas_ndi_map.end()) {
+        if (map_it != g_nas_ndi_map->end()) {
             std::vector <nas_ndi_map_data_t>& list = map_it->second;
 
             for (i = 0; i < value->count; i++) {
@@ -125,7 +108,7 @@ t_std_error nas_ndi_map_insert (nas_ndi_map_key_t *key, nas_ndi_map_val_t *value
             for (i = 0; i < value->count; i++) {
                 new_list.push_back (value->data[i]);
             }
-            g_nas_ndi_map.insert (std::make_pair (*key, new_list));
+            g_nas_ndi_map->insert (std::make_pair (*key, new_list));
         }
     }
     catch (...) {
@@ -143,10 +126,10 @@ t_std_error nas_ndi_map_delete (nas_ndi_map_key_t *key)
     std_mutex_lock (&nas_ndi_map_mutex);
 
     try {
-        auto map_it = g_nas_ndi_map.find (*key);
-        if (map_it != g_nas_ndi_map.end()) {
+        auto map_it = g_nas_ndi_map->find (*key);
+        if (map_it != g_nas_ndi_map->end()) {
             map_it->second.clear();
-            g_nas_ndi_map.erase (map_it);
+            g_nas_ndi_map->erase (map_it);
         }
     }
     catch (...) {
@@ -157,32 +140,38 @@ t_std_error nas_ndi_map_delete (nas_ndi_map_key_t *key)
     return rc;
 }
 
+static t_std_error nas_ndi_map_delete_internal (
+        std::vector <nas_ndi_map_data_t>& list,
+        nas_ndi_map_val_filter_t *filter)
+{
+    t_std_error rc = STD_ERR(NPU, FAIL, 0);
+    size_t position = 0;
+
+    for (auto data: list) {
+        if (nas_ndi_map_apply_filter (&filter->value,
+                    &data, filter->type)) {
+            list.erase(list.begin() + position);
+            rc = STD_ERR_OK;
+            break;
+        }
+        ++position;
+    }
+
+    return rc;
+}
+
 t_std_error nas_ndi_map_delete_elements (nas_ndi_map_key_t        *key,
-                                         nas_ndi_map_val_t        *value,
-                                         nas_ndi_map_val_filter_t  filter)
+                                         nas_ndi_map_val_filter_t *filter)
 {
     t_std_error rc = STD_ERR_OK;
-    uint32_t    i;
-    size_t      position;
 
     std_mutex_lock (&nas_ndi_map_mutex);
 
     try {
-        auto map_it = g_nas_ndi_map.find (*key);
-        if (map_it != g_nas_ndi_map.end()) {
-            std::vector <nas_ndi_map_data_t>& list = map_it->second;
-
-            for (i = 0; i < value->count; i++) {
-                position = 0;
-                for (auto data: list) {
-                    if (nas_ndi_map_apply_filter (&value->data[i],
-                                                  &data, filter)) {
-                        list.erase (list.begin() + position);
-                        break;
-                    }
-                    position++;
-                }
-            }
+        auto map_it = g_nas_ndi_map->find (*key);
+        if (map_it != g_nas_ndi_map->end()) {
+            while(nas_ndi_map_delete_internal(map_it->second,filter)
+                    == STD_ERR_OK);
         }
     }
     catch (...) {
@@ -203,8 +192,8 @@ t_std_error nas_ndi_map_get (nas_ndi_map_key_t *key, nas_ndi_map_val_t *value)
     std_mutex_lock (&nas_ndi_map_mutex);
 
     try {
-        auto map_it = g_nas_ndi_map.find (*key);
-        if (map_it != g_nas_ndi_map.end()) {
+        auto map_it = g_nas_ndi_map->find (*key);
+        if (map_it != g_nas_ndi_map->end()) {
             std::vector <nas_ndi_map_data_t>& list = map_it->second;
 
             count = list.size();
@@ -239,28 +228,32 @@ t_std_error nas_ndi_map_get (nas_ndi_map_key_t *key, nas_ndi_map_val_t *value)
 }
 
 t_std_error nas_ndi_map_get_elements (nas_ndi_map_key_t        *key,
-                                      nas_ndi_map_val_t        *value,
-                                      nas_ndi_map_val_filter_t  filter)
+                                      nas_ndi_map_val_t        *out_value,
+                                      nas_ndi_map_val_filter_t *filter)
 {
     t_std_error rc = STD_ERR_OK;
-    uint32_t    i;
+    uint32_t    i = 0;
 
     std_mutex_lock (&nas_ndi_map_mutex);
 
     try {
-        auto map_it = g_nas_ndi_map.find (*key);
-        if (map_it != g_nas_ndi_map.end()) {
-            std::vector <nas_ndi_map_data_t>& list = map_it->second;
+        if(out_value->count > 0) {
+            auto map_it = g_nas_ndi_map->find (*key);
+            if (map_it != g_nas_ndi_map->end()) {
+                std::vector <nas_ndi_map_data_t>& list = map_it->second;
 
-            for (i = 0; i < value->count; i++) {
                 for (auto data: list) {
-                    if (nas_ndi_map_apply_filter (&value->data[i],
-                                                  &data, filter)) {
-                        nas_ndi_map_copy_value (&value->data[i],
-                                                &data, filter);
+                    if (nas_ndi_map_apply_filter (&filter->value,
+                                &data, filter->type)) {
+                        out_value->data[i] = data;
+                        i++;
+                    }
+
+                    if(i == out_value->count) {
                         break;
                     }
                 }
+                out_value->count = i;
             }
         }
     }
@@ -280,8 +273,8 @@ t_std_error nas_ndi_map_get_val_count (nas_ndi_map_key_t *key, size_t *count)
     std_mutex_lock (&nas_ndi_map_mutex);
 
     try {
-        auto map_it = g_nas_ndi_map.find (*key);
-        if (map_it != g_nas_ndi_map.end()) {
+        auto map_it = g_nas_ndi_map->find (*key);
+        if (map_it != g_nas_ndi_map->end()) {
             std::vector <nas_ndi_map_data_t>& list = map_it->second;
 
             *count = list.size();

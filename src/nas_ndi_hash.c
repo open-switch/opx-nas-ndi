@@ -27,7 +27,6 @@
 
 #include "sai.h"
 #include "saiswitch.h"
-#include "sai_infra_api.h"
 #include "saihash.h"
 
 #include <stdio.h>

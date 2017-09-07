@@ -32,14 +32,30 @@
 #include <unordered_map>
 
 
-const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
-    ndi2sai_buffer_pool_attr_id_map = {
-    {BASE_QOS_BUFFER_POOL_SHARED_SIZE,        SAI_BUFFER_POOL_ATTR_SHARED_SIZE},
-    {BASE_QOS_BUFFER_POOL_POOL_TYPE,          SAI_BUFFER_POOL_ATTR_TYPE},
-    {BASE_QOS_BUFFER_POOL_SIZE,               SAI_BUFFER_POOL_ATTR_SIZE},
-    {BASE_QOS_BUFFER_POOL_THRESHOLD_MODE,     SAI_BUFFER_POOL_ATTR_THRESHOLD_MODE},
+static bool ndi2sai_buffer_pool_attr_id_get(nas_attr_id_t attr_id, sai_attr_id_t *sai_id)
+{
+    static const auto & ndi2sai_buffer_pool_attr_id_map =
+            * new std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
+    {
+        {BASE_QOS_BUFFER_POOL_SHARED_SIZE,    SAI_BUFFER_POOL_ATTR_SHARED_SIZE},
+        {BASE_QOS_BUFFER_POOL_POOL_TYPE,      SAI_BUFFER_POOL_ATTR_TYPE},
+        {BASE_QOS_BUFFER_POOL_SIZE,           SAI_BUFFER_POOL_ATTR_SIZE},
+        {BASE_QOS_BUFFER_POOL_THRESHOLD_MODE, SAI_BUFFER_POOL_ATTR_THRESHOLD_MODE},
+        {BASE_QOS_BUFFER_POOL_XOFF_SIZE,      SAI_BUFFER_POOL_ATTR_XOFF_SIZE},
+        {BASE_QOS_BUFFER_POOL_WRED_PROFILE_ID, SAI_BUFFER_POOL_ATTR_WRED_PROFILE_ID},
+    };
 
-};
+    try {
+        *sai_id = ndi2sai_buffer_pool_attr_id_map.at(attr_id);
+    }
+    catch (...) {
+         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                       "attr_id %u not supported\n", attr_id);
+         return false;
+    }
+
+    return true;
+}
 
 
 static t_std_error ndi_qos_fill_buffer_pool_attr(nas_attr_id_t attr_id,
@@ -47,14 +63,8 @@ static t_std_error ndi_qos_fill_buffer_pool_attr(nas_attr_id_t attr_id,
                         sai_attribute_t &sai_attr)
 {
     // Only the settable attributes are included
-    try {
-        sai_attr.id = ndi2sai_buffer_pool_attr_id_map.at(attr_id);
-    }
-    catch (...) {
-        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                      "attr_id %u not supported\n", attr_id);
+    if (ndi2sai_buffer_pool_attr_id_get(attr_id, &(sai_attr.id)) != true)
         return STD_ERR(QOS, CFG, 0);
-    }
 
     if (attr_id == BASE_QOS_BUFFER_POOL_SHARED_SIZE)
         sai_attr.value.u32 = p->shared_size;
@@ -66,6 +76,10 @@ static t_std_error ndi_qos_fill_buffer_pool_attr(nas_attr_id_t attr_id,
     else if (attr_id == BASE_QOS_BUFFER_POOL_THRESHOLD_MODE)
         sai_attr.value.s32 = (p->threshold_mode == BASE_QOS_BUFFER_THRESHOLD_MODE_STATIC?
                                 SAI_BUFFER_POOL_THRESHOLD_MODE_STATIC: SAI_BUFFER_POOL_THRESHOLD_MODE_DYNAMIC);
+    else if (attr_id == BASE_QOS_BUFFER_POOL_XOFF_SIZE)
+        sai_attr.value.u32 = p->xoff_size;
+    else if (attr_id == BASE_QOS_BUFFER_POOL_WRED_PROFILE_ID)
+        sai_attr.value.oid = ndi2sai_wred_profile_id(p->wred_profile_id);
 
     return STD_ERR_OK;
 }
@@ -220,6 +234,11 @@ static t_std_error _fill_ndi_qos_buffer_pool_struct(sai_attribute_t *attr_list,
         else if (attr->id == SAI_BUFFER_POOL_ATTR_THRESHOLD_MODE)
             p->threshold_mode = (attr->value.s32 == SAI_BUFFER_POOL_THRESHOLD_MODE_STATIC?
                                      BASE_QOS_BUFFER_THRESHOLD_MODE_STATIC: BASE_QOS_BUFFER_THRESHOLD_MODE_DYNAMIC);
+        else if (attr->id == SAI_BUFFER_POOL_ATTR_XOFF_SIZE)
+            p->xoff_size = attr->value.u32;
+        else if (attr->id == SAI_BUFFER_POOL_ATTR_WRED_PROFILE_ID)
+            p->wred_profile_id = sai2ndi_wred_profile_id(attr->value.oid);
+
     }
 
     return STD_ERR_OK;
@@ -253,16 +272,13 @@ t_std_error ndi_qos_get_buffer_pool(npu_id_t npu_id,
         return STD_ERR(QOS, CFG, 0);
     }
 
-    try {
-        for (uint_t i = 0; i < num_attr; i++) {
-            sai_attr.id = ndi2sai_buffer_pool_attr_id_map.at(nas_attr_list[i]);
+    for (uint_t i = 0; i < num_attr; i++) {
+        if (ndi2sai_buffer_pool_attr_id_get(nas_attr_list[i], &(sai_attr.id)) == true) {
             attr_list.push_back(sai_attr);
         }
-    }
-    catch(...) {
-        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                    "Unexpected error.\n", npu_id);
-        return STD_ERR(QOS, CFG, 0);
+        else {
+            return STD_ERR(QOS, CFG, 0);
+        }
     }
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
@@ -284,13 +300,6 @@ t_std_error ndi_qos_get_buffer_pool(npu_id_t npu_id,
 
 }
 
-
-static const std::unordered_map<BASE_QOS_BUFFER_POOL_STAT_t, sai_buffer_pool_stat_t,
-                                    std::hash<int>>
-    nas2sai_buffer_pool_counter_type = {
-        {BASE_QOS_BUFFER_POOL_STAT_CURRENT_OCCUPANCY_BYTES, SAI_BUFFER_POOL_STAT_CURR_OCCUPANCY_BYTES},
-        {BASE_QOS_BUFFER_POOL_STAT_WATERMARK_BYTES, SAI_BUFFER_POOL_STAT_WATERMARK_BYTES},
-    };
 
 static void _fill_counter_stat_by_type(sai_buffer_pool_stat_t type, uint64_t val,
         nas_qos_buffer_pool_stat_counter_t *stat )
@@ -324,6 +333,14 @@ t_std_error ndi_qos_get_buffer_pool_stats(npu_id_t npu_id,
                                 uint_t number_of_counters,
                                 nas_qos_buffer_pool_stat_counter_t *stats)
 {
+    static const auto & nas2sai_buffer_pool_counter_type =
+        * new std::unordered_map<BASE_QOS_BUFFER_POOL_STAT_t, sai_buffer_pool_stat_t,
+                                    std::hash<int>>
+    {
+        {BASE_QOS_BUFFER_POOL_STAT_CURRENT_OCCUPANCY_BYTES, SAI_BUFFER_POOL_STAT_CURR_OCCUPANCY_BYTES},
+        {BASE_QOS_BUFFER_POOL_STAT_WATERMARK_BYTES, SAI_BUFFER_POOL_STAT_WATERMARK_BYTES},
+    };
+
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {

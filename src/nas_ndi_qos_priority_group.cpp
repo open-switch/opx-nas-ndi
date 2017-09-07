@@ -32,13 +32,7 @@
 #include <unordered_map>
 
 
-const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
-    ndi2sai_priority_group_attr_id_map = {
-    {BASE_QOS_PRIORITY_GROUP_BUFFER_PROFILE_ID,            SAI_INGRESS_PRIORITY_GROUP_ATTR_BUFFER_PROFILE},
-
-};
-
- /**
+/**
   * This function sets the priority_group profile attributes in the NPU.
   * @param ndi_port_id
   * @param ndi_priority_group_id
@@ -201,9 +195,12 @@ uint_t ndi_qos_get_priority_group_id_list(ndi_port_t ndi_port_id,
 
 }
 
-
-static const std::unordered_map<BASE_QOS_PRIORITY_GROUP_STAT_t, sai_ingress_priority_group_stat_t, std::hash<int>>
-    nas2sai_priority_group_counter_type = {
+static bool nas2sai_priority_group_counter_type_get(BASE_QOS_PRIORITY_GROUP_STAT_t stat_id,
+                                                    sai_ingress_priority_group_stat_t * sai_stat_id)
+{
+    static const auto & nas2sai_priority_group_counter_type =
+        * new std::unordered_map<BASE_QOS_PRIORITY_GROUP_STAT_t, sai_ingress_priority_group_stat_t, std::hash<int>>
+    {
         {BASE_QOS_PRIORITY_GROUP_STAT_PACKETS, SAI_INGRESS_PRIORITY_GROUP_STAT_PACKETS},
         {BASE_QOS_PRIORITY_GROUP_STAT_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_BYTES},
         {BASE_QOS_PRIORITY_GROUP_STAT_CURRENT_OCCUPANCY_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_CURR_OCCUPANCY_BYTES},
@@ -213,6 +210,18 @@ static const std::unordered_map<BASE_QOS_PRIORITY_GROUP_STAT_t, sai_ingress_prio
         {BASE_QOS_PRIORITY_GROUP_STAT_XOFF_ROOM_CURRENT_OCCUPANCY_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_XOFF_ROOM_CURR_OCCUPANCY_BYTES},
         {BASE_QOS_PRIORITY_GROUP_STAT_XOFF_ROOM_WATERMARK_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_XOFF_ROOM_WATERMARK_BYTES},
     };
+
+    try {
+        *sai_stat_id = nas2sai_priority_group_counter_type.at(stat_id);
+    }
+    catch (...) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                "stats not mapped: stat_id %u\n",
+                stat_id);
+        return false;
+    }
+    return true;
+}
 
 static void _fill_counter_stat_by_type(sai_ingress_priority_group_stat_t type, uint64_t val,
         nas_qos_priority_group_stat_counter_t *stat )
@@ -276,7 +285,9 @@ t_std_error ndi_qos_get_priority_group_stats(ndi_port_t ndi_port_id,
     std::vector<uint64_t> counters(number_of_counters);
 
     for (uint_t i= 0; i<number_of_counters; i++) {
-        counter_id_list.push_back(nas2sai_priority_group_counter_type.at(counter_ids[i]));
+        sai_ingress_priority_group_stat_t sai_stat_id;
+        if (nas2sai_priority_group_counter_type_get(counter_ids[i], &sai_stat_id) == true)
+            counter_id_list.push_back(sai_stat_id);
     }
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
                         get_ingress_priority_group_stats(ndi2sai_priority_group_id(ndi_priority_group_id),
@@ -323,7 +334,9 @@ t_std_error ndi_qos_clear_priority_group_stats(ndi_port_t ndi_port_id,
     std::vector<uint64_t> counters(number_of_counters);
 
     for (uint_t i= 0; i<number_of_counters; i++) {
-        counter_id_list.push_back(nas2sai_priority_group_counter_type.at(counter_ids[i]));
+        sai_ingress_priority_group_stat_t sai_stat_id;
+        if (nas2sai_priority_group_counter_type_get(counter_ids[i], &sai_stat_id) == true)
+            counter_id_list.push_back(sai_stat_id);
     }
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
                         clear_ingress_priority_group_stats(ndi2sai_priority_group_id(ndi_priority_group_id),

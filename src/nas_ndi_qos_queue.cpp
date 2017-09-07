@@ -217,18 +217,6 @@ t_std_error ndi_qos_delete_queue(npu_id_t npu_id,
 }
 
 
-const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
-    ndi2sai_queue_attr_id_map = {
-        {BASE_QOS_QUEUE_TYPE,                 SAI_QUEUE_ATTR_TYPE},
-        {BASE_QOS_QUEUE_QUEUE_NUMBER,         SAI_QUEUE_ATTR_INDEX},
-        {BASE_QOS_QUEUE_PORT_ID,              SAI_QUEUE_ATTR_PORT},
-        {BASE_QOS_QUEUE_BUFFER_PROFILE_ID,    SAI_QUEUE_ATTR_BUFFER_PROFILE_ID},
-        {BASE_QOS_QUEUE_SCHEDULER_PROFILE_ID, SAI_QUEUE_ATTR_SCHEDULER_PROFILE_ID},
-        {BASE_QOS_QUEUE_WRED_ID,              SAI_QUEUE_ATTR_WRED_PROFILE_ID},
-        {BASE_QOS_QUEUE_PARENT,               SAI_QUEUE_ATTR_PARENT_SCHEDULER_NODE},
-
-};
-
 /**
  * This function get a queue from the NPU.
  * @param npu id
@@ -251,6 +239,19 @@ t_std_error ndi_qos_get_queue(npu_id_t npu_id,
     sai_attribute_t sai_attr;
     t_std_error rc;
 
+    static const auto & ndi2sai_queue_attr_id_map =
+        * new std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
+    {
+        {BASE_QOS_QUEUE_TYPE,                 SAI_QUEUE_ATTR_TYPE},
+        {BASE_QOS_QUEUE_QUEUE_NUMBER,         SAI_QUEUE_ATTR_INDEX},
+        {BASE_QOS_QUEUE_PORT_ID,              SAI_QUEUE_ATTR_PORT},
+        {BASE_QOS_QUEUE_BUFFER_PROFILE_ID,    SAI_QUEUE_ATTR_BUFFER_PROFILE_ID},
+        {BASE_QOS_QUEUE_SCHEDULER_PROFILE_ID, SAI_QUEUE_ATTR_SCHEDULER_PROFILE_ID},
+        {BASE_QOS_QUEUE_WRED_ID,              SAI_QUEUE_ATTR_WRED_PROFILE_ID},
+        {BASE_QOS_QUEUE_PARENT,               SAI_QUEUE_ATTR_PARENT_SCHEDULER_NODE},
+
+    };
+
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
@@ -268,7 +269,7 @@ t_std_error ndi_qos_get_queue(npu_id_t npu_id,
     }
     catch(...) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                    "Unexpected error.\n", npu_id);
+                    "Unexpected error.\n");
         return STD_ERR(QOS, CFG, 0);
     }
 
@@ -279,8 +280,8 @@ t_std_error ndi_qos_get_queue(npu_id_t npu_id,
                                 &attr_list[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                "queue get fails: npu_id %u, ndi_queue_id 0x%016lx\n",
-                npu_id, ndi_queue_id);
+                "queue get fails: npu_id %u, ndi_queue_id 0x%016lx\n sai queue id 0x%016lx",
+                npu_id, ndi_queue_id, ndi2sai_queue_id(ndi_queue_id));
         return STD_ERR(QOS, CFG, sai_ret);
     }
 
@@ -331,15 +332,22 @@ uint_t ndi_qos_get_number_of_queues(ndi_port_t ndi_port_id)
 {
     static uint_t fp_queue_count = 0;
     static uint_t cpu_queue_count = 0;
+    npu_port_t ndi_cpu_port = 0;
 
     if (fp_queue_count == 0 || cpu_queue_count == 0) {
         ndi_switch_get_queue_numbers(ndi_port_id.npu_id, NULL, NULL, &fp_queue_count, &cpu_queue_count);
     }
 
-    if (ndi_port_id.npu_port == 0)
+    (void) ndi_cpu_port_get(ndi_port_id.npu_id, &ndi_cpu_port);
+
+    if (ndi_port_id.npu_port == ndi_cpu_port) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "CPU queue count %d \n", cpu_queue_count);
         return cpu_queue_count;
-    else
+    }
+    else {
         return fp_queue_count;
+    }
 
 }
 
@@ -363,6 +371,8 @@ uint_t ndi_qos_get_queue_id_list(ndi_port_t ndi_port_id,
 
         return 0;
     }
+    EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "npu_port_id %d  queue count %d \n", ndi_port_id.npu_port, count);
 
     sai_attribute_t sai_attr;
     std::vector<sai_object_id_t> sai_queue_id_list(count);
@@ -386,10 +396,18 @@ uint_t ndi_qos_get_queue_id_list(ndi_port_t ndi_port_id,
         return 0;
     }
 
+    EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                            "No of queue ids retrieved are %d",
+                            sai_attr.value.objlist.count);
+
     // copy out sai-returned queue ids to nas
     if (ndi_queue_id_list) {
         for (uint_t i = 0; (i< sai_attr.value.objlist.count) && (i < count); i++) {
             ndi_queue_id_list[i] = sai2ndi_queue_id(sai_attr.value.objlist.list[i]);
+            EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                "sai queue id: 0x%016lx ndi_queue_id: 0x%016lx\n",
+                sai_attr.value.objlist.list[i], ndi_queue_id_list[i]);
+
         }
     }
 
@@ -397,9 +415,12 @@ uint_t ndi_qos_get_queue_id_list(ndi_port_t ndi_port_id,
 
 }
 
-
-static const std::unordered_map<BASE_QOS_QUEUE_STAT_t, sai_queue_stat_t, std::hash<int>>
-    nas2sai_queue_counter_type = {
+static bool nas2sai_queue_counter_type_get(BASE_QOS_QUEUE_STAT_t stat_id,
+                                            sai_queue_stat_t *sai_stat_id)
+{
+    static const auto &  nas2sai_queue_counter_type =
+        *new std::unordered_map<BASE_QOS_QUEUE_STAT_t, sai_queue_stat_t, std::hash<int>>
+    {
         {BASE_QOS_QUEUE_STAT_PACKETS, SAI_QUEUE_STAT_PACKETS},
         {BASE_QOS_QUEUE_STAT_BYTES, SAI_QUEUE_STAT_BYTES},
         {BASE_QOS_QUEUE_STAT_DROPPED_PACKETS, SAI_QUEUE_STAT_DROPPED_PACKETS},
@@ -429,6 +450,18 @@ static const std::unordered_map<BASE_QOS_QUEUE_STAT_t, sai_queue_stat_t, std::ha
         {BASE_QOS_QUEUE_STAT_SHARED_CURRENT_OCCUPANCY_BYTES, SAI_QUEUE_STAT_SHARED_CURR_OCCUPANCY_BYTES},
         {BASE_QOS_QUEUE_STAT_SHARED_WATERMARK_BYTES, SAI_QUEUE_STAT_SHARED_WATERMARK_BYTES},
     };
+
+    try {
+        *sai_stat_id = nas2sai_queue_counter_type.at(stat_id);
+    }
+    catch (...) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                "stats not mapped: stat_id %u\n",
+                stat_id);
+        return false;
+    }
+    return true;
+}
 
 static void _fill_counter_stat_by_type(sai_queue_stat_t type, uint64_t val,
         nas_qos_queue_stat_counter_t *stat )
@@ -551,7 +584,9 @@ t_std_error ndi_qos_get_queue_stats(ndi_port_t ndi_port_id,
     std::vector<uint64_t> counters(number_of_counters);
 
     for (uint_t i= 0; i<number_of_counters; i++) {
-        counter_id_list.push_back(nas2sai_queue_counter_type.at(counter_ids[i]));
+        sai_queue_stat_t sai_stat_id;
+        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id))
+            counter_id_list.push_back(sai_stat_id);
     }
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
                         get_queue_stats(ndi2sai_queue_id(ndi_queue_id),
@@ -598,7 +633,9 @@ t_std_error ndi_qos_clear_queue_stats(ndi_port_t ndi_port_id,
     std::vector<uint64_t> counters(number_of_counters);
 
     for (uint_t i= 0; i<number_of_counters; i++) {
-        counter_id_list.push_back(nas2sai_queue_counter_type.at(counter_ids[i]));
+        sai_queue_stat_t sai_stat_id;
+        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id))
+            counter_id_list.push_back(sai_stat_id);
     }
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
                         clear_queue_stats(ndi2sai_queue_id(ndi_queue_id),

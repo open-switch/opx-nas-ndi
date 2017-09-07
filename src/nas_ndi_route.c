@@ -88,10 +88,12 @@ static void ndi_route_params_copy(sai_route_entry_t *p_sai_route,
     std_ip_get_mask_from_prefix_len (af_index, p_route_entry->mask_len, &ip_mask);
 
     if (STD_IP_IS_AFINDEX_V4(af_index)) {
-        p_ip_prefix->mask.ip4 = ip_mask.u.v4_addr;
+        //SAI expects mask in network-byte order.
+        p_ip_prefix->mask.ip4 = htonl(ip_mask.u.v4_addr);
     } else {
         memcpy (p_ip_prefix->mask.ip6, ip_mask.u.v6_addr, sizeof (sai_ip6_t));
     }
+    p_sai_route->switch_id = ndi_switch_id_get();
     return;
 }
 
@@ -381,24 +383,53 @@ static t_std_error
 ndi_route_get_nh_member_oid (sai_object_id_t           nh_grp_oid,
                              uint32_t                  count,
                              nas_ndi_map_data_t       *in_out_data,
-                             nas_ndi_map_val_filter_t  filter)
+                             nas_ndi_map_val_filter_type_t  filter)
 {
     t_std_error       ndi_ret = STD_ERR_OK;
     nas_ndi_map_key_t key;
     nas_ndi_map_val_t value;
+    size_t            t_count = 0;
+    unsigned int      iter=0,t_iter=0;
 
     memset (&key, 0, sizeof (key));
     key.type = NAS_NDI_MAP_TYPE_NH_GRP_MEMBER;
     key.id1  = nh_grp_oid;
 
-    memset (&value, 0, sizeof (value));
-    value.count = count;
-    value.data  = in_out_data;
-
-    ndi_ret = nas_ndi_map_get_elements (&key, &value, filter);
-
+    ndi_ret = nas_ndi_map_get_val_count (&key, &t_count);
     if (ndi_ret != STD_ERR_OK) {
         return (ndi_ret);
+    }
+
+    if(t_count > 0) {
+        nas_ndi_map_data_t t_data[t_count];
+
+        memset (&value, 0, sizeof (value));
+        value.count = t_count;
+        value.data  = t_data;
+
+        ndi_ret = nas_ndi_map_get (&key, &value);
+
+        if (ndi_ret != STD_ERR_OK) {
+            return (ndi_ret);
+        }
+
+        for(iter = 0; iter < count; ++iter) {
+            for(t_iter = 0; t_iter < t_count; ++t_iter) {
+                if(filter == NAS_NDI_MAP_VAL_FILTER_VAL1) {
+                    if(in_out_data[iter].val1 == t_data[t_iter].val1) {
+                        in_out_data[iter].val2 = t_data[t_iter].val2;
+                        t_data[t_iter].val1 = -1;
+                        break;
+                    }
+                } else if(filter == NAS_NDI_MAP_VAL_FILTER_VAL2) {
+                    if(in_out_data[iter].val2 == t_data[t_iter].val2) {
+                        in_out_data[iter].val1 = t_data[t_iter].val1;
+                        t_data[t_iter].val2 = -1;
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     return ndi_ret;
@@ -494,13 +525,17 @@ static t_std_error ndi_route_nh_grp_members_remove (nas_ndi_db_t    *ndi_db_ptr,
 {
     uint32_t          i;
     nas_ndi_map_key_t key;
-    nas_ndi_map_val_t value;
+    nas_ndi_map_val_filter_t filter;
     sai_status_t      sai_rc = SAI_STATUS_FAILURE;
     t_std_error       ndi_rc = STD_ERR_OK;
 
     if (nh_count > NDI_MAX_NH_ENTRIES_PER_GROUP) {
         return STD_ERR (ROUTE, TOOBIG, sai_rc);
     }
+
+    memset (&key, 0, sizeof (key));
+    key.type = NAS_NDI_MAP_TYPE_NH_GRP_MEMBER;
+    key.id1  = nh_grp_oid;
 
     for (i = 0; i < nh_count; i++) {
         sai_rc = ndi_next_hop_group_api_get(ndi_db_ptr)->
@@ -509,31 +544,27 @@ static t_std_error ndi_route_nh_grp_members_remove (nas_ndi_db_t    *ndi_db_ptr,
         if (sai_rc != SAI_STATUS_SUCCESS) {
             return STD_ERR (ROUTE, FAIL, sai_rc);
         }
+
+        memset (&filter, 0, sizeof (filter));
+        filter.value.val1 = SAI_NULL_OBJECT_ID;
+        filter.value.val2 = data[i].val2;
+        filter.type = NAS_NDI_MAP_VAL_FILTER_VAL2;
+
+        /*
+         * nas_ndi_map_data_t.val1 contains NAS nhId.
+         * nas_ndi_map_data_t.val2 contains SAI NH member Id.
+         * 'value.data' contains both NAS nhId and SAI NH member Id.
+         * So deleting the mapping using NAS_NDI_MAP_VAL_FILTER_VAL2
+         * since val2 is unique.
+         */
+        ndi_rc = nas_ndi_map_delete_elements (&key, &filter);
+
+        if (ndi_rc != STD_ERR_OK) {
+            break;
+        }
     }
 
-    memset (&key, 0, sizeof (key));
-    key.type = NAS_NDI_MAP_TYPE_NH_GRP_MEMBER;
-    key.id1  = nh_grp_oid;
-
-    memset (&value, 0, sizeof (value));
-    value.count = nh_count;
-    value.data  = data;
-
-    /*
-     * nas_ndi_map_data_t.val1 contains NAS nhId.
-     * nas_ndi_map_data_t.val2 contains SAI NH member Id.
-     * 'value.data' contains both NAS nhId and SAI NH member Id.
-     * So can delete the mapping either using NAS_NDI_MAP_VAL_FILTER_VAL1 or
-     * NAS_NDI_MAP_VAL_FILTER_VAL2. Using NAS_NDI_MAP_VAL_FILTER_VAL1 here.
-     */
-    ndi_rc = nas_ndi_map_delete_elements (&key, &value,
-                                          NAS_NDI_MAP_VAL_FILTER_VAL1);
-
-    if (ndi_rc != STD_ERR_OK) {
-        return ndi_rc;
-    }
-
-    return STD_ERR_OK;
+    return ndi_rc;
 }
 
 t_std_error ndi_route_next_hop_group_create (ndi_nh_group_t *p_nh_group_entry,

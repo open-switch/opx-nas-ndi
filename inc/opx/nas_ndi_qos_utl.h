@@ -21,11 +21,7 @@
 #ifndef __NAS_NDI_QOS_UTL_H__
 #define __NAS_NDI_QOS_UTL_H__
 
-#include "dell-base-qos.h"
-#include "nas_ndi_qos.h"
-#include <stdlib.h>
-#include <list>
-#include <vector>
+#include "nas_ndi_int.h"
 
 #define ndi2sai_policer_id(x) (x)
 #define sai2ndi_policer_id(x) (x)
@@ -57,6 +53,8 @@
 #define sai2ndi_priority_group_id(x) (x)
 #define ndi2sai_priority_group_id(x) (x)
 
+#define sai2ndi_port_pool_id(x) (x)
+#define ndi2sai_port_pool_id(x) (x)
 
 
 /*  NDI QoS specific APIs  */

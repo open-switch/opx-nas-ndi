@@ -88,6 +88,13 @@ static inline t_std_error ndi_utl_mk_std_err (enum e_std_error_subsystems sub,
              STD_ERR_MK (sub, e_std_err_code_FAIL, 0);
 }
 
+t_std_error handle_profile_map(sai_switch_profile_id_t profile_id,
+                               const char *profile_file_name);
+
+int ndi_profile_get_next_value(sai_switch_profile_id_t profile_id, const char **variable, const char **value);
+
+const char *ndi_profile_get_value(sai_switch_profile_id_t profile_id, const char *variable);
+
 #ifdef __cplusplus
 }
 #endif

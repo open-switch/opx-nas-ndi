@@ -8,7 +8,7 @@
 
 typedef std::map<std::string, std::string> nas_ndi_cfg_kv_pair_t;
 typedef std::map<std::string, std::string>::iterator kv_iter;
-static nas_ndi_cfg_kv_pair_t kvpair;
+static auto kvpair = new nas_ndi_cfg_kv_pair_t;
 
 static const char* ndi_profile_set_value(int profile_id,
                                  const char* variable,
@@ -21,9 +21,9 @@ static const char* ndi_profile_set_value(int profile_id,
         NDI_INIT_LOG_TRACE("%s - key value NULL  \n", __FUNCTION__);
         return NULL;
     }
-    kviter = kvpair.find(variable);
-    if (kviter == kvpair.end()) {
-        kvpair.insert(std::pair<std::string, std::string>(variable, value));
+    kviter = kvpair->find(variable);
+    if (kviter == kvpair->end()) {
+        kvpair->insert(std::pair<std::string, std::string>(variable, value));
     }
     else {
         kviter->second = value;
@@ -60,8 +60,8 @@ const char* ndi_profile_get_value(sai_switch_profile_id_t profile_id,
 
     key = variable;
 
-    kviter = kvpair.find(key);
-    if (kviter == kvpair.end()) {
+    kviter = kvpair->find(key);
+    if (kviter == kvpair->end()) {
         return NULL;
     }
     NDI_INIT_LOG_TRACE("get value for the key %s %s\n", variable,
@@ -80,18 +80,18 @@ int ndi_profile_get_next_value(sai_switch_profile_id_t profile_id,
         return -1;
     }
     if (*variable == NULL) {
-            if (kvpair.size() < 1) {
+            if (kvpair->size() < 1) {
             return -1;
         }
-        kviter = kvpair.begin();
+        kviter = kvpair->begin();
     } else {
         key = *variable;
-        kviter = kvpair.find(key);
-        if (kviter == kvpair.end()) {
+        kviter = kvpair->find(key);
+        if (kviter == kvpair->end()) {
             return -1;
         }
         kviter++;
-        if (kviter == kvpair.end()) {
+        if (kviter == kvpair->end()) {
             return -1;
         }
     }

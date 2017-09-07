@@ -69,7 +69,17 @@ typedef enum {
      * Used to retrieve SAI STP port object Id given STP Object Id and
      * Port Object Id.
      */
-    NAS_NDI_MAP_TYPE_SAI_PORT_ID,
+    NAS_NDI_MAP_TYPE_STP_PORT_ID,
+
+    /*
+     * nas_ndi_map_key_t.id1: SAI Port Object Id
+     * nas_ndi_map_data_t.val1: SAI STP Port Object Id
+     * nas_ndi_map_data_t.val2: SAI STP Object Id
+     *
+     * Used to retrieve the list of all SAI STP port object Id given a
+     * SAI Port Object Id.
+     */
+    NAS_NDI_MAP_TYPE_PORT_STP_PORTS,
 
 } nas_ndi_map_type_t;
 
@@ -88,12 +98,17 @@ typedef enum {
     NAS_NDI_MAP_VAL_FILTER_NONE = 0x00000001,
     NAS_NDI_MAP_VAL_FILTER_VAL1 = 0x00000002,
     NAS_NDI_MAP_VAL_FILTER_VAL2 = 0x00000004,
-} nas_ndi_map_val_filter_t;
+} nas_ndi_map_val_filter_type_t;
 
 typedef struct _nas_ndi_map_data_t {
     sai_object_id_t val1;
     sai_object_id_t val2;
 } nas_ndi_map_data_t;
+
+typedef struct _nas_ndi_map_val_filter_t {
+    nas_ndi_map_data_t value;
+    nas_ndi_map_val_filter_type_t type;
+} nas_ndi_map_val_filter_t;
 
 typedef struct _nas_ndi_map_val_t {
     /**
@@ -104,6 +119,11 @@ typedef struct _nas_ndi_map_val_t {
      *   'count' field with the total number of elements. The calling
      *   function must then invoke the function again, with the sufficient
      *   buffer to accomodate the elements.
+     *
+     * - In get_elements the function returns the exact or less number of
+     *   filter matching elements as specified by caller in the out_value
+     *   count. If number of elements returned is less than out_value count
+     *   then the count is set appropriately.
      *
      * - In NON-Get operation, the calling function must set the 'data'
      *   field to the actual number of valid elements in the 'data' field.
@@ -124,14 +144,13 @@ t_std_error nas_ndi_map_insert (nas_ndi_map_key_t *key, nas_ndi_map_val_t *value
 t_std_error nas_ndi_map_delete (nas_ndi_map_key_t *key);
 
 t_std_error nas_ndi_map_delete_elements (nas_ndi_map_key_t        *key,
-                                         nas_ndi_map_val_t        *value,
-                                         nas_ndi_map_val_filter_t  filter);
+                                         nas_ndi_map_val_filter_t *filter);
 
 t_std_error nas_ndi_map_get (nas_ndi_map_key_t *key, nas_ndi_map_val_t *val);
 
 t_std_error nas_ndi_map_get_elements (nas_ndi_map_key_t        *key,
-                                      nas_ndi_map_val_t        *value,
-                                      nas_ndi_map_val_filter_t  filter);
+                                      nas_ndi_map_val_t        *out_value,
+                                      nas_ndi_map_val_filter_t *filter);
 
 t_std_error nas_ndi_map_get_val_count (nas_ndi_map_key_t *key, size_t *count);
 

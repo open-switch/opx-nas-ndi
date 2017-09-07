@@ -35,6 +35,7 @@
 #include "saitypes.h"
 #include "nas_ndi_vlan.h"
 #include "nas_ndi_sw_profile.h"
+#include "nas_switch.h"
 
 #include "std_thread_tools.h"
 #include "std_socket_tools.h"
@@ -86,6 +87,7 @@ sai_object_id_t ndi_switch_id_get()
 
 static t_std_error nas_ndi_service_method_init(service_method_table_t **service_ptr)
 {
+
     if (service_ptr == NULL) {
         return (STD_ERR(NPU, PARAM, 0));
     }
@@ -214,11 +216,6 @@ static t_std_error nas_ndi_sai_api_table_init(ndi_sai_api_tbl_t *n_sai_api_tbl)
 
     if (sai_ret != SAI_STATUS_SUCCESS) {
        return (STD_ERR(NPU, CFG, sai_ret));
-    }
-    // Initialize FC specfic APIs
-    if (ndi_sai_fc_apis_init() != STD_ERR_OK) {
-        NDI_INIT_LOG_ERROR("Failed to initialize SAI FC APIs");
-        return (STD_ERR(NPU, CFG, sai_ret));
     }
 
     return STD_ERR_OK;
@@ -437,6 +434,7 @@ t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
     sai_attribute_t  sai_switch_attr_list[NDI_SWITCH_INIT_MAX_ATTR];
     bool ndi_switch_init = 1;
     sai_s8_list_t nil_list = {0};
+    sai_s8_list_t hardware_info = {0};
     uint32_t count = 0;
 
     sai_switch_api_t *sai_switch_api_tbl = ndi_sai_switch_api_tbl_get(ndi_db_ptr);
@@ -457,7 +455,12 @@ t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
         sai_switch_attr_list[count].value.u32 = ndi_db_ptr->npu_profile_id;
         count++;
         sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_SWITCH_HARDWARE_INFO;
-        sai_switch_attr_list[count].value.s8list = nil_list;
+        if ((hardware_info.list = (int8_t *)nas_switch_get_hw_info(0)) != NULL) {
+            hardware_info.count = strlen((char *)hardware_info.list) + 1;
+            sai_switch_attr_list[count].value.s8list = hardware_info;
+        } else {
+            sai_switch_attr_list[count].value.s8list = nil_list;
+        }
         count++;
         sai_switch_attr_list[count].id = SAI_SWITCH_ATTR_FIRMWARE_PATH_NAME;
         sai_switch_attr_list[count].value.s8list = nil_list;
@@ -482,6 +485,8 @@ t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
         count++;
     }
 
+    handle_profile_map(ndi_db_ptr->npu_profile_id, getenv("OPX_SAI_PROFILE_FILE"));
+
    /*  Create the NPU */
    sai_ret = sai_switch_api_tbl->create_switch(&ndi_switch_id,
                                                    count,
@@ -489,7 +494,6 @@ t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
     if (sai_ret != SAI_STATUS_SUCCESS) {
         return (STD_ERR(NPU, CFG, sai_ret));
     }
-
     return STD_ERR_OK;
 }
 
@@ -570,11 +574,18 @@ t_std_error nas_ndi_init(void)
             NDI_INIT_LOG_ERROR("sai switch initialization failure\n");
             break;
         }
+
+        // Initialize FC specfic APIs
+        if ((ret_code = ndi_sai_fc_apis_init()) != STD_ERR_OK) {
+            NDI_INIT_LOG_ERROR("Failed to initialize SAI FC APIs");
+            break;
+        }
+
+        if ((ret_code = ndi_sai_fc_switch_init(ndi_db_ptr)) != STD_ERR_OK) {
+            NDI_INIT_LOG_ERROR("sai FC switch initialization failure\n");
+            break;
+        }
         NDI_INIT_LOG_TRACE("sai instance and npu # %d init passed\n", npu_idx);
-    }
-    if ((ret_code = ndi_sai_fc_switch_init()) != STD_ERR_OK) {
-        NDI_INIT_LOG_ERROR("sai FC switch initialization failure\n");
-        return ret_code;
     }
 
     /*  Now initialize the port map tables */

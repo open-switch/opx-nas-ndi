@@ -22,35 +22,25 @@
 #include<unordered_map>
 #include <algorithm>
 
-static std::unordered_map<BASE_IF_PHY_MAC_LEARN_MODE_t, sai_port_fdb_learning_mode_t,std::hash<int>>
-ndi_to_sai_fdb_learn_mode =
-{
-    {BASE_IF_PHY_MAC_LEARN_MODE_DROP, SAI_PORT_FDB_LEARNING_MODE_DROP},
-    {BASE_IF_PHY_MAC_LEARN_MODE_DISABLE, SAI_PORT_FDB_LEARNING_MODE_DISABLE},
-    {BASE_IF_PHY_MAC_LEARN_MODE_HW, SAI_PORT_FDB_LEARNING_MODE_HW},
-    {BASE_IF_PHY_MAC_LEARN_MODE_CPU_TRAP, SAI_PORT_FDB_LEARNING_MODE_CPU_TRAP},
-    {BASE_IF_PHY_MAC_LEARN_MODE_CPU_LOG, SAI_PORT_FDB_LEARNING_MODE_CPU_LOG},
-};
-
-
-static std::unordered_map<sai_port_fdb_learning_mode_t, BASE_IF_PHY_MAC_LEARN_MODE_t,std::hash<int>>
-sai_to_ndi_fdb_learn_mode =
-{
-    {SAI_PORT_FDB_LEARNING_MODE_DROP, BASE_IF_PHY_MAC_LEARN_MODE_DROP},
-    {SAI_PORT_FDB_LEARNING_MODE_DISABLE, BASE_IF_PHY_MAC_LEARN_MODE_DISABLE},
-    {SAI_PORT_FDB_LEARNING_MODE_HW, BASE_IF_PHY_MAC_LEARN_MODE_HW},
-    {SAI_PORT_FDB_LEARNING_MODE_CPU_TRAP, BASE_IF_PHY_MAC_LEARN_MODE_CPU_TRAP},
-    {SAI_PORT_FDB_LEARNING_MODE_CPU_LOG, BASE_IF_PHY_MAC_LEARN_MODE_CPU_LOG},
-};
 
 sai_port_fdb_learning_mode_t ndi_port_get_sai_mac_learn_mode
                              (BASE_IF_PHY_MAC_LEARN_MODE_t ndi_fdb_learn_mode){
 
+    static const auto ndi_to_sai_fdb_learn_mode = new std::unordered_map<BASE_IF_PHY_MAC_LEARN_MODE_t,
+                                                            sai_port_fdb_learning_mode_t,std::hash<int>>
+    {
+        {BASE_IF_PHY_MAC_LEARN_MODE_DROP, SAI_PORT_FDB_LEARNING_MODE_DROP},
+        {BASE_IF_PHY_MAC_LEARN_MODE_DISABLE, SAI_PORT_FDB_LEARNING_MODE_DISABLE},
+        {BASE_IF_PHY_MAC_LEARN_MODE_HW, SAI_PORT_FDB_LEARNING_MODE_HW},
+        {BASE_IF_PHY_MAC_LEARN_MODE_CPU_TRAP, SAI_PORT_FDB_LEARNING_MODE_CPU_TRAP},
+        {BASE_IF_PHY_MAC_LEARN_MODE_CPU_LOG, SAI_PORT_FDB_LEARNING_MODE_CPU_LOG},
+    };
+
     sai_port_fdb_learning_mode_t mode = SAI_PORT_FDB_LEARNING_MODE_HW;
 
-    auto it = ndi_to_sai_fdb_learn_mode.find(ndi_fdb_learn_mode);
+    auto it = ndi_to_sai_fdb_learn_mode->find(ndi_fdb_learn_mode);
 
-    if(it != ndi_to_sai_fdb_learn_mode.end()){
+    if(it != ndi_to_sai_fdb_learn_mode->end()){
         mode = it->second;
     }
 
@@ -61,40 +51,41 @@ sai_port_fdb_learning_mode_t ndi_port_get_sai_mac_learn_mode
 BASE_IF_PHY_MAC_LEARN_MODE_t ndi_port_get_mac_learn_mode
                              (sai_port_fdb_learning_mode_t sai_fdb_learn_mode){
 
+    static const auto sai_to_ndi_fdb_learn_mode = new std::unordered_map<sai_port_fdb_learning_mode_t, BASE_IF_PHY_MAC_LEARN_MODE_t,std::hash<int>>
+    {
+        {SAI_PORT_FDB_LEARNING_MODE_DROP, BASE_IF_PHY_MAC_LEARN_MODE_DROP},
+        {SAI_PORT_FDB_LEARNING_MODE_DISABLE, BASE_IF_PHY_MAC_LEARN_MODE_DISABLE},
+        {SAI_PORT_FDB_LEARNING_MODE_HW, BASE_IF_PHY_MAC_LEARN_MODE_HW},
+        {SAI_PORT_FDB_LEARNING_MODE_CPU_TRAP, BASE_IF_PHY_MAC_LEARN_MODE_CPU_TRAP},
+        {SAI_PORT_FDB_LEARNING_MODE_CPU_LOG, BASE_IF_PHY_MAC_LEARN_MODE_CPU_LOG},
+    };
     BASE_IF_PHY_MAC_LEARN_MODE_t mode = BASE_IF_PHY_MAC_LEARN_MODE_HW;
 
-    auto it = sai_to_ndi_fdb_learn_mode.find(sai_fdb_learn_mode);
+    auto it = sai_to_ndi_fdb_learn_mode->find(sai_fdb_learn_mode);
 
-    if(it != sai_to_ndi_fdb_learn_mode.end()){
+    if(it != sai_to_ndi_fdb_learn_mode->end()){
         mode = it->second;
     }
 
     return mode;
 }
-static std::unordered_map<BASE_CMN_LOOPBACK_TYPE_t, sai_port_internal_loopback_mode_t,std::hash<int>>
-ndi2sai_int_loopback_mode =
-{
-    {BASE_CMN_LOOPBACK_TYPE_NONE, SAI_PORT_INTERNAL_LOOPBACK_MODE_NONE},
-    {BASE_CMN_LOOPBACK_TYPE_PHY, SAI_PORT_INTERNAL_LOOPBACK_MODE_PHY},
-    {BASE_CMN_LOOPBACK_TYPE_MAC, SAI_PORT_INTERNAL_LOOPBACK_MODE_MAC},
-};
 
-static std::unordered_map<sai_port_internal_loopback_mode_t,BASE_CMN_LOOPBACK_TYPE_t,std::hash<int>>
-sai2ndi_int_loopback_mode =
-{
-    {SAI_PORT_INTERNAL_LOOPBACK_MODE_NONE, BASE_CMN_LOOPBACK_TYPE_NONE},
-    {SAI_PORT_INTERNAL_LOOPBACK_MODE_PHY, BASE_CMN_LOOPBACK_TYPE_PHY},
-    {SAI_PORT_INTERNAL_LOOPBACK_MODE_MAC, BASE_CMN_LOOPBACK_TYPE_MAC},
-};
 
 sai_port_internal_loopback_mode_t ndi_port_get_sai_loopback_mode
                              (BASE_CMN_LOOPBACK_TYPE_t lpbk_mode){
 
+    static const auto ndi2sai_int_loopback_mode = new std::unordered_map<BASE_CMN_LOOPBACK_TYPE_t, sai_port_internal_loopback_mode_t,std::hash<int>>
+    {
+        {BASE_CMN_LOOPBACK_TYPE_NONE, SAI_PORT_INTERNAL_LOOPBACK_MODE_NONE},
+        {BASE_CMN_LOOPBACK_TYPE_PHY, SAI_PORT_INTERNAL_LOOPBACK_MODE_PHY},
+        {BASE_CMN_LOOPBACK_TYPE_MAC, SAI_PORT_INTERNAL_LOOPBACK_MODE_MAC},
+    };
+
      sai_port_internal_loopback_mode_t mode = SAI_PORT_INTERNAL_LOOPBACK_MODE_NONE;
 
-    auto it = ndi2sai_int_loopback_mode.find(lpbk_mode);
+    auto it = ndi2sai_int_loopback_mode->find(lpbk_mode);
 
-    if(it != ndi2sai_int_loopback_mode.end()){
+    if(it != ndi2sai_int_loopback_mode->end()){
         mode = it->second;
     }
     return mode;
@@ -102,66 +93,75 @@ sai_port_internal_loopback_mode_t ndi_port_get_sai_loopback_mode
 
 BASE_CMN_LOOPBACK_TYPE_t ndi_port_get_ndi_loopback_mode(sai_port_internal_loopback_mode_t lpbk_mode){
 
-     BASE_CMN_LOOPBACK_TYPE_t mode = BASE_CMN_LOOPBACK_TYPE_NONE;
+    static const auto sai2ndi_int_loopback_mode = new std::unordered_map<sai_port_internal_loopback_mode_t,BASE_CMN_LOOPBACK_TYPE_t,std::hash<int>>
+    {
+        {SAI_PORT_INTERNAL_LOOPBACK_MODE_NONE, BASE_CMN_LOOPBACK_TYPE_NONE},
+        {SAI_PORT_INTERNAL_LOOPBACK_MODE_PHY, BASE_CMN_LOOPBACK_TYPE_PHY},
+        {SAI_PORT_INTERNAL_LOOPBACK_MODE_MAC, BASE_CMN_LOOPBACK_TYPE_MAC},
+    };
 
-    auto it = sai2ndi_int_loopback_mode.find(lpbk_mode);
+    BASE_CMN_LOOPBACK_TYPE_t mode = BASE_CMN_LOOPBACK_TYPE_NONE;
 
-    if(it != sai2ndi_int_loopback_mode.end()){
+    auto it = sai2ndi_int_loopback_mode->find(lpbk_mode);
+
+    if(it != sai2ndi_int_loopback_mode->end()){
         mode = it->second;
     }
     return mode;
 }
 
-static std::unordered_map<BASE_IF_SPEED_t, uint32_t,std::hash<int>>
-ndi2sai_speed =
-{
-    {BASE_IF_SPEED_10MBPS,       10},
-    {BASE_IF_SPEED_100MBPS,     100},
-    {BASE_IF_SPEED_1GIGE,      1000},
-    {BASE_IF_SPEED_10GIGE,    10000},
-    {BASE_IF_SPEED_20GIGE,    20000},
-    {BASE_IF_SPEED_25GIGE,    25000},
-    {BASE_IF_SPEED_40GIGE,    40000},
-    {BASE_IF_SPEED_50GIGE,    50000},
-    {BASE_IF_SPEED_100GIGE,  100000},
-    {BASE_IF_SPEED_4GFC,       4000},
-    {BASE_IF_SPEED_8GFC,       8000},
-    {BASE_IF_SPEED_16GFC,     16000},
-    {BASE_IF_SPEED_32GFC,     32000},
-};
+
+static const auto ndi2sai_speed = new std::unordered_map<BASE_IF_SPEED_t, uint32_t,std::hash<int>>
+    {
+        {BASE_IF_SPEED_10MBPS,       10},
+        {BASE_IF_SPEED_100MBPS,     100},
+        {BASE_IF_SPEED_1GIGE,      1000},
+        {BASE_IF_SPEED_10GIGE,    10000},
+        {BASE_IF_SPEED_20GIGE,    20000},
+        {BASE_IF_SPEED_25GIGE,    25000},
+        {BASE_IF_SPEED_40GIGE,    40000},
+        {BASE_IF_SPEED_50GIGE,    50000},
+        {BASE_IF_SPEED_100GIGE,  100000},
+        {BASE_IF_SPEED_4GFC,       4000},
+        {BASE_IF_SPEED_8GFC,       8000},
+        {BASE_IF_SPEED_16GFC,     16000},
+        {BASE_IF_SPEED_32GFC,     32000},
+    };
 
 bool ndi_port_get_sai_speed(BASE_IF_SPEED_t speed, uint32_t *sai_speed){
 
-    auto it = ndi2sai_speed.find(speed);
-    if(it == ndi2sai_speed.end()) return false;
+    auto it = ndi2sai_speed->find(speed);
+    if(it == ndi2sai_speed->end()) return false;
     *sai_speed = it->second;
     return true;
 }
+
 bool ndi_port_get_ndi_speed(uint32_t sai_speed, BASE_IF_SPEED_t *ndi_speed) {
-    auto it = std::find_if(ndi2sai_speed.begin(), ndi2sai_speed.end(),
-            [&sai_speed](decltype(*ndi2sai_speed.begin()) &speed_map){return speed_map.second == sai_speed;});
-    if (it == ndi2sai_speed.end()) return false;
+    auto it = std::find_if(ndi2sai_speed->begin(), ndi2sai_speed->end(),
+            [&sai_speed](decltype(*ndi2sai_speed->begin()) &speed_map){return speed_map.second == sai_speed;});
+    if (it == ndi2sai_speed->end()) return false;
     *ndi_speed = it->first;
     return true;
 }
 
-static std::unordered_map<BASE_CMN_FEC_TYPE_t, sai_port_fec_mode_t, std::hash<int>>
-ndi2sai_int_fec_mode =
-{
-    {BASE_CMN_FEC_TYPE_OFF, SAI_PORT_FEC_MODE_NONE},
-    {BASE_CMN_FEC_TYPE_CL74_FC, SAI_PORT_FEC_MODE_FC},
-    {BASE_CMN_FEC_TYPE_CL91_RS, SAI_PORT_FEC_MODE_RS},
-    {BASE_CMN_FEC_TYPE_CL108_RS, SAI_PORT_FEC_MODE_RS}
-};
+
 
 sai_port_fec_mode_t ndi_port_get_sai_fec_mode(BASE_CMN_FEC_TYPE_t ndi_fec_mode)
 {
-    auto it = ndi2sai_int_fec_mode.find(ndi_fec_mode);
-    if (it == ndi2sai_int_fec_mode.end()) {
+    static const auto ndi2sai_int_fec_mode = new std::unordered_map<BASE_CMN_FEC_TYPE_t, sai_port_fec_mode_t, std::hash<int>>
+    {
+        {BASE_CMN_FEC_TYPE_OFF, SAI_PORT_FEC_MODE_NONE},
+        {BASE_CMN_FEC_TYPE_CL74_FC, SAI_PORT_FEC_MODE_FC},
+        {BASE_CMN_FEC_TYPE_CL91_RS, SAI_PORT_FEC_MODE_RS},
+        {BASE_CMN_FEC_TYPE_CL108_RS, SAI_PORT_FEC_MODE_RS}
+    };
+
+    auto it = ndi2sai_int_fec_mode->find(ndi_fec_mode);
+    if (it == ndi2sai_int_fec_mode->end()) {
         return SAI_PORT_FEC_MODE_NONE;
     }
 
-    return ndi2sai_int_fec_mode[ndi_fec_mode];
+    return ndi2sai_int_fec_mode->at(ndi_fec_mode);
 }
 
 BASE_CMN_FEC_TYPE_t ndi_port_get_fec_mode(sai_port_fec_mode_t sai_fec_mode,

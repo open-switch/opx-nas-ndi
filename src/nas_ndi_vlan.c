@@ -264,8 +264,7 @@ t_std_error ndi_del_vlan_member_from_cache(npu_id_t npu_id,
         sai_object_id_t port_id)
 {
     nas_ndi_map_key_t map_key;
-    nas_ndi_map_data_t map_data;
-    nas_ndi_map_val_t map_val;
+    nas_ndi_map_val_filter_t filter;
     t_std_error rc = STD_ERR(NPU, FAIL, 0);
 
     map_key.type = NAS_NDI_MAP_TYPE_VLAN_PORTS;
@@ -273,13 +272,11 @@ t_std_error ndi_del_vlan_member_from_cache(npu_id_t npu_id,
             ((sai_object_id_t)vlan_id));
     map_key.id2 = SAI_NULL_OBJECT_ID;
 
-    map_data.val1 = port_id;
-    map_data.val2 = SAI_NULL_OBJECT_ID;
+    filter.value.val1 = port_id;
+    filter.value.val2 = SAI_NULL_OBJECT_ID;
+    filter.type = NAS_NDI_MAP_VAL_FILTER_VAL1;
 
-    map_val.count = 1;
-    map_val.data = &map_data;
-
-    rc = nas_ndi_map_delete_elements(&map_key,&map_val,NAS_NDI_MAP_VAL_FILTER_VAL1);
+    rc = nas_ndi_map_delete_elements(&map_key,&filter);
     if(STD_ERR_OK != rc) {
         return rc;
     }
@@ -302,7 +299,7 @@ static inline  sai_vlan_api_t *ndi_sai_vlan_api(nas_ndi_db_t *ndi_db_ptr)
      return(ndi_db_ptr->ndi_sai_api_tbl.n_sai_vlan_api_tbl);
 }
 
-t_std_error ndi_del_port_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
+static t_std_error ndi_del_port_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
         sai_object_id_t port_id)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
@@ -340,7 +337,7 @@ t_std_error ndi_del_port_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
     return STD_ERR_OK;
 }
 
-t_std_error ndi_add_port_to_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
+static t_std_error ndi_add_port_to_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
         sai_object_id_t port_id, bool istagged)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
@@ -770,7 +767,8 @@ t_std_error ndi_del_new_member_from_default_vlan(npu_id_t npu_id,
     sai_object_id_t sai_vlan_id = SAI_NULL_OBJECT_ID;
     sai_object_id_t port_id = SAI_NULL_OBJECT_ID;
 
-    if (ndi_sai_port_id_get(npu_id,npu_port,&port_id) != STD_ERR_OK) {
+    if(!(del_all) &&
+            (ndi_sai_port_id_get(npu_id,npu_port,&port_id) != STD_ERR_OK)) {
         NDI_VLAN_LOG_ERROR("SAI port id get failed for NPU-id:%d"
                 " NPU-port:%d",npu_id,npu_port);
         return STD_ERR(NPU, PARAM, 0);
@@ -837,7 +835,7 @@ t_std_error ndi_del_new_member_from_default_vlan(npu_id_t npu_id,
                 continue;
             }
 
-            if((sai_attr[0].value.oid == port_id) || del_all){
+            if((del_all) || (sai_attr[0].value.oid == port_id)){
                 if ((sai_ret = ndi_sai_vlan_api(ndi_db_ptr)->remove_vlan_member(
                                 member_list[iter]))
                         != SAI_STATUS_SUCCESS) {
@@ -859,8 +857,7 @@ t_std_error ndi_del_new_member_from_default_vlan(npu_id_t npu_id,
             return STD_ERR(NPU, FAIL, 0);
         }
     } else {
-        NDI_VLAN_LOG_ERROR("Default vlan memberlist get is empty");
-        return STD_ERR(NPU, FAIL, 0);
+        NDI_LOG_TRACE("NDI-VLAN","Default vlan memberlist get is empty");
     }
 
     return STD_ERR_OK;

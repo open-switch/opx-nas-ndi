@@ -136,8 +136,6 @@ static bool to_sai_enum(_sai_attr_map &map, sai_attribute_t *param) {
 
 }
 
-
-
 static bool frm_sai_oper_mode(sai_attribute_t *param) {
 
     NDI_PORT_LOG_TRACE("frm_sai_oper_mode \n");
@@ -272,7 +270,11 @@ static std::unordered_map<uint64_t,_sai_fc_op_table> _attr_to_op = {
         { BASE_IF_FC_IF_INTERFACES_STATE_INTERFACE_BB_CREDIT_RECEIVE, {
             SW_ATTR_U32, NULL, NULL, SAI_FC_PORT_ATTR_BB_CREDIT_RX}},
         { BASE_IF_FC_IF_INTERFACES_INTERFACE_FLOW_CONTROL_ENABLE, {
-           SW_ATTR_BOOL, NULL, NULL, SAI_FC_PORT_ATTR_FLOW_CONTROL_ENABLE}}
+           SW_ATTR_BOOL, NULL, NULL, SAI_FC_PORT_ATTR_FLOW_CONTROL_ENABLE}},
+        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_FC_MTU, {
+           SW_ATTR_U32, NULL, NULL, SAI_FC_PORT_ATTR_MAX_FRAME_SIZE }},
+        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_BB_CREDIT, {
+           SW_ATTR_U32, NULL, NULL, SAI_FC_PORT_ATTR_BB_CREDIT }}
 
 };
 

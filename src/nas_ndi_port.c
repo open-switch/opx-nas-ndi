@@ -33,6 +33,7 @@
 #include "saistatus.h"
 #include "saitypes.h"
 #include "nas_ndi_vlan.h"
+#include "nas_ndi_stg_util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,18 +75,19 @@ t_std_error _sai_port_attr_set_or_get(npu_id_t npu, port_t port, SAI_SET_OR_GET_
     sai_status_t sai_ret = SAI_STATUS_SUCCESS;
     if (set==SAI_SG_ACT_SET) {
         sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->set_port_attribute(sai_port,attr);
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            NDI_PORT_LOG_ERROR("Error in setting attr %d on npu %d and port %d",attr->id,npu,port);
+            return STD_ERR(NPU, CFG, sai_ret);
+        } else {
+            NDI_PORT_LOG_TRACE("Successful in setting attr %d on npu %d and port %d",attr->id,npu,port);
+        }
     } else {
         sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->get_port_attribute(sai_port, count, attr);
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            return STD_ERR(NPU, CFG, sai_ret);
+        }
     }
-
-    if (sai_ret == SAI_STATUS_SUCCESS) {
-        return STD_ERR_OK;
-    }
-    else {
-        NDI_PORT_LOG_TRACE("Error in setting attr %d on npu %d and port %d",
-                attr->id,npu,port);
-        return STD_ERR(NPU, CFG, sai_ret);
-    }
+    return STD_ERR_OK;
 }
 
 t_std_error ndi_port_oper_state_notify_register(ndi_port_oper_status_change_fn reg_fn)
@@ -411,7 +413,7 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
            sal_media_type = SAI_PORT_MEDIA_TYPE_NOT_PRESENT;
             break;
         case PLATFORM_MEDIA_TYPE_AR_POPTICS_UNKNOWN:
-           sal_media_type = SAI_PORT_MEDIA_TYPE_UNKNONWN;
+           sal_media_type = SAI_PORT_MEDIA_TYPE_UNKNOWN;
             break;
 
         case PLATFORM_MEDIA_TYPE_AR_SFPPLUS_10GBASE_USR:
@@ -465,6 +467,16 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_QSFPPLUS_4X16_16GBASE_FC_SW:
         case PLATFORM_MEDIA_TYPE_QSFPPLUS_64GBASE_FC_LW4:
         case PLATFORM_MEDIA_TYPE_QSFPPLUS_4X16_16GBASE_FC_LW:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_40GBASE_SR_AOC10M:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_40GBASE_SR_AOC3M:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_40GBASE_SR_AOC5M:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_40GBASE_SR_AOC7M:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_4X10_10GBASE_SR_AOC10M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_SR_AOC10M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_SR_AOC1M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_SR_AOC5M:
+        case PLATFORM_MEDIA_TYPE_SFPPLUS_10GBASE_SR_AOC3M:
+
 
         case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_SR4:
         case PLATFORM_MEDIA_TYPE_AR_QSFP28_100GBASE_LR4:
@@ -555,11 +567,30 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2_3M:
         case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2_4M:
         case PLATFORM_MEDIA_TYPE_2X50_50GBASE_CR2:
+
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CR4:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CR4_1M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CR4_1_HALFM:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CR4_2M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CR4_2_HALFM:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CR4_3M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CR4_5M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CR4_HALFM:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CR4_LPBK:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_2X100GBASE_CR4_1M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_2X100GBASE_CR4_2M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_2X100GBASE_CR4_3M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_8X25GBASE_CR4_1M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_8X25GBASE_CR4_2M:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_8X25GBASE_CR4_3M:
+        case PLATFORM_MEDIA_TYPE_1GBASE_COPPER:
+        case PLATFORM_MEDIA_TYPE_10GBASE_COPPER:
+        case PLATFORM_MEDIA_TYPE_25GBASE_BACKPLANE:
             sal_media_type = SAI_PORT_MEDIA_TYPE_COPPER;
             break;
         default:
             NDI_PORT_LOG_ERROR("media type is not recognized %d \n", hal_media_type);
-            sal_media_type = SAI_PORT_MEDIA_TYPE_UNKNONWN;
+            sal_media_type = SAI_PORT_MEDIA_TYPE_UNKNOWN;
     }
     return (sal_media_type);
 }
@@ -1121,6 +1152,13 @@ t_std_error ndi_phy_port_delete(npu_id_t npu_id, npu_port_t port_id)
     sai_object_id_t sai_port;
     t_std_error rc = ndi_sai_port_id_get(npu_id, port_id, &sai_port);
     if (rc != STD_ERR_OK) {
+        return rc;
+    }
+
+    rc = ndi_stg_delete_port_stp_ports(npu_id,port_id);
+    if (rc != STD_ERR_OK) {
+        NDI_PORT_LOG_ERROR("Port STP SAI object remove failed for npu %d"
+                " port %d, ret %d ",npu_id, port_id, rc);
         return rc;
     }
 

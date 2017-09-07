@@ -33,24 +33,12 @@
 #include <unordered_map>
 
 
-static std::unordered_map<BASE_QOS_FLOW_CONTROL_t, sai_port_flow_control_mode_t, std::hash<int>> \
-    ndi2sai_flow_control_map = {
-        {BASE_QOS_FLOW_CONTROL_DISABLE,        SAI_PORT_FLOW_CONTROL_MODE_DISABLE},
-        {BASE_QOS_FLOW_CONTROL_TX_ONLY,        SAI_PORT_FLOW_CONTROL_MODE_TX_ONLY},
-        {BASE_QOS_FLOW_CONTROL_RX_ONLY,        SAI_PORT_FLOW_CONTROL_MODE_RX_ONLY},
-        {BASE_QOS_FLOW_CONTROL_BOTH_ENABLE,    SAI_PORT_FLOW_CONTROL_MODE_BOTH_ENABLE},
-    };
 
-static std::unordered_map<sai_port_flow_control_mode_t, BASE_QOS_FLOW_CONTROL_t, std::hash<int>> \
-    sai2ndi_flow_control_map = {
-        {SAI_PORT_FLOW_CONTROL_MODE_DISABLE,        BASE_QOS_FLOW_CONTROL_DISABLE        },
-        {SAI_PORT_FLOW_CONTROL_MODE_TX_ONLY,        BASE_QOS_FLOW_CONTROL_TX_ONLY        },
-        {SAI_PORT_FLOW_CONTROL_MODE_RX_ONLY,        BASE_QOS_FLOW_CONTROL_RX_ONLY        },
-        {SAI_PORT_FLOW_CONTROL_MODE_BOTH_ENABLE,    BASE_QOS_FLOW_CONTROL_BOTH_ENABLE    },
-    };
-
-static  std::unordered_map<BASE_QOS_PORT_INGRESS_t, sai_port_attr_t, std::hash<int>>
-    ndi2sai_port_ing_attr_id_map = {
+static bool ndi2sai_port_ing_attr_id_get(BASE_QOS_PORT_INGRESS_t attr_id, sai_attr_id_t *sai_id)
+{
+    static const auto & ndi2sai_port_ing_attr_id_map =
+            * new std::unordered_map<BASE_QOS_PORT_INGRESS_t, sai_attr_id_t, std::hash<int>>
+    {
     {BASE_QOS_PORT_INGRESS_POLICER_ID,              SAI_PORT_ATTR_POLICER_ID},
     {BASE_QOS_PORT_INGRESS_FLOOD_STORM_CONTROL,     SAI_PORT_ATTR_FLOOD_STORM_CONTROL_POLICER_ID},
     {BASE_QOS_PORT_INGRESS_BROADCAST_STORM_CONTROL, SAI_PORT_ATTR_BROADCAST_STORM_CONTROL_POLICER_ID},
@@ -62,28 +50,43 @@ static  std::unordered_map<BASE_QOS_PORT_INGRESS_t, sai_port_attr_t, std::hash<i
     {BASE_QOS_PORT_INGRESS_DEFAULT_TRAFFIC_CLASS,   SAI_PORT_ATTR_QOS_DEFAULT_TC},
     {BASE_QOS_PORT_INGRESS_DOT1P_TO_TC_MAP,         SAI_PORT_ATTR_QOS_DOT1P_TO_TC_MAP},
     {BASE_QOS_PORT_INGRESS_DOT1P_TO_COLOR_MAP,      SAI_PORT_ATTR_QOS_DOT1P_TO_COLOR_MAP},
-    {BASE_QOS_PORT_INGRESS_DOT1P_TO_TC_COLOR_MAP,   SAI_PORT_ATTR_QOS_DOT1P_TO_TC_AND_COLOR_MAP},
     {BASE_QOS_PORT_INGRESS_DSCP_TO_TC_MAP,          SAI_PORT_ATTR_QOS_DSCP_TO_TC_MAP},
     {BASE_QOS_PORT_INGRESS_DSCP_TO_COLOR_MAP,       SAI_PORT_ATTR_QOS_DSCP_TO_COLOR_MAP},
-    {BASE_QOS_PORT_INGRESS_DSCP_TO_TC_COLOR_MAP,    SAI_PORT_ATTR_QOS_DSCP_TO_TC_AND_COLOR_MAP},
     {BASE_QOS_PORT_INGRESS_TC_TO_QUEUE_MAP,         SAI_PORT_ATTR_QOS_TC_TO_QUEUE_MAP},
     {BASE_QOS_PORT_INGRESS_TC_TO_PRIORITY_GROUP_MAP,SAI_PORT_ATTR_QOS_TC_TO_PRIORITY_GROUP_MAP},
     {BASE_QOS_PORT_INGRESS_PRIORITY_GROUP_TO_PFC_PRIORITY_MAP, SAI_PORT_ATTR_QOS_PFC_PRIORITY_TO_PRIORITY_GROUP_MAP},
     {BASE_QOS_PORT_INGRESS_BUFFER_PROFILE_ID_LIST,     SAI_PORT_ATTR_QOS_INGRESS_BUFFER_PROFILE_LIST},
     };
 
-static t_std_error _fill_port_qos_ing_attr(BASE_QOS_PORT_INGRESS_t attr_id,
-                                 const qos_port_ing_struct_t *p,
-                                 sai_attribute_t *attr)
-{
     try {
-        attr->id = ndi2sai_port_ing_attr_id_map[attr_id];
+        *sai_id = ndi2sai_port_ing_attr_id_map. at(attr_id);
     }
     catch (...) {
         EV_LOGGING(NDI, DEBUG, "NDI-QOS",
                       "attr_id %d out of range\n", attr_id);
-        return STD_ERR(QOS, CFG, 0);
+        return false;
     }
+
+    return true;
+}
+
+
+
+static t_std_error _fill_port_qos_ing_attr(BASE_QOS_PORT_INGRESS_t attr_id,
+                                 const qos_port_ing_struct_t *p,
+                                 sai_attribute_t *attr)
+{
+    static const auto & ndi2sai_flow_control_map =
+        * new std::unordered_map<BASE_QOS_FLOW_CONTROL_t, sai_port_flow_control_mode_t, std::hash<int>>
+    {
+        {BASE_QOS_FLOW_CONTROL_DISABLE,        SAI_PORT_FLOW_CONTROL_MODE_DISABLE},
+        {BASE_QOS_FLOW_CONTROL_TX_ONLY,        SAI_PORT_FLOW_CONTROL_MODE_TX_ONLY},
+        {BASE_QOS_FLOW_CONTROL_RX_ONLY,        SAI_PORT_FLOW_CONTROL_MODE_RX_ONLY},
+        {BASE_QOS_FLOW_CONTROL_BOTH_ENABLE,    SAI_PORT_FLOW_CONTROL_MODE_BOTH_ENABLE},
+    };
+
+    if (ndi2sai_port_ing_attr_id_get(attr_id, &(attr->id)) != true)
+        return STD_ERR(QOS, CFG, 0);
 
     switch (attr_id) {
     case BASE_QOS_PORT_INGRESS_POLICER_ID:
@@ -99,7 +102,7 @@ static t_std_error _fill_port_qos_ing_attr(BASE_QOS_PORT_INGRESS_t attr_id,
         attr->value.oid = ndi2sai_policer_id(p->mcast_storm_control);
         break;
     case BASE_QOS_PORT_INGRESS_FLOW_CONTROL:
-        attr->value.s32 = ndi2sai_flow_control_map[p->flow_control];
+        attr->value.s32 = ndi2sai_flow_control_map.at(p->flow_control);
         break;
     case BASE_QOS_PORT_INGRESS_DEFAULT_TRAFFIC_CLASS:
         attr->value.u8 = p->default_tc;
@@ -110,17 +113,11 @@ static t_std_error _fill_port_qos_ing_attr(BASE_QOS_PORT_INGRESS_t attr_id,
     case BASE_QOS_PORT_INGRESS_DOT1P_TO_COLOR_MAP:
         attr->value.oid = ndi2sai_qos_map_id(p->dot1p_to_color_map);
         break;
-    case BASE_QOS_PORT_INGRESS_DOT1P_TO_TC_COLOR_MAP:
-        attr->value.oid = ndi2sai_qos_map_id(p->dot1p_to_tc_color_map);
-        break;
     case BASE_QOS_PORT_INGRESS_DSCP_TO_TC_MAP:
         attr->value.oid = ndi2sai_qos_map_id(p->dscp_to_tc_map);
         break;
     case BASE_QOS_PORT_INGRESS_DSCP_TO_COLOR_MAP:
         attr->value.oid = ndi2sai_qos_map_id(p->dscp_to_color_map);
-        break;
-    case BASE_QOS_PORT_INGRESS_DSCP_TO_TC_COLOR_MAP:
-        attr->value.oid = ndi2sai_qos_map_id(p->dscp_to_tc_color_map);
         break;
     case BASE_QOS_PORT_INGRESS_TC_TO_QUEUE_MAP:
         attr->value.oid = ndi2sai_qos_map_id(p->tc_to_queue_map);
@@ -217,6 +214,15 @@ t_std_error ndi_qos_set_port_ing_profile_attr(npu_id_t npu_id,
 static t_std_error _fill_ndi_qos_port_ing_struct(sai_attribute_t *attr_list,
                         uint_t num_attr, qos_port_ing_struct_t*p)
 {
+    static const auto & sai2ndi_flow_control_map =
+        * new std::unordered_map<sai_port_flow_control_mode_t, BASE_QOS_FLOW_CONTROL_t, std::hash<int>>
+    {
+        {SAI_PORT_FLOW_CONTROL_MODE_DISABLE,        BASE_QOS_FLOW_CONTROL_DISABLE        },
+        {SAI_PORT_FLOW_CONTROL_MODE_TX_ONLY,        BASE_QOS_FLOW_CONTROL_TX_ONLY        },
+        {SAI_PORT_FLOW_CONTROL_MODE_RX_ONLY,        BASE_QOS_FLOW_CONTROL_RX_ONLY        },
+        {SAI_PORT_FLOW_CONTROL_MODE_BOTH_ENABLE,    BASE_QOS_FLOW_CONTROL_BOTH_ENABLE    },
+    };
+
     for (uint_t i = 0 ; i< num_attr; i++ ) {
         sai_attribute_t *attr = &attr_list[i];
         switch (attr->id) {
@@ -233,7 +239,7 @@ static t_std_error _fill_ndi_qos_port_ing_struct(sai_attribute_t *attr_list,
             p->mcast_storm_control = sai2ndi_policer_id(attr->value.oid);
             break;
         case SAI_PORT_ATTR_GLOBAL_FLOW_CONTROL_MODE:
-            p->flow_control = sai2ndi_flow_control_map[(sai_port_flow_control_mode_t)(attr->value.s32)];
+            p->flow_control = sai2ndi_flow_control_map.at((sai_port_flow_control_mode_t)(attr->value.s32));
             break;
         case SAI_PORT_ATTR_QOS_DEFAULT_TC:
             p->default_tc = attr->value.u8;
@@ -244,17 +250,11 @@ static t_std_error _fill_ndi_qos_port_ing_struct(sai_attribute_t *attr_list,
         case SAI_PORT_ATTR_QOS_DOT1P_TO_COLOR_MAP:
             p->dot1p_to_color_map = sai2ndi_qos_map_id(attr->value.oid);
             break;
-        case SAI_PORT_ATTR_QOS_DOT1P_TO_TC_AND_COLOR_MAP:
-            p->dot1p_to_tc_color_map = sai2ndi_qos_map_id(attr->value.oid);
-            break;
         case SAI_PORT_ATTR_QOS_DSCP_TO_TC_MAP:
             p->dscp_to_tc_map = sai2ndi_qos_map_id(attr->value.oid);
             break;
         case SAI_PORT_ATTR_QOS_DSCP_TO_COLOR_MAP:
             p->dscp_to_color_map = sai2ndi_qos_map_id(attr->value.oid);
-            break;
-        case SAI_PORT_ATTR_QOS_DSCP_TO_TC_AND_COLOR_MAP:
-            p->dscp_to_tc_color_map = sai2ndi_qos_map_id(attr->value.oid);
             break;
         case SAI_PORT_ATTR_QOS_TC_TO_QUEUE_MAP:
             p->tc_to_queue_map = sai2ndi_qos_map_id(attr->value.oid);
@@ -311,23 +311,19 @@ t_std_error ndi_qos_get_port_ing_profile(npu_id_t npu_id,
     std::vector<sai_object_id_t> priority_group_id_list;
     std::vector<sai_object_id_t> buffer_profile_id_list;
     for (uint_t i = 0; i< num_attr; i++) {
-        try {
-            attr_list[i].id = ndi2sai_port_ing_attr_id_map[nas_attr_list[i]];
-
-            if (attr_list[i].id == SAI_PORT_ATTR_INGRESS_PRIORITY_GROUP_LIST) {
-                attr_list[i].value.objlist.count = p->num_priority_group_id;
-                priority_group_id_list.resize(p->num_priority_group_id);
-                attr_list[i].value.objlist.list = priority_group_id_list.data();
-            }
-
-            if (attr_list[i].id == SAI_PORT_ATTR_QOS_INGRESS_BUFFER_PROFILE_LIST) {
-                attr_list[i].value.objlist.count = p->num_buffer_profile;
-                buffer_profile_id_list.resize(p->num_buffer_profile);
-                attr_list[i].value.objlist.list = buffer_profile_id_list.data();
-            }
-        }
-        catch (...) {
+        if (ndi2sai_port_ing_attr_id_get(nas_attr_list[i], &(attr_list[i].id)) != true)
             return STD_ERR(QOS, CFG, 0);
+
+        if (attr_list[i].id == SAI_PORT_ATTR_INGRESS_PRIORITY_GROUP_LIST) {
+            attr_list[i].value.objlist.count = p->num_priority_group_id;
+            priority_group_id_list.resize(p->num_priority_group_id);
+            attr_list[i].value.objlist.list = priority_group_id_list.data();
+        }
+
+        if (attr_list[i].id == SAI_PORT_ATTR_QOS_INGRESS_BUFFER_PROFILE_LIST) {
+            attr_list[i].value.objlist.count = p->num_buffer_profile;
+            buffer_profile_id_list.resize(p->num_buffer_profile);
+            attr_list[i].value.objlist.list = buffer_profile_id_list.data();
         }
     }
 
@@ -362,12 +358,14 @@ t_std_error ndi_qos_get_port_ing_profile(npu_id_t npu_id,
 
 }
 
-static  std::unordered_map<BASE_QOS_PORT_EGRESS_t, sai_port_attr_t, std::hash<int>>
-    ndi2sai_port_egr_attr_id_map = {
+static bool ndi2sai_port_egr_attr_id_get(BASE_QOS_PORT_EGRESS_t attr_id, sai_attr_id_t *sai_id)
+{
+    static const auto & ndi2sai_port_egr_attr_id_map =
+        * new std::unordered_map<BASE_QOS_PORT_EGRESS_t, sai_port_attr_t, std::hash<int>>
+    {
         {BASE_QOS_PORT_EGRESS_TC_TO_QUEUE_MAP,      SAI_PORT_ATTR_QOS_TC_TO_QUEUE_MAP},
         {BASE_QOS_PORT_EGRESS_TC_COLOR_TO_DOT1P_MAP,SAI_PORT_ATTR_QOS_TC_AND_COLOR_TO_DOT1P_MAP},
         {BASE_QOS_PORT_EGRESS_TC_COLOR_TO_DSCP_MAP, SAI_PORT_ATTR_QOS_TC_AND_COLOR_TO_DSCP_MAP},
-        {BASE_QOS_PORT_EGRESS_WRED_PROFILE_ID,      SAI_PORT_ATTR_QOS_WRED_PROFILE_ID},
         {BASE_QOS_PORT_EGRESS_SCHEDULER_PROFILE_ID, SAI_PORT_ATTR_QOS_SCHEDULER_PROFILE_ID},
         {BASE_QOS_PORT_EGRESS_QUEUE_ID_LIST,        SAI_PORT_ATTR_QOS_QUEUE_LIST},
         {BASE_QOS_PORT_EGRESS_PFC_PRIORITY_TO_QUEUE_MAP,SAI_PORT_ATTR_QOS_PFC_PRIORITY_TO_QUEUE_MAP},
@@ -378,30 +376,29 @@ static  std::unordered_map<BASE_QOS_PORT_EGRESS_t, sai_port_attr_t, std::hash<in
         {BASE_QOS_PORT_EGRESS_NUM_MULTICAST_QUEUE,     0},
         {BASE_QOS_PORT_EGRESS_BUFFER_LIMIT,         0},
         */
-};
+    };
+
+    try {
+        *sai_id = ndi2sai_port_egr_attr_id_map.at(attr_id);
+    }
+    catch (...) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "attr_id %d out of range\n", attr_id);
+        return false;
+    }
+    return true;
+}
 
 static t_std_error _fill_port_qos_egr_attr(BASE_QOS_PORT_EGRESS_t attr_id,
                                  const qos_port_egr_struct_t *p,
                                  sai_attribute_t *attr)
 {
-    try {
-        attr->id = ndi2sai_port_egr_attr_id_map[attr_id];
-    }
-    catch (...) {
-        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                      "attr_id %d out of range\n", attr_id);
+    if (ndi2sai_port_egr_attr_id_get(attr_id, &(attr->id)) != true)
         return STD_ERR(QOS, CFG, 0);
-    }
 
     switch (attr_id) {
     case BASE_QOS_PORT_EGRESS_TC_TO_QUEUE_MAP:
         attr->value.oid = ndi2sai_qos_map_id(p->tc_to_queue_map);
-        break;
-    case BASE_QOS_PORT_EGRESS_TC_TO_DOT1P_MAP:
-        attr->value.oid = ndi2sai_qos_map_id(p->tc_to_dot1p_map);
-        break;
-    case BASE_QOS_PORT_EGRESS_TC_TO_DSCP_MAP:
-        attr->value.oid = ndi2sai_qos_map_id(p->tc_to_dscp_map);
         break;
     case BASE_QOS_PORT_EGRESS_TC_COLOR_TO_DOT1P_MAP:
         attr->value.oid = ndi2sai_qos_map_id(p->tc_color_to_dot1p_map);
@@ -409,9 +406,11 @@ static t_std_error _fill_port_qos_egr_attr(BASE_QOS_PORT_EGRESS_t attr_id,
     case BASE_QOS_PORT_EGRESS_TC_COLOR_TO_DSCP_MAP:
         attr->value.oid = ndi2sai_qos_map_id(p->tc_color_to_dscp_map);
         break;
+    /* Deprecated by SAI
     case BASE_QOS_PORT_EGRESS_WRED_PROFILE_ID:
         attr->value.oid = ndi2sai_wred_profile_id(p->wred_profile_id);
         break;
+    */
     case BASE_QOS_PORT_EGRESS_SCHEDULER_PROFILE_ID:
         attr->value.oid = ndi2sai_scheduler_profile_id(p->scheduler_profile_id);
         break;
@@ -518,9 +517,6 @@ static t_std_error _fill_ndi_qos_port_egr_struct(const sai_attribute_t *attr_lis
         case SAI_PORT_ATTR_QOS_TC_AND_COLOR_TO_DSCP_MAP:
             p->tc_color_to_dscp_map  = sai2ndi_qos_map_id(attr->value.oid);
             break;
-        case SAI_PORT_ATTR_QOS_WRED_PROFILE_ID:
-            p->wred_profile_id = sai2ndi_wred_profile_id(attr->value.oid);
-            break;
         case SAI_PORT_ATTR_QOS_SCHEDULER_PROFILE_ID:
             p->scheduler_profile_id = sai2ndi_scheduler_profile_id(attr->value.oid);
             break;
@@ -616,24 +612,20 @@ t_std_error ndi_qos_get_port_egr_profile(npu_id_t npu_id,
     std::vector<sai_object_id_t> buffer_profile_id_list;
     bool queue_id_list_polled = false;
     for (uint_t i = 0; i< num_attr; i++) {
-        try {
-            attr_list[i].id = ndi2sai_port_egr_attr_id_map[nas_attr_list[i]];
-
-            if (attr_list[i].id == SAI_PORT_ATTR_QOS_QUEUE_LIST) {
-                attr_list[i].value.objlist.count = p->num_queue_id;
-                queue_id_list.resize(p->num_queue_id);
-                attr_list[i].value.objlist.list = queue_id_list.data();
-                queue_id_list_polled = true;
-            }
-
-            if (attr_list[i].id == SAI_PORT_ATTR_QOS_EGRESS_BUFFER_PROFILE_LIST) {
-                attr_list[i].value.objlist.count = p->num_buffer_profile;
-                buffer_profile_id_list.resize(p->num_buffer_profile);
-                attr_list[i].value.objlist.list = buffer_profile_id_list.data();
-            }
-        }
-        catch (...) {
+        if (ndi2sai_port_egr_attr_id_get(nas_attr_list[i], &(attr_list[i].id)) != true)
             return STD_ERR(QOS, CFG, 0);
+
+        if (attr_list[i].id == SAI_PORT_ATTR_QOS_QUEUE_LIST) {
+            attr_list[i].value.objlist.count = p->num_queue_id;
+            queue_id_list.resize(p->num_queue_id);
+            attr_list[i].value.objlist.list = queue_id_list.data();
+            queue_id_list_polled = true;
+        }
+
+        if (attr_list[i].id == SAI_PORT_ATTR_QOS_EGRESS_BUFFER_PROFILE_LIST) {
+            attr_list[i].value.objlist.count = p->num_buffer_profile;
+            buffer_profile_id_list.resize(p->num_buffer_profile);
+            attr_list[i].value.objlist.list = buffer_profile_id_list.data();
         }
     }
 

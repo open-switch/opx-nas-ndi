@@ -42,31 +42,38 @@
            ((x) + NAS_BUFFER_SHARED_DYNAMIC_THRESHOLD_START \
         - SAI_BUFFER_SHARED_DYNAMIC_THRESHOLD_START)
 
+static bool ndi2sai_buffer_profile_attr_id_get(nas_attr_id_t attr_id, sai_attr_id_t *sai_id)
+{
+    static const auto &  ndi2sai_buffer_profile_attr_id_map =
+        * new std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
+    {
+        {BASE_QOS_BUFFER_PROFILE_POOL_ID,                   SAI_BUFFER_PROFILE_ATTR_POOL_ID},
+        {BASE_QOS_BUFFER_PROFILE_BUFFER_SIZE,               SAI_BUFFER_PROFILE_ATTR_BUFFER_SIZE},
+        {BASE_QOS_BUFFER_PROFILE_THRESHOLD_MODE,            SAI_BUFFER_PROFILE_ATTR_THRESHOLD_MODE},
+        {BASE_QOS_BUFFER_PROFILE_SHARED_DYNAMIC_THRESHOLD,  SAI_BUFFER_PROFILE_ATTR_SHARED_DYNAMIC_TH},
+        {BASE_QOS_BUFFER_PROFILE_SHARED_STATIC_THRESHOLD,   SAI_BUFFER_PROFILE_ATTR_SHARED_STATIC_TH},
+        {BASE_QOS_BUFFER_PROFILE_XOFF_THRESHOLD,            SAI_BUFFER_PROFILE_ATTR_XOFF_TH},
+        {BASE_QOS_BUFFER_PROFILE_XON_THRESHOLD,             SAI_BUFFER_PROFILE_ATTR_XON_TH},
+        {BASE_QOS_BUFFER_PROFILE_XON_OFFSET_THRESHOLD,      SAI_BUFFER_PROFILE_ATTR_XON_OFFSET_TH},
+    };
 
-const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
-    ndi2sai_buffer_profile_attr_id_map = {
-    {BASE_QOS_BUFFER_PROFILE_POOL_ID,                   SAI_BUFFER_PROFILE_ATTR_POOL_ID},
-    {BASE_QOS_BUFFER_PROFILE_BUFFER_SIZE,               SAI_BUFFER_PROFILE_ATTR_BUFFER_SIZE},
-    {BASE_QOS_BUFFER_PROFILE_THRESHOLD_MODE,            SAI_BUFFER_PROFILE_ATTR_THRESHOLD_MODE},
-    {BASE_QOS_BUFFER_PROFILE_SHARED_DYNAMIC_THRESHOLD,  SAI_BUFFER_PROFILE_ATTR_SHARED_DYNAMIC_TH},
-    {BASE_QOS_BUFFER_PROFILE_SHARED_STATIC_THRESHOLD,   SAI_BUFFER_PROFILE_ATTR_SHARED_STATIC_TH},
-    {BASE_QOS_BUFFER_PROFILE_XOFF_THRESHOLD,            SAI_BUFFER_PROFILE_ATTR_XOFF_TH},
-    {BASE_QOS_BUFFER_PROFILE_XON_THRESHOLD,             SAI_BUFFER_PROFILE_ATTR_XON_TH},
-
-};
-
+    try {
+        *sai_id = ndi2sai_buffer_profile_attr_id_map.at(attr_id);
+    }
+    catch (...) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                      "attr_id %u not supported\n", attr_id);
+        return false;
+    }
+    return true;
+}
 
 static t_std_error ndi_qos_fill_buffer_profile_attr(nas_attr_id_t attr_id,
                         const ndi_qos_buffer_profile_struct_t *p,
                         sai_attribute_t &sai_attr)
 {
     // Only the settable attributes are included
-    try {
-        sai_attr.id = ndi2sai_buffer_profile_attr_id_map.at(attr_id);
-    }
-    catch (...) {
-        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                      "attr_id %u not supported\n", attr_id);
+    if (ndi2sai_buffer_profile_attr_id_get(attr_id, &(sai_attr.id)) != true) {
         return STD_ERR(QOS, CFG, 0);
     }
 
@@ -87,6 +94,8 @@ static t_std_error ndi_qos_fill_buffer_profile_attr(nas_attr_id_t attr_id,
         sai_attr.value.s32 = p->xoff_th;
     else if (attr_id == BASE_QOS_BUFFER_PROFILE_XON_THRESHOLD)
         sai_attr.value.s32 = p->xon_th;
+    else if (attr_id == BASE_QOS_BUFFER_PROFILE_XON_OFFSET_THRESHOLD)
+        sai_attr.value.s32 = p->xon_offset_th;
 
     return STD_ERR_OK;
 }
@@ -249,6 +258,8 @@ static t_std_error _fill_ndi_qos_buffer_profile_struct(sai_attribute_t *attr_lis
             p->xoff_th = attr->value.u32;
         else if (attr->id == SAI_BUFFER_PROFILE_ATTR_XON_TH)
             p->xon_th = attr->value.u32;
+        else if (attr->id == SAI_BUFFER_PROFILE_ATTR_XON_OFFSET_TH)
+            p->xon_offset_th = attr->value.u32;
     }
 
     return STD_ERR_OK;
@@ -282,16 +293,11 @@ t_std_error ndi_qos_get_buffer_profile(npu_id_t npu_id,
         return STD_ERR(QOS, CFG, 0);
     }
 
-    try {
-        for (uint_t i = 0; i < num_attr; i++) {
-            sai_attr.id = ndi2sai_buffer_profile_attr_id_map.at(nas_attr_list[i]);
+    for (uint_t i = 0; i < num_attr; i++) {
+        if (ndi2sai_buffer_profile_attr_id_get(nas_attr_list[i], &(sai_attr.id)) != true)
+            return STD_ERR(QOS, CFG, 0);
+        else
             attr_list.push_back(sai_attr);
-        }
-    }
-    catch(...) {
-        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                    "Unexpected error.\n", npu_id);
-        return STD_ERR(QOS, CFG, 0);
     }
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->

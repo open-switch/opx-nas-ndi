@@ -33,9 +33,11 @@ const sai_acl_api_t* ndi_acl_utl_api_get (const nas_ndi_db_t* ndi_db_ptr);
 #define ndi_acl_utl_ndi2sai_table_id(x)   (sai_object_id_t) (x)
 #define ndi_acl_utl_ndi2sai_entry_id(x)   (sai_object_id_t) (x)
 #define ndi_acl_utl_ndi2sai_counter_id(x) (sai_object_id_t) (x)
+#define ndi_acl_utl_ndi2sai_range_id(x)   (sai_object_id_t) (x)
 #define ndi_acl_utl_sai2ndi_table_id(x)   (ndi_obj_id_t) (x)
 #define ndi_acl_utl_sai2ndi_entry_id(x)   (ndi_obj_id_t) (x)
 #define ndi_acl_utl_sai2ndi_counter_id(x) (ndi_obj_id_t) (x)
+#define ndi_acl_utl_sai2ndi_range_id(x)   (ndi_obj_id_t) (x)
 
 ////////////////////////////////////////////////////////////////////////////////
 // Utilities to map NAS-NDI values to SAI values and populate the SAI attribute
@@ -45,6 +47,8 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
 
 t_std_error ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_t ndi_action_type,
                                              sai_attribute_t* attr_p);
+
+uint_t ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_t ndi_action_type);
 
 t_std_error ndi_acl_utl_ndi2sai_tbl_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_type,
                                                  sai_attribute_t* sai_attr_p);

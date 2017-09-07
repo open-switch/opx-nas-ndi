@@ -21,6 +21,7 @@
 #include "nas_ndi_utils.h"
 #include "nas_ndi_common.h"
 #include "nas_ndi_event_logs.h"
+#include "nas_switch.h"
 #include "sai.h"
 
 #include <stdio.h>
@@ -31,7 +32,6 @@
 #include <unordered_map>
 
 #define NDI_MAX_NPU          1
-#define NDI_CPU_PORT_ID      0
 
 /*  This file contains ndi_port to sai_port mapping table definition and APIs to
  *  add/delete/get sai_port. Two dinemtional vector [npu_id][npu_port_id] is used
@@ -172,7 +172,7 @@ t_std_error ndi_cpu_port_get(npu_id_t npu_id, npu_port_t *cpu_port)
     if (cpu_port == NULL) {
         return(STD_ERR(NPU, PARAM, 0));
     }
-    *cpu_port = NDI_CPU_PORT_ID;
+    *cpu_port = nas_switch_get_cpu_port_id(ndi_switch_id_get());
     return(STD_ERR_OK);
 }
 
@@ -379,6 +379,8 @@ t_std_error ndi_sai_cpu_port_add(npu_id_t npu_id)
         return(ret_code);
     }
 
+    NDI_INIT_LOG_TRACE(" SAI CPU PORT add %d \n", ndi_cpu_port);
+
     sai_cpu_port = sai_attr.value.oid;
 
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].sai_port = sai_cpu_port;
@@ -387,13 +389,13 @@ t_std_error ndi_sai_cpu_port_add(npu_id_t npu_id)
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].flags |= NDI_PORT_MAP_ACTIVE_MASK | NDI_PORT_MAP_CPU_PORT_MASK;
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_list.resize(1);
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_list[0] = ndi_cpu_port;
-
     sai_entry.npu_id = npu_id;
     sai_entry.npu_port = ndi_cpu_port;
     if (ndi_saiport_map_add_entry(sai_cpu_port, &sai_entry) != true) {
         return STD_ERR(NPU, FAIL, 0);
     }
     return(STD_ERR_OK);
+
 }
 
 t_std_error ndi_port_map_sai_port_delete(npu_id_t npu, sai_object_id_t sai_port, npu_port_t *npu_port)

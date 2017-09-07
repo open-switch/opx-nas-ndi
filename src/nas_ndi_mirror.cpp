@@ -59,31 +59,9 @@ struct port_to_mirror_id_map_key{
 typedef std::vector<ndi_mirror_id_t> mirror_ids;
 
 // Map which maintains port and mirroring direction to ndi mirror id mapping
-static std::map<port_to_mirror_id_map_key,mirror_ids,port_to_mirror_id_map_key > port_to_mirror_id_map;
+static auto port_to_mirror_id_map = new std::map<port_to_mirror_id_map_key,mirror_ids,port_to_mirror_id_map_key >;
 typedef std::pair<port_to_mirror_id_map_key,mirror_ids > port_to_mirror_id_pair;
 
-
-static std::unordered_map<BASE_CMN_TRAFFIC_PATH_t, sai_port_attr_t, std::hash<int>>
-ndi_mirror_dir_to_sai_map = {
-    {BASE_CMN_TRAFFIC_PATH_INGRESS,SAI_PORT_ATTR_INGRESS_MIRROR_SESSION},
-    {BASE_CMN_TRAFFIC_PATH_EGRESS,SAI_PORT_ATTR_EGRESS_MIRROR_SESSION}
-};
-
-
-static std::unordered_map<BASE_MIRROR_MODE_t, sai_mirror_session_type_t, std::hash<int>>
-ndi_mirror_type_to_sai_map = {
-    {BASE_MIRROR_MODE_SPAN,SAI_MIRROR_SESSION_TYPE_LOCAL},
-    {BASE_MIRROR_MODE_RSPAN,SAI_MIRROR_SESSION_TYPE_REMOTE},
-    {BASE_MIRROR_MODE_ERSPAN,SAI_MIRROR_SESSION_TYPE_ENHANCED_REMOTE}
-};
-
-
-static std::unordered_map<sai_mirror_session_type_t, BASE_MIRROR_MODE_t, std::hash<int>>
-ndi_mirror_type_from_sai_map = {
-    {SAI_MIRROR_SESSION_TYPE_LOCAL,BASE_MIRROR_MODE_SPAN},
-    {SAI_MIRROR_SESSION_TYPE_REMOTE,BASE_MIRROR_MODE_RSPAN},
-    {SAI_MIRROR_SESSION_TYPE_ENHANCED_REMOTE,BASE_MIRROR_MODE_ERSPAN}
-};
 
 
 static inline  sai_mirror_api_t * ndi_mirror_api_get(nas_ndi_db_t *ndi_db_ptr) {
@@ -100,9 +78,16 @@ static bool ndi_mirror_fill_common_attr(ndi_mirror_entry_t * entry, sai_attribut
                                            unsigned int & attr_ix){
 
     attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_TYPE;
-    auto it = ndi_mirror_type_to_sai_map.find(entry->mode);
+    static const auto ndi_mirror_type_to_sai_map = new  std::unordered_map<BASE_MIRROR_MODE_t, sai_mirror_session_type_t, std::hash<int>>
+    {
+        {BASE_MIRROR_MODE_SPAN,SAI_MIRROR_SESSION_TYPE_LOCAL},
+        {BASE_MIRROR_MODE_RSPAN,SAI_MIRROR_SESSION_TYPE_REMOTE},
+        {BASE_MIRROR_MODE_ERSPAN,SAI_MIRROR_SESSION_TYPE_ENHANCED_REMOTE}
+    };
 
-    if(it == ndi_mirror_type_to_sai_map.end() ){
+    auto it = ndi_mirror_type_to_sai_map->find(entry->mode);
+
+    if(it == ndi_mirror_type_to_sai_map->end() ){
         NDI_MIRROR_LOG(ERR,0,"Not a valid Mirror type %d",entry->mode);
         return false;
     }
@@ -157,16 +142,16 @@ static void ndi_mirror_fill_erspan_attr(ndi_mirror_entry_t * entry, sai_attribut
     memcpy( attr_list[attr_ix++].value.mac,entry->dst_mac,sizeof(entry->dst_mac));
 
     attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_TOS;
-    attr_list[attr_ix++].value.u8 = 0;
+    attr_list[attr_ix++].value.u8 = entry->dscp;
 
     attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_IPHDR_VERSION;
     attr_list[attr_ix++].value.u8 = NDI_IPV4_VERSION;
 
     attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_TTL;
-    attr_list[attr_ix++].value.u8 = NDI_TTL;
+    attr_list[attr_ix++].value.u8 = entry->ttl ? entry->ttl : NDI_TTL;
 
     attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_GRE_PROTOCOL_TYPE;
-    attr_list[attr_ix++].value.u16 = NDI_GRE_TYPE;
+    attr_list[attr_ix++].value.u16 = entry->gre_prot_type ? entry->gre_prot_type : NDI_GRE_TYPE;
 
     attr_list[attr_ix].id= SAI_MIRROR_SESSION_ATTR_ERSPAN_ENCAPSULATION_TYPE;
     attr_list[attr_ix++].value.s32 = SAI_ERSPAN_ENCAPSULATION_TYPE_MIRROR_L3_GRE_TUNNEL;
@@ -238,7 +223,7 @@ t_std_error ndi_mirror_delete_session(ndi_mirror_entry_t * entry){
 static bool ndi_mirror_get_port_to_id_list(port_to_mirror_id_map_key & key,sai_attribute_t *attr,
                                            ndi_mirror_id_t id,bool enable){
 
-    auto port_it = port_to_mirror_id_map.find(key);
+    auto port_it = port_to_mirror_id_map->find(key);
 
     /* If have to enable Mirroring on a source port, then check if there is already a mirroring session
      * on that port in the same direction, if so add the new mirror id to list and pass new mirror
@@ -250,7 +235,7 @@ static bool ndi_mirror_get_port_to_id_list(port_to_mirror_id_map_key & key,sai_a
      */
 
     if(enable){
-        if(port_it != port_to_mirror_id_map.end()){
+        if(port_it != port_to_mirror_id_map->end()){
             mirror_ids & ndi_mirror_ids = port_it->second;
             if(std::find(ndi_mirror_ids.begin(),ndi_mirror_ids.end(),id)
                                                 == ndi_mirror_ids.end()){
@@ -262,13 +247,13 @@ static bool ndi_mirror_get_port_to_id_list(port_to_mirror_id_map_key & key,sai_a
         }else{
             mirror_ids ndi_mirror_ids;
             ndi_mirror_ids.push_back(id);
-            port_to_mirror_id_map.insert(port_to_mirror_id_pair(key,std::move(ndi_mirror_ids)));
-            attr->value.objlist.count = port_to_mirror_id_map[key].size();
-            attr->value.objlist.list = (sai_object_id_t *)port_to_mirror_id_map[key].data();
+            port_to_mirror_id_map->insert(port_to_mirror_id_pair(key,std::move(ndi_mirror_ids)));
+            attr->value.objlist.count = port_to_mirror_id_map->at(key).size();
+            attr->value.objlist.list = (sai_object_id_t *)port_to_mirror_id_map->at(key).data();
 
         }
     } else {
-        if(port_it == port_to_mirror_id_map.end()){
+        if(port_it == port_to_mirror_id_map->end()){
             NDI_MIRROR_LOG(ERR,0,"No port has mirror id %" PRIu64 " configured on port %d in direction %d"
                     ,id,key.port,key.dir);
             return false;
@@ -300,8 +285,14 @@ t_std_error ndi_mirror_update_direction(ndi_mirror_entry_t *entry, ndi_mirror_sr
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(port.src_port.npu_id);
 
-    auto it = ndi_mirror_dir_to_sai_map.find(port.direction);
-    if(it == ndi_mirror_dir_to_sai_map.end()){
+    static const auto ndi_mirror_dir_to_sai_map = new std::unordered_map<BASE_CMN_TRAFFIC_PATH_t, sai_port_attr_t, std::hash<int>>
+    {
+        {BASE_CMN_TRAFFIC_PATH_INGRESS,SAI_PORT_ATTR_INGRESS_MIRROR_SESSION},
+        {BASE_CMN_TRAFFIC_PATH_EGRESS,SAI_PORT_ATTR_EGRESS_MIRROR_SESSION}
+    };
+
+    auto it = ndi_mirror_dir_to_sai_map->find(port.direction);
+    if(it == ndi_mirror_dir_to_sai_map->end()){
         NDI_MIRROR_LOG(ERR,0,"Invalid Direction %d passed to updated entry %d",port.direction
                                                                     ,entry->ndi_mirror_id);
         return STD_ERR(MIRROR,PARAM,0);
@@ -400,6 +391,22 @@ t_std_error ndi_mirror_update_session(ndi_mirror_entry_t * entry, BASE_MIRROR_EN
             mirror_attr.id = SAI_MIRROR_SESSION_ATTR_DST_MAC_ADDRESS;
             memcpy(mirror_attr.value.mac,entry->dst_mac,sizeof(entry->dst_mac));
             break;
+
+        case BASE_MIRROR_ENTRY_TTL:
+            mirror_attr.id = SAI_MIRROR_SESSION_ATTR_TTL;
+            mirror_attr.value.u32 = entry->ttl;
+            break;
+
+        case BASE_MIRROR_ENTRY_DSCP:
+            mirror_attr.id = SAI_MIRROR_SESSION_ATTR_TOS;
+            mirror_attr.value.u32 = entry->dscp;
+            break;
+
+        case BASE_MIRROR_ENTRY_GRE_PROTOCOL_TYPE:
+            mirror_attr.id = SAI_MIRROR_SESSION_ATTR_GRE_PROTOCOL_TYPE;
+            mirror_attr.value.u32 = entry->gre_prot_type;
+            break;
+
 
         default:
             NDI_MIRROR_LOG(ERR,0,"Invalid Attribute Id passed to update Mirror Session"

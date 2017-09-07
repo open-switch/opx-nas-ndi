@@ -40,6 +40,8 @@
 
 #include "nas_ndi_mac.h"
 
+#define DEFAULT_SAI_PROFILE_FILE "/etc/opx/sai/sai-profile.ini"
+
 #ifdef __cplusplus
 extern "C"{
 #endif

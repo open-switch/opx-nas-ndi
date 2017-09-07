@@ -31,39 +31,62 @@
 #include <vector>
 #include <unordered_map>
 
+static bool ndi2sai_wred_profile_attr_id_get(nas_attr_id_t attr_id, sai_attr_id_t *sai_id)
+{
+    static const auto & ndi2sai_wred_profile_attr_id_map =
+        * new std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
+    {
+        {BASE_QOS_WRED_PROFILE_GREEN_ENABLE,        SAI_WRED_ATTR_GREEN_ENABLE},
+        {BASE_QOS_WRED_PROFILE_GREEN_MIN_THRESHOLD, SAI_WRED_ATTR_GREEN_MIN_THRESHOLD},
+        {BASE_QOS_WRED_PROFILE_GREEN_MAX_THRESHOLD, SAI_WRED_ATTR_GREEN_MAX_THRESHOLD},
+        {BASE_QOS_WRED_PROFILE_GREEN_DROP_PROBABILITY,  SAI_WRED_ATTR_GREEN_DROP_PROBABILITY},
+        {BASE_QOS_WRED_PROFILE_YELLOW_ENABLE,           SAI_WRED_ATTR_YELLOW_ENABLE},
+        {BASE_QOS_WRED_PROFILE_YELLOW_MIN_THRESHOLD,    SAI_WRED_ATTR_YELLOW_MIN_THRESHOLD},
+        {BASE_QOS_WRED_PROFILE_YELLOW_MAX_THRESHOLD,    SAI_WRED_ATTR_YELLOW_MAX_THRESHOLD},
+        {BASE_QOS_WRED_PROFILE_YELLOW_DROP_PROBABILITY, SAI_WRED_ATTR_YELLOW_DROP_PROBABILITY},
+        {BASE_QOS_WRED_PROFILE_RED_ENABLE,              SAI_WRED_ATTR_RED_ENABLE},
+        {BASE_QOS_WRED_PROFILE_RED_MIN_THRESHOLD,       SAI_WRED_ATTR_RED_MIN_THRESHOLD},
+        {BASE_QOS_WRED_PROFILE_RED_MAX_THRESHOLD,       SAI_WRED_ATTR_RED_MAX_THRESHOLD},
+        {BASE_QOS_WRED_PROFILE_RED_DROP_PROBABILITY,    SAI_WRED_ATTR_RED_DROP_PROBABILITY},
+        {BASE_QOS_WRED_PROFILE_WEIGHT,        SAI_WRED_ATTR_WEIGHT},
+        // TO be deprecated. For now, re-map it to ECN_MARK_MODE
+        {BASE_QOS_WRED_PROFILE_ECN_ENABLE,    SAI_WRED_ATTR_ECN_MARK_MODE},
+        {BASE_QOS_WRED_PROFILE_ECN_MARK,      SAI_WRED_ATTR_ECN_MARK_MODE},
+    };
 
-const static std::unordered_map<nas_attr_id_t, sai_attr_id_t, std::hash<int>>
-    ndi2sai_wred_profile_attr_id_map = {
-    {BASE_QOS_WRED_PROFILE_GREEN_ENABLE,        SAI_WRED_ATTR_GREEN_ENABLE},
-    {BASE_QOS_WRED_PROFILE_GREEN_MIN_THRESHOLD, SAI_WRED_ATTR_GREEN_MIN_THRESHOLD},
-    {BASE_QOS_WRED_PROFILE_GREEN_MAX_THRESHOLD, SAI_WRED_ATTR_GREEN_MAX_THRESHOLD},
-    {BASE_QOS_WRED_PROFILE_GREEN_DROP_PROBABILITY,  SAI_WRED_ATTR_GREEN_DROP_PROBABILITY},
-    {BASE_QOS_WRED_PROFILE_YELLOW_ENABLE,           SAI_WRED_ATTR_YELLOW_ENABLE},
-    {BASE_QOS_WRED_PROFILE_YELLOW_MIN_THRESHOLD,    SAI_WRED_ATTR_YELLOW_MIN_THRESHOLD},
-    {BASE_QOS_WRED_PROFILE_YELLOW_MAX_THRESHOLD,    SAI_WRED_ATTR_YELLOW_MAX_THRESHOLD},
-    {BASE_QOS_WRED_PROFILE_YELLOW_DROP_PROBABILITY, SAI_WRED_ATTR_YELLOW_DROP_PROBABILITY},
-    {BASE_QOS_WRED_PROFILE_RED_ENABLE,              SAI_WRED_ATTR_RED_ENABLE},
-    {BASE_QOS_WRED_PROFILE_RED_MIN_THRESHOLD,       SAI_WRED_ATTR_RED_MIN_THRESHOLD},
-    {BASE_QOS_WRED_PROFILE_RED_MAX_THRESHOLD,       SAI_WRED_ATTR_RED_MAX_THRESHOLD},
-    {BASE_QOS_WRED_PROFILE_RED_DROP_PROBABILITY,    SAI_WRED_ATTR_RED_DROP_PROBABILITY},
-    {BASE_QOS_WRED_PROFILE_WEIGHT,        SAI_WRED_ATTR_WEIGHT},
-    {BASE_QOS_WRED_PROFILE_ECN_ENABLE,    SAI_WRED_ATTR_ECN_MARK_ENABLE},
-};
 
+    try {
+        *sai_id = ndi2sai_wred_profile_attr_id_map.at(attr_id);
+    }
+    catch(...) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                    "attr_id not mapped: %u\n", attr_id);
+        return false;
+    }
+
+    return true;
+}
 
 static t_std_error ndi_qos_fill_wred_attr(nas_attr_id_t attr_id,
                         const qos_wred_struct_t *p,
                         sai_attribute_t &sai_attr)
 {
+    static const auto &  ndi2sai_wred_profile_ecn_mark_mode_map =
+    * new std::unordered_map<int, sai_ecn_mark_mode_t, std::hash<int>>
+    {
+        {BASE_QOS_ECN_MARK_MODE_NONE,       SAI_ECN_MARK_MODE_NONE},
+        {BASE_QOS_ECN_MARK_MODE_GREEN,      SAI_ECN_MARK_MODE_GREEN},
+        {BASE_QOS_ECN_MARK_MODE_YELLOW,     SAI_ECN_MARK_MODE_YELLOW},
+        {BASE_QOS_ECN_MARK_MODE_RED,        SAI_ECN_MARK_MODE_RED},
+        {BASE_QOS_ECN_MARK_MODE_GREEN_YELLOW,   SAI_ECN_MARK_MODE_GREEN_YELLOW},
+        {BASE_QOS_ECN_MARK_MODE_GREEN_RED,      SAI_ECN_MARK_MODE_GREEN_RED},
+        {BASE_QOS_ECN_MARK_MODE_YELLOW_RED,     SAI_ECN_MARK_MODE_YELLOW_RED},
+        {BASE_QOS_ECN_MARK_MODE_ALL,            SAI_ECN_MARK_MODE_ALL},
+    };
+
     // Only the settable attributes are included
-    try {
-        sai_attr.id = ndi2sai_wred_profile_attr_id_map.at(attr_id);
-    }
-    catch (...) {
-        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
-                      "attr_id %u not supported\n", attr_id);
+    if (ndi2sai_wred_profile_attr_id_get(attr_id, &(sai_attr.id)) != true)
         return STD_ERR(QOS, CFG, 0);
-    }
 
     if (attr_id == BASE_QOS_WRED_PROFILE_GREEN_ENABLE)
         sai_attr.value.booldata = p->g_enable;
@@ -91,9 +114,17 @@ static t_std_error ndi_qos_fill_wred_attr(nas_attr_id_t attr_id,
         sai_attr.value.u32 = p->r_drop_prob;
     else if (attr_id == BASE_QOS_WRED_PROFILE_WEIGHT)
         sai_attr.value.u8 = p->weight;
-    else if (attr_id == BASE_QOS_WRED_PROFILE_ECN_ENABLE)
-        sai_attr.value.booldata = p->ecn_enable;
-
+    // ECN_ENABLE To be deprecated
+    else if ((attr_id == BASE_QOS_WRED_PROFILE_ECN_ENABLE) ||
+             (attr_id == BASE_QOS_WRED_PROFILE_ECN_MARK)) {
+        try {
+            sai_attr.value.s32 = ndi2sai_wred_profile_ecn_mark_mode_map.at(p->ecn_mark);
+        } catch (...) {
+            EV_LOGGING(NDI, ERR, "NDI-QOS",
+                      "ECN-mark value %d is out of bound \n", p->ecn_mark);
+            return STD_ERR(QOS, CFG, 0);
+        }
+    }
     return STD_ERR_OK;
 }
 
@@ -152,6 +183,7 @@ t_std_error ndi_qos_create_wred_profile(npu_id_t npu_id,
     sai_object_id_t sai_qos_wred_profile_id;
     if ((sai_ret = ndi_sai_qos_wred_api(ndi_db_ptr)->
             create_wred_profile(&sai_qos_wred_profile_id,
+                                ndi_switch_id_get(),
                                 attr_list.size(),
                                 &attr_list[0]))
                          != SAI_STATUS_SUCCESS) {
@@ -233,6 +265,18 @@ t_std_error ndi_qos_delete_wred_profile(npu_id_t npu_id, ndi_obj_id_t ndi_wred_i
 static t_std_error _fill_ndi_qos_wred_profile_struct(sai_attribute_t *attr_list,
                         uint_t num_attr, qos_wred_struct_t *p)
 {
+    static const auto & sai2ndi_wred_profile_ecn_mark_mode_map =
+    * new std::unordered_map<int, BASE_QOS_ECN_MARK_MODE_t, std::hash<int>>
+    {
+        {SAI_ECN_MARK_MODE_NONE,    BASE_QOS_ECN_MARK_MODE_NONE},
+        {SAI_ECN_MARK_MODE_GREEN,   BASE_QOS_ECN_MARK_MODE_GREEN},
+        {SAI_ECN_MARK_MODE_YELLOW,  BASE_QOS_ECN_MARK_MODE_YELLOW},
+        {SAI_ECN_MARK_MODE_RED,     BASE_QOS_ECN_MARK_MODE_RED},
+        {SAI_ECN_MARK_MODE_GREEN_YELLOW, BASE_QOS_ECN_MARK_MODE_GREEN_YELLOW},
+        {SAI_ECN_MARK_MODE_GREEN_RED,   BASE_QOS_ECN_MARK_MODE_GREEN_RED},
+        {SAI_ECN_MARK_MODE_YELLOW_RED,  BASE_QOS_ECN_MARK_MODE_YELLOW_RED},
+        {SAI_ECN_MARK_MODE_ALL,         BASE_QOS_ECN_MARK_MODE_ALL},
+    };
 
     for (uint_t i = 0 ; i< num_attr; i++ ) {
         sai_attribute_t *attr = &attr_list[i];
@@ -262,8 +306,15 @@ static t_std_error _fill_ndi_qos_wred_profile_struct(sai_attribute_t *attr_list,
             p->r_drop_prob = attr->value.u8;
         else if (attr->id == SAI_WRED_ATTR_WEIGHT)
             p->weight = attr->value.u8;
-        else if (attr->id == SAI_WRED_ATTR_ECN_MARK_ENABLE)
-            p->ecn_enable = attr->value.booldata;
+        else if (attr->id == SAI_WRED_ATTR_ECN_MARK_MODE) {
+            try {
+                p->ecn_mark = sai2ndi_wred_profile_ecn_mark_mode_map.at(attr->value.s32);
+            }
+            catch (...) {
+                EV_LOGGING(NDI, ERR, "NDI-QOS",
+                      "wred profile ecn-mark mode %d is not mapped to user.\n", attr->value.s32);
+            }
+        }
     }
 
     return STD_ERR_OK;
@@ -297,16 +348,11 @@ t_std_error ndi_qos_get_wred_profile(npu_id_t npu_id,
         return STD_ERR(QOS, CFG, 0);
     }
 
-    try {
-        for (uint_t i = 0; i < num_attr; i++) {
-            sai_attr.id = ndi2sai_wred_profile_attr_id_map.at(nas_attr_list[i]);
-            attr_list.push_back(sai_attr);
-        }
-    }
-    catch(...) {
-        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                    "Unexpected error.\n", npu_id);
-        return STD_ERR(QOS, CFG, 0);
+    for (uint_t i = 0; i < num_attr; i++) {
+        if (ndi2sai_wred_profile_attr_id_get(nas_attr_list[i], &(sai_attr.id)) != true)
+            return STD_ERR(QOS, CFG, 0);
+
+        attr_list.push_back(sai_attr);
     }
 
     if ((sai_ret = ndi_sai_qos_wred_api(ndi_db_ptr)->

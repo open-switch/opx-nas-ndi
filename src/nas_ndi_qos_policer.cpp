@@ -67,26 +67,13 @@ static void _fill_sai_meter_peak_rate(sai_attribute_t *sai_attr_p,
 static void _fill_sai_meter_stat_list(sai_attribute_t *sai_attr_p,
                                  const qos_policer_struct_t* p);
 
-static const
-    std::unordered_map<BASE_QOS_METER_t, fill_sai_policer_fn, std::hash<int>>
-    _fill_sai_policer_fn_map = {
-        {BASE_QOS_METER_TYPE,                    _fill_sai_meter_type},
-        {BASE_QOS_METER_MODE,                    _fill_sai_meter_mode},
-        {BASE_QOS_METER_COLOR_SOURCE,            _fill_sai_meter_color_source},
-        {BASE_QOS_METER_GREEN_PACKET_ACTION,     _fill_sai_meter_green_packet_action},
-        {BASE_QOS_METER_YELLOW_PACKET_ACTION,    _fill_sai_meter_yellow_packet_action},
-        {BASE_QOS_METER_RED_PACKET_ACTION,       _fill_sai_meter_red_packet_action},
-        {BASE_QOS_METER_COMMITTED_BURST,         _fill_sai_meter_commited_burst},
-        {BASE_QOS_METER_COMMITTED_RATE,          _fill_sai_meter_commited_rate},
-        {BASE_QOS_METER_PEAK_BURST,              _fill_sai_meter_peak_burst},
-        {BASE_QOS_METER_PEAK_RATE,               _fill_sai_meter_peak_rate},
-        {BASE_QOS_METER_STAT_LIST,               _fill_sai_meter_stat_list},
-    };
 
-
-static const
-    std::unordered_map<BASE_QOS_METER_t, sai_policer_attr_t, std::hash<int>>
-        _nas2sai_policer_attr_id_map = {
+static sai_policer_attr_t   ndi_qos_utl_ndi2sai_policer_attr_id (
+                                    BASE_QOS_METER_t ndi_policer_attr_id)
+{
+    static const auto &  _nas2sai_policer_attr_id_map =
+            * new std::unordered_map<BASE_QOS_METER_t, sai_policer_attr_t, std::hash<int>>
+    {
         {BASE_QOS_METER_TYPE,                    SAI_POLICER_ATTR_METER_TYPE},
         {BASE_QOS_METER_MODE,                    SAI_POLICER_ATTR_MODE},
         {BASE_QOS_METER_COLOR_SOURCE,            SAI_POLICER_ATTR_COLOR_SOURCE},
@@ -98,11 +85,8 @@ static const
         {BASE_QOS_METER_PEAK_BURST,              SAI_POLICER_ATTR_PBS},
         {BASE_QOS_METER_PEAK_RATE,               SAI_POLICER_ATTR_PIR},
         {BASE_QOS_METER_STAT_LIST,               SAI_POLICER_ATTR_ENABLE_COUNTER_PACKET_ACTION_LIST},
-       };
+    };
 
-static sai_policer_attr_t   ndi_qos_utl_ndi2sai_policer_attr_id (
-                                    BASE_QOS_METER_t ndi_policer_attr_id)
-{
     return _nas2sai_policer_attr_id_map.at(ndi_policer_attr_id);
 }
 
@@ -196,8 +180,11 @@ static void _fill_sai_meter_peak_rate(sai_attribute_t *sai_attr_p,
 
 }
 
-static const std::unordered_map<BASE_QOS_POLICER_STAT_TYPE_t, sai_policer_stat_t, std::hash<int>>
-    nas2ndi_policer_stat_type =
+static void _fill_sai_meter_stat_list(sai_attribute_t *sai_attr_p,
+                                 const qos_policer_struct_t* p)
+{
+    static const auto &  nas2ndi_policer_stat_type =
+        * new std::unordered_map<BASE_QOS_POLICER_STAT_TYPE_t, sai_policer_stat_t, std::hash<int>>
     {
       {BASE_QOS_POLICER_STAT_TYPE_PACKETS,          SAI_POLICER_STAT_PACKETS},
       {BASE_QOS_POLICER_STAT_TYPE_BYTES,            SAI_POLICER_STAT_ATTR_BYTES},
@@ -209,9 +196,6 @@ static const std::unordered_map<BASE_QOS_POLICER_STAT_TYPE_t, sai_policer_stat_t
       {BASE_QOS_POLICER_STAT_TYPE_RED_BYTES,        SAI_POLICER_STAT_RED_BYTES},
     };
 
-static void _fill_sai_meter_stat_list(sai_attribute_t *sai_attr_p,
-                                 const qos_policer_struct_t* p)
-{
     try {
         sai_attr_p->value.s32list.count = p->stat_list_count;
         for (uint_t i= 0; i < p->stat_list_count; i++) {
@@ -235,6 +219,22 @@ static t_std_error ndi_qos_utl_fill_policer_attr (sai_attribute_t *sai_attr_p,
                                          BASE_QOS_METER_t attr_id,
                                          const qos_policer_struct_t * p)
 {
+    static const auto &    _fill_sai_policer_fn_map =
+        * new std::unordered_map<BASE_QOS_METER_t, fill_sai_policer_fn, std::hash<int>>
+    {
+        {BASE_QOS_METER_TYPE,                    _fill_sai_meter_type},
+        {BASE_QOS_METER_MODE,                    _fill_sai_meter_mode},
+        {BASE_QOS_METER_COLOR_SOURCE,            _fill_sai_meter_color_source},
+        {BASE_QOS_METER_GREEN_PACKET_ACTION,     _fill_sai_meter_green_packet_action},
+        {BASE_QOS_METER_YELLOW_PACKET_ACTION,    _fill_sai_meter_yellow_packet_action},
+        {BASE_QOS_METER_RED_PACKET_ACTION,       _fill_sai_meter_red_packet_action},
+        {BASE_QOS_METER_COMMITTED_BURST,         _fill_sai_meter_commited_burst},
+        {BASE_QOS_METER_COMMITTED_RATE,          _fill_sai_meter_commited_rate},
+        {BASE_QOS_METER_PEAK_BURST,              _fill_sai_meter_peak_burst},
+        {BASE_QOS_METER_PEAK_RATE,               _fill_sai_meter_peak_rate},
+        {BASE_QOS_METER_STAT_LIST,               _fill_sai_meter_stat_list},
+    };
+
     try {
 
         sai_attr_p->id = ndi_qos_utl_ndi2sai_policer_attr_id(attr_id);
@@ -255,8 +255,12 @@ static t_std_error ndi_qos_utl_fill_policer_attr (sai_attribute_t *sai_attr_p,
 
 
 
-static const std::unordered_map<sai_policer_stat_t, BASE_QOS_POLICER_STAT_TYPE_t, std::hash<int>>
-    sai2nas_stat_type = {
+static void ndi_qos_utl_fill_policer_info(const std::vector<sai_attribute_t> attr_list,
+                                        qos_policer_struct_t *p)
+{
+    static const auto & sai2nas_stat_type =
+            * new std::unordered_map<sai_policer_stat_t, BASE_QOS_POLICER_STAT_TYPE_t, std::hash<int>>
+    {
         {SAI_POLICER_STAT_PACKETS, BASE_QOS_POLICER_STAT_TYPE_PACKETS},
         {SAI_POLICER_STAT_ATTR_BYTES, BASE_QOS_POLICER_STAT_TYPE_BYTES},
         {SAI_POLICER_STAT_GREEN_PACKETS, BASE_QOS_POLICER_STAT_TYPE_GREEN_PACKETS},
@@ -268,9 +272,6 @@ static const std::unordered_map<sai_policer_stat_t, BASE_QOS_POLICER_STAT_TYPE_t
     };
 
 
-static void ndi_qos_utl_fill_policer_info(const std::vector<sai_attribute_t> attr_list,
-                                        qos_policer_struct_t *p)
-{
     for (auto attr: attr_list) {
         switch (attr.id) {
         case SAI_POLICER_ATTR_METER_TYPE:
@@ -541,18 +542,6 @@ t_std_error ndi_qos_get_policer(npu_id_t npu_id,
     return STD_ERR_OK;
 }
 
-static const std::unordered_map<BASE_QOS_POLICER_STAT_TYPE_t, sai_policer_stat_t, std::hash<int>>
-    ndi2sai_policer_stat_type = {
-      {BASE_QOS_POLICER_STAT_TYPE_PACKETS,         SAI_POLICER_STAT_PACKETS},
-      {BASE_QOS_POLICER_STAT_TYPE_BYTES,         SAI_POLICER_STAT_ATTR_BYTES},
-      {BASE_QOS_POLICER_STAT_TYPE_GREEN_PACKETS, SAI_POLICER_STAT_GREEN_PACKETS},
-      {BASE_QOS_POLICER_STAT_TYPE_GREEN_BYTES,     SAI_POLICER_STAT_GREEN_BYTES},
-      {BASE_QOS_POLICER_STAT_TYPE_YELLOW_PACKETS, SAI_POLICER_STAT_YELLOW_PACKETS},
-      {BASE_QOS_POLICER_STAT_TYPE_YELLOW_BYTES, SAI_POLICER_STAT_YELLOW_BYTES},
-      {BASE_QOS_POLICER_STAT_TYPE_RED_PACKETS,     SAI_POLICER_STAT_RED_PACKETS},
-      {BASE_QOS_POLICER_STAT_TYPE_RED_BYTES,     SAI_POLICER_STAT_RED_BYTES}
-    };
-
 /**
  * This function get a policer from the NPU.
  * @param npu_id npu id
@@ -568,6 +557,19 @@ t_std_error ndi_qos_get_policer_stat(npu_id_t npu_id,
                                 const BASE_QOS_POLICER_STAT_TYPE_t * stat_list,
                                 policer_stats_struct_t * stats)
 {
+    static const auto & ndi2sai_policer_stat_type =
+            * new std::unordered_map<BASE_QOS_POLICER_STAT_TYPE_t, sai_policer_stat_t, std::hash<int>>
+    {
+      {BASE_QOS_POLICER_STAT_TYPE_PACKETS,         SAI_POLICER_STAT_PACKETS},
+      {BASE_QOS_POLICER_STAT_TYPE_BYTES,         SAI_POLICER_STAT_ATTR_BYTES},
+      {BASE_QOS_POLICER_STAT_TYPE_GREEN_PACKETS, SAI_POLICER_STAT_GREEN_PACKETS},
+      {BASE_QOS_POLICER_STAT_TYPE_GREEN_BYTES,     SAI_POLICER_STAT_GREEN_BYTES},
+      {BASE_QOS_POLICER_STAT_TYPE_YELLOW_PACKETS, SAI_POLICER_STAT_YELLOW_PACKETS},
+      {BASE_QOS_POLICER_STAT_TYPE_YELLOW_BYTES, SAI_POLICER_STAT_YELLOW_BYTES},
+      {BASE_QOS_POLICER_STAT_TYPE_RED_PACKETS,     SAI_POLICER_STAT_RED_PACKETS},
+      {BASE_QOS_POLICER_STAT_TYPE_RED_BYTES,     SAI_POLICER_STAT_RED_BYTES}
+    };
+
     if (stat_list_count > BASE_QOS_POLICER_STAT_TYPE_MAX) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "sai_id: %d, ndi_policer_id %u, too many statistics types!\n",

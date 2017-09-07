@@ -1,3 +1,13 @@
+opx-nas-ndi (3.19.0) unstable; urgency=medium
+
+  * Update: Added SAI profile
+  * Update: Added object cache
+  * Update: Added ACL supported actions and packet colors
+  * Update: Added new optical media adapter types
+  * Update: Added QoS buffer pools
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Tue, 20 Jun 2017 14:44:33 -0800
+
 opx-nas-ndi (3.13.0) unstable; urgency=medium
 
   * Update: Added SFP plus for EMC and QSFP DD SR4

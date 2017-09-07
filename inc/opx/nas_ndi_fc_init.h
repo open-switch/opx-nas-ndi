@@ -25,6 +25,7 @@
 #include "saifcport.h"
 #include "saifcswitch.h"
 #include "saitypes.h"
+#include "nas_ndi_int.h"
 #include "ds_common_types.h"
 #include "std_error_codes.h"
 
@@ -41,7 +42,7 @@ typedef struct _ndi_sai_fc_api_tbl_t
 
 t_std_error ndi_sai_fc_apis_init(void);
 void nas_fc_lock_init();
-t_std_error ndi_sai_fc_switch_init(void);
+t_std_error ndi_sai_fc_switch_init(nas_ndi_db_t *ndi_db_ptr);
 sai_fc_switch_api_t *ndi_get_fc_switch_api(void);
 sai_fc_port_api_t *ndi_get_fc_port_api(void);
 t_std_error ndi_sai_fcport_id_get (npu_id_t npu_id, port_t port,

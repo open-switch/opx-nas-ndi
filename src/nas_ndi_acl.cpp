@@ -126,6 +126,28 @@ t_std_error ndi_acl_table_create (npu_id_t npu_id, const ndi_acl_table_t* ndi_tb
         sai_tbl_attr_list.push_back(sai_tbl_attr);
     }
 
+    // Set of Actions allowed in Table
+    sai_tbl_attr = nil_attr;
+    sai_tbl_attr.id = SAI_ACL_TABLE_ATTR_ACTION_LIST;
+    std::vector<int32_t> sai_type_list;
+    for (uint_t count = 0; count < ndi_tbl_p->action_count; count++) {
+        auto action_type = ndi_tbl_p->action_list[count];
+
+        try {
+            sai_type_list.push_back(ndi_acl_utl_ndi2sai_action_type(action_type));
+        } catch (std::out_of_range& e) {
+            NDI_ACL_LOG_ERROR("ACL Action type %d is not supported in SAI",
+                              action_type);
+            return STD_ERR(ACL, PARAM, 0);
+        }
+
+    }
+    if (sai_type_list.size() > 0) {
+        sai_tbl_attr.value.s32list.count = sai_type_list.size();
+        sai_tbl_attr.value.s32list.list = sai_type_list.data();
+        sai_tbl_attr_list.push_back (sai_tbl_attr);
+    }
+
     NDI_ACL_LOG_DETAIL ("Creating ACL Table with %d attributes",
                         sai_tbl_attr_list.size());
 
@@ -609,6 +631,90 @@ t_std_error ndi_acl_counter_get_byte_count (npu_id_t npu_id,
     *byte_count_p = sai_counter_attr.value.u64;
 
     return rc;
+}
+
+t_std_error ndi_acl_range_create(npu_id_t npu_id, const ndi_acl_range_t *acl_range_p,
+                                 ndi_obj_id_t *ndi_range_id_p)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    sai_object_id_t sai_range_id = 0;
+
+    sai_attribute_t sai_attr = {0};
+    const sai_attribute_t nil_attr = {0};
+    std::vector<sai_attribute_t> sai_attr_list;
+
+    nas_ndi_db_t* ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        return STD_ERR(UDF, FAIL, 0);
+    }
+
+    if (acl_range_p == NULL || ndi_range_id_p == NULL) {
+        return STD_ERR(ACL, PARAM, 0);
+    }
+
+    sai_attr.id = SAI_ACL_RANGE_ATTR_TYPE;
+    switch(acl_range_p->type) {
+    case NDI_ACL_RANGE_L4_SRC_PORT:
+        sai_attr.value.s32 = SAI_ACL_RANGE_TYPE_L4_SRC_PORT_RANGE;
+        break;
+    case NDI_ACL_RANGE_L4_DST_PORT:
+        sai_attr.value.s32 = SAI_ACL_RANGE_TYPE_L4_DST_PORT_RANGE;
+        break;
+    case NDI_ACL_RANGE_OUTER_VLAN:
+        sai_attr.value.s32 = SAI_ACL_RANGE_TYPE_OUTER_VLAN;
+        break;
+    case NDI_ACL_RANGE_INNER_VLAN:
+        sai_attr.value.s32 = SAI_ACL_RANGE_TYPE_INNER_VLAN;
+        break;
+    case NDI_ACL_RANGE_PACKET_LENGTH:
+        sai_attr.value.s32 = SAI_ACL_RANGE_TYPE_PACKET_LENGTH;
+        break;
+    default:
+        NDI_ACL_LOG_ERROR("Unsupported range type %d", acl_range_p->type);
+        return STD_ERR(ACL, PARAM, 0);
+    }
+    sai_attr_list.push_back(sai_attr);
+
+    sai_attr = nil_attr;
+    sai_attr.id = SAI_ACL_RANGE_ATTR_LIMIT;
+    sai_attr.value.s32range.min = acl_range_p->min;
+    sai_attr.value.s32range.max = acl_range_p->max;
+    sai_attr_list.push_back(sai_attr);
+
+    sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->create_acl_range(&sai_range_id,
+                    ndi_switch_id_get(), sai_attr_list.size(),
+                    sai_attr_list.data());
+    if (sai_ret != SAI_STATUS_SUCCESS) {
+        NDI_ACL_LOG_ERROR("Create ACL range failed in SAI %d", sai_ret);
+        return _sai_to_ndi_err(sai_ret);
+    }
+    *ndi_range_id_p = ndi_acl_utl_sai2ndi_range_id(sai_range_id);
+    NDI_ACL_LOG_INFO("Successfully created ACL range - Return NDI ID %" PRIx64,
+                     *ndi_range_id_p);
+
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_acl_range_delete(npu_id_t npu_id, ndi_obj_id_t ndi_range_id)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        return STD_ERR(ACL, FAIL, 0);
+    }
+
+    sai_object_id_t sai_range_id = ndi_acl_utl_ndi2sai_range_id(ndi_range_id);
+
+    sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->remove_acl_range(sai_range_id);
+    if (sai_ret != SAI_STATUS_SUCCESS) {
+        NDI_ACL_LOG_ERROR("Delete ACL range failed %d", sai_ret);
+        return _sai_to_ndi_err(sai_ret);
+    }
+
+    NDI_ACL_LOG_INFO("Successfully deleted ACL range NDI ID %" PRIx64,
+                     ndi_range_id);
+    return STD_ERR_OK;
 }
 
 } // end Extern C

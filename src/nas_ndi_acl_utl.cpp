@@ -27,7 +27,6 @@
 #include "nas_ndi_event_logs.h"
 #include "nas_ndi_acl.h"
 #include "nas_ndi_acl_utl.h"
-#include "sai_acl_utils.h"
 #include <vector>
 #include <unordered_map>
 #include <string.h>
@@ -86,12 +85,15 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
             {BASE_ACL_MATCH_TYPE_SRC_PORT,           SAI_ACL_ENTRY_ATTR_FIELD_SRC_PORT},
             {BASE_ACL_MATCH_TYPE_NEIGHBOR_DST_HIT,   SAI_ACL_ENTRY_ATTR_FIELD_NEIGHBOR_NPU_META_DST_HIT},
             {BASE_ACL_MATCH_TYPE_ROUTE_DST_HIT,      SAI_ACL_ENTRY_ATTR_FIELD_ROUTE_NPU_META_DST_HIT},
+            {BASE_ACL_MATCH_TYPE_FDB_DST_HIT,        SAI_ACL_ENTRY_ATTR_FIELD_FDB_NPU_META_DST_HIT},
             {BASE_ACL_MATCH_TYPE_IN_INTFS,           SAI_ACL_ENTRY_ATTR_FIELD_IN_PORTS},
             {BASE_ACL_MATCH_TYPE_OUT_INTFS,          SAI_ACL_ENTRY_ATTR_FIELD_OUT_PORTS},
             {BASE_ACL_MATCH_TYPE_IN_INTF,            SAI_ACL_ENTRY_ATTR_FIELD_IN_PORT},
             {BASE_ACL_MATCH_TYPE_OUT_INTF,           SAI_ACL_ENTRY_ATTR_FIELD_OUT_PORT},
             {BASE_ACL_MATCH_TYPE_SRC_INTF,           SAI_ACL_ENTRY_ATTR_FIELD_SRC_PORT},
             {BASE_ACL_MATCH_TYPE_UDF,                SAI_ACL_ENTRY_ATTR_USER_DEFINED_FIELD_MIN},
+            {BASE_ACL_MATCH_TYPE_IPV6_NEXT_HEADER,   SAI_ACL_ENTRY_ATTR_FIELD_IPV6_NEXT_HEADER},
+            {BASE_ACL_MATCH_TYPE_RANGE_CHECK,        SAI_ACL_ENTRY_ATTR_FIELD_ACL_RANGE_TYPE},
         };
 
     auto type_map_itr = _nas2sai_entry_filter_type_map.find (ndi_filter_type);
@@ -145,6 +147,7 @@ t_std_error ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_t ndi_action_t
             {BASE_ACL_ACTION_TYPE_REDIRECT_INTF_LIST,   SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT_LIST},
             {BASE_ACL_ACTION_TYPE_EGRESS_INTF_MASK,     SAI_ACL_ENTRY_ATTR_ACTION_EGRESS_BLOCK_PORT_LIST},
             {BASE_ACL_ACTION_TYPE_SET_USER_TRAP_ID,     SAI_ACL_ENTRY_ATTR_ACTION_SET_USER_TRAP_ID},
+            {BASE_ACL_ACTION_TYPE_SET_PACKET_COLOR,     SAI_ACL_ENTRY_ATTR_ACTION_SET_PACKET_COLOR},
         };
 
     auto type_map_itr = _nas2sai_entry_action_type_map.find (ndi_action_type);
@@ -155,6 +158,57 @@ t_std_error ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_t ndi_action_t
 
    sai_attr_p->id = type_map_itr->second;
    return STD_ERR_OK;
+}
+
+uint_t ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_t ndi_action_type)
+{
+    // Locking instances where global variables are used
+    std_mutex_simple_lock_guard g(&table_lock);
+
+    static const
+        std::unordered_map<BASE_ACL_ACTION_TYPE_t, sai_acl_action_type_t, std::hash<int>>
+        _nas2sai_action_type_map = {
+
+            {BASE_ACL_ACTION_TYPE_REDIRECT_INTF,        SAI_ACL_ACTION_TYPE_REDIRECT},
+            {BASE_ACL_ACTION_TYPE_REDIRECT_INTF_LIST,   SAI_ACL_ACTION_TYPE_REDIRECT_LIST},
+            {BASE_ACL_ACTION_TYPE_REDIRECT_PORT,        SAI_ACL_ACTION_TYPE_REDIRECT},
+            {BASE_ACL_ACTION_TYPE_REDIRECT_PORT_LIST,   SAI_ACL_ACTION_TYPE_REDIRECT_LIST},
+            {BASE_ACL_ACTION_TYPE_REDIRECT_IP_NEXTHOP,  SAI_ACL_ACTION_TYPE_REDIRECT},
+            {BASE_ACL_ACTION_TYPE_PACKET_ACTION,        SAI_ACL_ACTION_TYPE_PACKET_ACTION},
+            {BASE_ACL_ACTION_TYPE_FLOOD,                SAI_ACL_ACTION_TYPE_FLOOD},
+            {BASE_ACL_ACTION_TYPE_SET_COUNTER,          SAI_ACL_ACTION_TYPE_COUNTER},
+            {BASE_ACL_ACTION_TYPE_MIRROR_INGRESS,       SAI_ACL_ACTION_TYPE_MIRROR_INGRESS},
+            {BASE_ACL_ACTION_TYPE_MIRROR_EGRESS,        SAI_ACL_ACTION_TYPE_MIRROR_EGRESS},
+            {BASE_ACL_ACTION_TYPE_SET_POLICER,          SAI_ACL_ACTION_TYPE_SET_POLICER},
+            {BASE_ACL_ACTION_TYPE_DECREMENT_TTL,        SAI_ACL_ACTION_TYPE_DECREMENT_TTL},
+            {BASE_ACL_ACTION_TYPE_SET_TC,               SAI_ACL_ACTION_TYPE_SET_TC},
+            {BASE_ACL_ACTION_TYPE_SET_INNER_VLAN_ID,    SAI_ACL_ACTION_TYPE_SET_INNER_VLAN_ID},
+            {BASE_ACL_ACTION_TYPE_SET_INNER_VLAN_PRI,   SAI_ACL_ACTION_TYPE_SET_INNER_VLAN_PRI},
+            {BASE_ACL_ACTION_TYPE_SET_OUTER_VLAN_ID,    SAI_ACL_ACTION_TYPE_SET_OUTER_VLAN_ID},
+            {BASE_ACL_ACTION_TYPE_SET_OUTER_VLAN_PRI,   SAI_ACL_ACTION_TYPE_SET_OUTER_VLAN_PRI},
+            {BASE_ACL_ACTION_TYPE_SET_SRC_MAC,          SAI_ACL_ACTION_TYPE_SET_SRC_MAC},
+            {BASE_ACL_ACTION_TYPE_SET_DST_MAC,          SAI_ACL_ACTION_TYPE_SET_DST_MAC},
+            {BASE_ACL_ACTION_TYPE_SET_SRC_IP,           SAI_ACL_ACTION_TYPE_SET_SRC_IP},
+            {BASE_ACL_ACTION_TYPE_SET_DST_IP,           SAI_ACL_ACTION_TYPE_SET_DST_IP},
+            {BASE_ACL_ACTION_TYPE_SET_SRC_IPV6,         SAI_ACL_ACTION_TYPE_SET_SRC_IPv6},
+            {BASE_ACL_ACTION_TYPE_SET_DST_IPV6,         SAI_ACL_ACTION_TYPE_SET_DST_IPv6},
+            {BASE_ACL_ACTION_TYPE_SET_DSCP,             SAI_ACL_ACTION_TYPE_SET_DSCP},
+            {BASE_ACL_ACTION_TYPE_SET_L4_SRC_PORT,      SAI_ACL_ACTION_TYPE_SET_L4_SRC_PORT},
+            {BASE_ACL_ACTION_TYPE_SET_L4_DST_PORT,      SAI_ACL_ACTION_TYPE_SET_L4_DST_PORT},
+            {BASE_ACL_ACTION_TYPE_SET_CPU_QUEUE,        SAI_ACL_ACTION_TYPE_SET_CPU_QUEUE},
+            {BASE_ACL_ACTION_TYPE_EGRESS_MASK,          SAI_ACL_ACTION_TYPE_EGRESS_BLOCK_PORT_LIST},
+            {BASE_ACL_ACTION_TYPE_EGRESS_INTF_MASK,     SAI_ACL_ACTION_TYPE_EGRESS_BLOCK_PORT_LIST},
+            {BASE_ACL_ACTION_TYPE_SET_USER_TRAP_ID,     SAI_ACL_ACTION_TYPE_SET_USER_TRAP_ID},
+        };
+
+    auto type_map_itr = _nas2sai_action_type_map.find (ndi_action_type);
+
+    if (type_map_itr == _nas2sai_action_type_map.end()) {
+        throw std::out_of_range(std::string("Invalid action type id ") +
+                                std::to_string(ndi_action_type));
+    }
+
+    return static_cast<uint_t>(type_map_itr->second);
 }
 
 // Map NAS-NDI Filter ID to SAI Table Filter ID
@@ -204,12 +258,15 @@ t_std_error ndi_acl_utl_ndi2sai_tbl_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filte
             {BASE_ACL_MATCH_TYPE_SRC_PORT,           SAI_ACL_TABLE_ATTR_FIELD_SRC_PORT},
             {BASE_ACL_MATCH_TYPE_NEIGHBOR_DST_HIT,   SAI_ACL_TABLE_ATTR_FIELD_NEIGHBOR_NPU_META_DST_HIT},
             {BASE_ACL_MATCH_TYPE_ROUTE_DST_HIT,      SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT},
+            {BASE_ACL_MATCH_TYPE_FDB_DST_HIT,        SAI_ACL_TABLE_ATTR_FIELD_FDB_NPU_META_DST_HIT},
             {BASE_ACL_MATCH_TYPE_IN_INTFS,           SAI_ACL_TABLE_ATTR_FIELD_IN_PORTS},
             {BASE_ACL_MATCH_TYPE_OUT_INTFS,          SAI_ACL_TABLE_ATTR_FIELD_OUT_PORTS},
             {BASE_ACL_MATCH_TYPE_IN_INTF,            SAI_ACL_TABLE_ATTR_FIELD_IN_PORT},
             {BASE_ACL_MATCH_TYPE_OUT_INTF,           SAI_ACL_TABLE_ATTR_FIELD_OUT_PORT},
             {BASE_ACL_MATCH_TYPE_SRC_INTF,           SAI_ACL_TABLE_ATTR_FIELD_SRC_PORT},
             {BASE_ACL_MATCH_TYPE_UDF,                SAI_ACL_TABLE_ATTR_USER_DEFINED_FIELD_GROUP_MIN},
+            {BASE_ACL_MATCH_TYPE_IPV6_NEXT_HEADER,   SAI_ACL_TABLE_ATTR_FIELD_IPV6_NEXT_HEADER},
+            {BASE_ACL_MATCH_TYPE_RANGE_CHECK,        SAI_ACL_TABLE_ATTR_FIELD_ACL_RANGE_TYPE},
         };
 
     auto filter_type_itr = _nas2sai_tbl_filter_type_map.find (ndi_filter_type);
@@ -417,11 +474,27 @@ static void _fill_sai_filter_oid (sai_attribute_t* sai_attr_p,
     sai_attr_p->value.aclfield.data.oid = sai_oid;
 }
 
+static void _fill_sai_filter_oid_list (sai_attribute_t* sai_attr_p,
+                                       const ndi_acl_entry_filter_t* ndi_filter_p,
+                                       nas::mem_alloc_helper_t& mem_helper)
+{
+    auto oid_count = ndi_filter_p->data.values.ndi_obj_ref_list.count;
+    auto oid_list = mem_helper.alloc<sai_object_id_t> (oid_count);
+
+    for (uint_t count=0; count < oid_count; count++) {
+        oid_list [count] = static_cast<sai_object_id_t>
+           (ndi_filter_p->data.values.ndi_obj_ref_list.list[count]);
+    }
+
+    sai_attr_p->value.aclfield.data.objlist.count = oid_count;
+    sai_attr_p->value.aclfield.data.objlist.list = oid_list;
+}
+
 static void _fill_sai_filter_bool (sai_attribute_t* sai_attr_p,
                                    const ndi_acl_entry_filter_t* ndi_filter_p,
                                    nas::mem_alloc_helper_t& mem_helper)
 {
-    sai_attr_p->value.aclfield.data.booldata = true;
+    sai_attr_p->value.aclfield.data.booldata = ndi_filter_p->data.values.u32;
 }
 
 t_std_error ndi_acl_utl_fill_sai_filter (sai_attribute_t *sai_attr_p,
@@ -450,6 +523,7 @@ t_std_error ndi_acl_utl_fill_sai_filter (sai_attribute_t *sai_attr_p,
             {NDI_ACL_FILTER_U16,                _fill_sai_filter_u16},
             {NDI_ACL_FILTER_U8,                 _fill_sai_filter_u8},
             {NDI_ACL_FILTER_OBJ_ID,             _fill_sai_filter_oid},
+            {NDI_ACL_FILTER_OBJ_ID_LIST,        _fill_sai_filter_oid_list},
             {NDI_ACL_FILTER_BOOL,               _fill_sai_filter_bool},
             {NDI_ACL_FILTER_U8LIST,             _fill_sai_filter_u8list},
         };
@@ -602,6 +676,27 @@ static void _fill_sai_action_set_npu_portlist (sai_attribute_t* sai_attr_p,
     sai_attr_p->value.aclaction.parameter.objlist.list = sai_portlist;
 }
 
+static void _fill_sai_action_pkt_color (sai_attribute_t* sai_attr_p,
+                                        const ndi_acl_entry_action_t* ndi_action_p,
+                                        nas::mem_alloc_helper_t& mem_helper)
+{
+    static const
+        std::unordered_map<BASE_ACL_PACKET_COLOR_t, sai_packet_color_t, std::hash<int>>
+        ndi2sai_pkt_color_map = {
+            {BASE_ACL_PACKET_COLOR_GREEN,       SAI_PACKET_COLOR_GREEN},
+            {BASE_ACL_PACKET_COLOR_YELLOW,      SAI_PACKET_COLOR_YELLOW},
+            {BASE_ACL_PACKET_COLOR_RED,         SAI_PACKET_COLOR_RED},
+        };
+
+    auto it = ndi2sai_pkt_color_map.find (ndi_action_p->pkt_color);
+
+    if (it == ndi2sai_pkt_color_map.end()) {
+        throw std::out_of_range (std::string {"Invalid packet color type"}
+                                 + std::to_string (ndi_action_p->pkt_color));
+    }
+    sai_attr_p->value.aclaction.parameter.s32 = it->second;
+}
+
 static void _fill_sai_action_pkt_action (sai_attribute_t* sai_attr_p,
                                          const ndi_acl_entry_action_t* ndi_action_p,
                                          nas::mem_alloc_helper_t& mem_helper)
@@ -659,6 +754,7 @@ t_std_error ndi_acl_utl_fill_sai_action (sai_attribute_t* sai_attr_p,
             {NDI_ACL_ACTION_U32,               _fill_sai_action_set_u32},
             {NDI_ACL_ACTION_U16,               _fill_sai_action_set_u16},
             {NDI_ACL_ACTION_U8,                _fill_sai_action_set_u8},
+            {NDI_ACL_ACTION_PKT_COLOR,         _fill_sai_action_pkt_color},
         };
 
     BASE_ACL_ACTION_TYPE_t  action_type = ndi_action_p->action_type;
