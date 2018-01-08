@@ -73,6 +73,10 @@ sai_object_id_t ndi_get_sai_vlan_obj_id(npu_id_t npu_id,
 t_std_error ndi_get_sai_vlan_id(npu_id_t npu_id, sai_object_id_t vlan_obj_id,
         hal_vlan_id_t *vlan_id);
 
+t_std_error ndi_vlan_delete_default_member_brports(npu_id_t npu_id, sai_object_id_t brport, bool del_all);
+
+bool ndi_vlan_get_default_obj_id(npu_id_t npu_id);
+
 #ifdef __cplusplus
 }
 #endif

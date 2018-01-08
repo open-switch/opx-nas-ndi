@@ -26,6 +26,7 @@
 #include "nas_ndi_int.h"
 #include "nas_ndi_utils.h"
 #include "nas_ndi_vlan_util.h"
+#include "nas_ndi_obj_cache.h"
 #include "nas_ndi_map.h"
 
 #include "saitypes.h"
@@ -36,14 +37,13 @@
 
 #include <unordered_map>
 #include <functional>
-#include <stdint.h>
 #include <inttypes.h>
 #include <vector>
 
 #define NDI_STG_LOG(type,LVL,msg, ...) \
         EV_LOG( type, NAS_L2, LVL,"NDI-STG", msg, ##__VA_ARGS__)
 
-
+static sai_object_id_t default_stg_id;
 
 static bool ndi_stp_get_sai_state(BASE_STG_INTERFACE_STATE_t state, sai_stp_port_state_t & sai_state){
     static const auto ndi_to_sai_stp_state_map = new std::unordered_map<BASE_STG_INTERFACE_STATE_t, sai_stp_port_state_t,std::hash<int>>
@@ -76,8 +76,22 @@ static inline  sai_vlan_api_t * ndi_vlan_api_get(nas_ndi_db_t *ndi_db_ptr) {
     return(ndi_db_ptr->ndi_sai_api_tbl.n_sai_vlan_api_tbl);
 }
 
+static bool ndi_stg_get_brport(sai_object_id_t port, sai_object_id_t & br_port){
+    ndi_brport_obj_t brport_obj;
+    brport_obj.port_obj_id = port;
+
+    if(!nas_ndi_get_bridge_port_obj(&brport_obj,ndi_brport_query_type_FROM_PORT)){
+        NDI_STG_LOG(ERR,0,"Failed to find bridge port for port %llx",brport_obj.port_obj_id);
+        return false;
+    }
+
+    br_port = brport_obj.brport_obj_id;
+    return true;
+}
+
+
 sai_object_id_t ndi_stg_get_stp_port_id_from_cache(sai_object_id_t stp_id,
-        sai_object_id_t port_id)
+        sai_object_id_t brport)
 {
     nas_ndi_map_key_t map_key;
     nas_ndi_map_data_t map_data;
@@ -85,7 +99,7 @@ sai_object_id_t ndi_stg_get_stp_port_id_from_cache(sai_object_id_t stp_id,
 
     map_key.type = NAS_NDI_MAP_TYPE_STP_PORT_ID;
     map_key.id1 = stp_id;
-    map_key.id2 = port_id;
+    map_key.id2 = brport;
 
     map_data.val1 = SAI_NULL_OBJECT_ID;
     map_data.val2 = SAI_NULL_OBJECT_ID;
@@ -101,22 +115,22 @@ sai_object_id_t ndi_stg_get_stp_port_id_from_cache(sai_object_id_t stp_id,
 }
 
 t_std_error ndi_stg_del_port_from_cache(sai_object_id_t stp_id,
-        sai_object_id_t port_id)
+        sai_object_id_t brport)
 {
     nas_ndi_map_key_t map_key;
     nas_ndi_map_val_filter_t filter;
     t_std_error rc = STD_ERR(NPU, FAIL, 0);
     sai_object_id_t stp_port_id =
-        ndi_stg_get_stp_port_id_from_cache(stp_id,port_id);
+        ndi_stg_get_stp_port_id_from_cache(stp_id,brport);
 
     map_key.type = NAS_NDI_MAP_TYPE_STP_PORT_ID;
     map_key.id1 = stp_id;
-    map_key.id2 = port_id;
+    map_key.id2 = brport;
 
     rc = nas_ndi_map_delete(&map_key);
 
     map_key.type = NAS_NDI_MAP_TYPE_PORT_STP_PORTS;
-    map_key.id1 = port_id;
+    map_key.id1 = brport;
     map_key.id2 = SAI_NULL_OBJECT_ID;
 
     filter.value.val1 = stp_port_id;
@@ -129,7 +143,7 @@ t_std_error ndi_stg_del_port_from_cache(sai_object_id_t stp_id,
 }
 
 t_std_error ndi_stg_add_port_to_cache(sai_object_id_t stp_id,
-        sai_object_id_t port_id,
+        sai_object_id_t brport,
         sai_object_id_t stp_port_id)
 {
     nas_ndi_map_key_t map_key;
@@ -139,7 +153,7 @@ t_std_error ndi_stg_add_port_to_cache(sai_object_id_t stp_id,
 
     map_key.type = NAS_NDI_MAP_TYPE_STP_PORT_ID;
     map_key.id1 = stp_id;
-    map_key.id2 = port_id;
+    map_key.id2 = brport;
 
     map_data.val1 = stp_port_id;
     map_data.val2 = SAI_NULL_OBJECT_ID;
@@ -153,7 +167,7 @@ t_std_error ndi_stg_add_port_to_cache(sai_object_id_t stp_id,
     }
 
     map_key.type = NAS_NDI_MAP_TYPE_PORT_STP_PORTS;
-    map_key.id1 = port_id;
+    map_key.id1 = brport;
     map_key.id2 = SAI_NULL_OBJECT_ID;
 
     map_data.val1 = stp_port_id;
@@ -164,70 +178,191 @@ t_std_error ndi_stg_add_port_to_cache(sai_object_id_t stp_id,
 
     rc = nas_ndi_map_insert(&map_key,&map_val);
     if(STD_ERR_OK != rc) {
-        ndi_stg_del_port_from_cache(stp_id,port_id);
+        ndi_stg_del_port_from_cache(stp_id,brport);
         return rc;
     }
 
     return STD_ERR_OK;
 }
 
-t_std_error ndi_stg_set_stp_port_state_internal(
-        nas_ndi_db_t *ndi_db_ptr,
-        sai_object_id_t stg_id,
-        sai_object_id_t port_id,
-        sai_stp_port_state_t sai_stp_state)
+
+static bool ndi_stg_create_stp_port(
+            sai_object_id_t stg_id,
+            sai_object_id_t brport,
+            sai_stp_port_state_t sai_stp_state)
 {
-    t_std_error rc = STD_ERR(STG, FAIL, 0);
+
+    npu_id_t npu_id = ndi_npu_id_get();
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+
+    if (ndi_db_ptr == NULL) {
+        NDI_STG_LOG(ERR,0, "Not able to find STG NDI function table entry");
+        return false;
+    }
+
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     sai_object_id_t stp_port_id = SAI_NULL_OBJECT_ID;
     sai_attribute_t attr_list[SAI_STP_PORT_ATTR_END] = {0};
-    uint32_t attr_count = 0;
+    size_t attr_count = 0;
 
-    if((stp_port_id = ndi_stg_get_stp_port_id_from_cache(stg_id,port_id)) ==
-            SAI_NULL_OBJECT_ID)
-    {
-        attr_list[attr_count].id = SAI_STP_PORT_ATTR_STP;
-        attr_list[attr_count].value.oid = stg_id;
-        attr_count++;
+    attr_list[attr_count].id = SAI_STP_PORT_ATTR_STP;
+    attr_list[attr_count++].value.oid = stg_id;
 
-        attr_list[attr_count].id = SAI_STP_PORT_ATTR_PORT;
-        attr_list[attr_count].value.oid = port_id;
-        attr_count++;
+    attr_list[attr_count].id = SAI_STP_PORT_ATTR_BRIDGE_PORT;
+    attr_list[attr_count++].value.oid = brport;
 
-        attr_list[attr_count].id = SAI_STP_PORT_ATTR_STATE;
-        /* Default port state is blocking so setting it to same during STG
-           port object creation */
-        attr_list[attr_count].value.s32 = sai_stp_state;
-        attr_count++;
+    attr_list[attr_count].id = SAI_STP_PORT_ATTR_STATE;
+    attr_list[attr_count++].value.s32 = sai_stp_state;
 
-        if ((sai_ret = ndi_stp_api_get(ndi_db_ptr)->create_stp_port(
-                        &stp_port_id,ndi_switch_id_get(),attr_count,attr_list))
-                != SAI_STATUS_SUCCESS) {
-            NDI_STG_LOG(ERR,0,"NDI STG Port creation failed with return"
-                    " code %d",sai_ret);
-            return STD_ERR(STG, FAIL, sai_ret);
-        }
 
-        if((rc = ndi_stg_add_port_to_cache(stg_id,port_id,stp_port_id)) !=
-                STD_ERR_OK) {
-            NDI_STG_LOG(ERR,0,"NDI STG Port add to cache failed");
-            return rc;
-        }
+    if ((sai_ret = ndi_stp_api_get(ndi_db_ptr)->create_stp_port(
+                    &stp_port_id,ndi_switch_id_get(),attr_count,attr_list))
+            != SAI_STATUS_SUCCESS) {
+        NDI_STG_LOG(ERR,0,"NDI STG Port creation failed with return"
+                " code %d",sai_ret);
+        return false;
+    }
+
+    if((ndi_stg_add_port_to_cache(stg_id,brport,stp_port_id)) !=
+            STD_ERR_OK) {
+        NDI_STG_LOG(ERR,0,"NDI STG Port add to cache failed");
+        return false;
+    }
+
+    return true;
+}
+
+t_std_error ndi_stg_set_stp_port_state_internal(
+        nas_ndi_db_t *ndi_db_ptr,
+        sai_object_id_t stg_id,
+        sai_object_id_t brport,
+        sai_stp_port_state_t sai_stp_state)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    sai_object_id_t stp_port_id = SAI_NULL_OBJECT_ID;
+    sai_attribute_t attr_list;
+
+    if((stp_port_id = ndi_stg_get_stp_port_id_from_cache(stg_id,brport)) == SAI_NULL_OBJECT_ID){
+
+      if(!ndi_stg_create_stp_port(stg_id,brport,sai_stp_state)){
+          return STD_ERR(STG,FAIL,0);
+      }
     } else {
-        attr_list[0].id = SAI_STP_PORT_ATTR_STATE;
-        attr_list[0].value.s32 = sai_stp_state;
+        attr_list.id = SAI_STP_PORT_ATTR_STATE;
+        attr_list.value.s32 = sai_stp_state;
 
         if ((sai_ret = ndi_stp_api_get(ndi_db_ptr)->set_stp_port_attribute(
-                        stp_port_id, &attr_list[0])) != SAI_STATUS_SUCCESS) {
+                        stp_port_id, &attr_list)) != SAI_STATUS_SUCCESS) {
             NDI_STG_LOG(ERR,0,"Failed to set stp state %d to port %d in stg id"
                     " %d with return code %d",
-                    sai_stp_state,port_id,stg_id,sai_ret);
+                    sai_stp_state,brport,stg_id,sai_ret);
             return STD_ERR(STG, FAIL, sai_ret);
         }
     }
 
     return STD_ERR_OK;
 }
+
+/*
+ * For default STP port state put the state to forwarding
+ */
+bool ndi_stg_create_default_stp_port(sai_object_id_t brport){
+    return ndi_stg_create_stp_port(default_stg_id, brport, SAI_STP_PORT_STATE_FORWARDING);
+}
+
+static bool ndi_stg_get_brport_state(npu_id_t npu_id, ndi_stg_id_t stg_id,
+                                     sai_object_id_t port, BASE_STG_INTERFACE_STATE_t & state){
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    sai_object_id_t stp_port_id = SAI_NULL_OBJECT_ID;
+    sai_attribute_t attr;
+    sai_status_t sai_ret;
+    sai_stp_port_state_t sai_stp_state;
+
+    if(ndi_db_ptr == NULL){
+        NDI_STG_LOG(ERR,0,"Invalid NPU id %d",npu_id);
+        return false;
+    }
+
+    /* Get bridge port id for sai port id */
+    sai_object_id_t brport;
+    if(!ndi_stg_get_brport(port,brport)){
+        return false;
+    }
+
+    if((stp_port_id = ndi_stg_get_stp_port_id_from_cache(
+        (sai_object_id_t)stg_id, brport)) != SAI_NULL_OBJECT_ID) {
+        attr.id = SAI_STP_PORT_ATTR_STATE;
+
+        if ((sai_ret = ndi_stp_api_get(ndi_db_ptr)->get_stp_port_attribute(
+                        stp_port_id,1,&attr)) != SAI_STATUS_SUCCESS) {
+            NDI_STG_LOG(ERR,0,"Failed to get the STP Port State for STG id %" PRIu64 ""
+                    "and Port id %d with return code %d",stg_id,brport,sai_ret);
+            return false;
+        }
+
+        sai_stp_state = (sai_stp_port_state_t)attr.value.s32;
+    } else {
+        NDI_STG_LOG(TRACE,0,"Failed to get STG port object id for stg id %d and"
+                " port %d",stg_id,brport);
+        /* If STP port object is not present then state SET has not happened
+         * yet hence assuming as BLOCKING state since the SAI STP port state
+         * for newly created STP instance is BLOCKING */
+        sai_stp_state = SAI_STP_PORT_STATE_BLOCKING;
+    }
+
+    NDI_STG_LOG(INFO,3,"Got the STP Port State for STG id %" PRIu64 " "
+                                        "and Port id %d",stg_id,brport);
+
+    static const auto sai_to_ndi_stp_state_map = new std::unordered_map<sai_stp_port_state_t, BASE_STG_INTERFACE_STATE_t, std::hash<int>>
+    {
+        {SAI_STP_PORT_STATE_BLOCKING,BASE_STG_INTERFACE_STATE_BLOCKING},
+        {SAI_STP_PORT_STATE_LEARNING,BASE_STG_INTERFACE_STATE_LEARNING},
+        {SAI_STP_PORT_STATE_FORWARDING,BASE_STG_INTERFACE_STATE_FORWARDING}
+    };
+
+    auto it = sai_to_ndi_stp_state_map->find(sai_stp_state);
+    if(it == sai_to_ndi_stp_state_map->end()){
+        NDI_STG_LOG(ERR,0,"NO SAI STP State found for %d",sai_stp_state);
+        return false;
+    }
+    state = it->second;
+    return true;
+
+}
+
+static bool ndi_stg_set_brport_state(npu_id_t npu_id, ndi_stg_id_t stg_id, sai_object_id_t port,
+                                     BASE_STG_INTERFACE_STATE_t state ){
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+
+    if(ndi_db_ptr == NULL){
+        NDI_STG_LOG(ERR,0,"Invalid NPU id %d",npu_id);
+        return false;
+    }
+
+    sai_stp_port_state_t sai_stp_state;
+    if(!ndi_stp_get_sai_state(state,sai_stp_state)){
+        NDI_STG_LOG(ERR,0,"NO SAI STP State found for %d",state);
+        return false;
+    }
+
+    /* Get bridge port id for sai port id */
+    sai_object_id_t brport;
+    if(!ndi_stg_get_brport(port,brport)){
+        return STD_ERR(STG,FAIL,0);
+    }
+
+    if(ndi_stg_set_stp_port_state_internal(ndi_db_ptr,(sai_object_id_t)stg_id,
+            brport, sai_stp_state) != STD_ERR_OK) {
+        return false;
+    }
+
+    NDI_STG_LOG(INFO,3,"Set stp state %d to port %d in stg id %" PRIu64 "",
+                                                sai_stp_state,brport,stg_id);
+
+    return true;
+
+}
+
 
 t_std_error ndi_stg_add(npu_id_t npu_id, ndi_stg_id_t * stg_id){
     sai_status_t sai_ret;
@@ -252,6 +387,7 @@ t_std_error ndi_stg_add(npu_id_t npu_id, ndi_stg_id_t * stg_id){
     *stg_id = sai_stp_id;
     return STD_ERR_OK;
 }
+
 
 t_std_error ndi_stg_delete_all_stp_ports(nas_ndi_db_t *ndi_db_ptr,
         sai_object_id_t stg_id)
@@ -290,11 +426,8 @@ t_std_error ndi_stg_delete_all_stp_ports(nas_ndi_db_t *ndi_db_ptr,
             return STD_ERR(STG, FAIL, sai_ret);
         }
 
-        attr_list[attr_count].id = SAI_STP_PORT_ATTR_STP;
-        attr_count++;
-
-        attr_list[attr_count].id = SAI_STP_PORT_ATTR_PORT;
-        attr_count++;
+        attr_list[attr_count++].id = SAI_STP_PORT_ATTR_STP;
+        attr_list[attr_count++].id = SAI_STP_PORT_ATTR_BRIDGE_PORT;
 
         for(iter=0; iter<count; iter++) {
             if ((sai_ret = ndi_stp_api_get(ndi_db_ptr)->get_stp_port_attribute(
@@ -370,55 +503,27 @@ t_std_error ndi_stg_update_vlan(npu_id_t npu_id, ndi_stg_id_t  stg_id, hal_vlan_
 }
 
 
+
 t_std_error ndi_stg_set_stp_port_state(npu_id_t npu_id, ndi_stg_id_t stg_id,
-        npu_port_t port_id, BASE_STG_INTERFACE_STATE_t port_stp_state)
-{
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+        npu_port_t port_id, BASE_STG_INTERFACE_STATE_t port_stp_state) {
+
     sai_object_id_t obj_id;
-    t_std_error rc = STD_ERR(STG, FAIL, 0);
-
-    if(ndi_db_ptr == NULL){
-        NDI_STG_LOG(ERR,0,"Invalid NPU id %d",npu_id);
-        return STD_ERR(STG,PARAM,0);
-    }
-
-    sai_stp_port_state_t sai_stp_state;
-    if(!ndi_stp_get_sai_state(port_stp_state,sai_stp_state)){
-        NDI_STG_LOG(ERR,0,"NO SAI STP State found for %d",port_stp_state);
-        return STD_ERR(STG,PARAM,0);
-    }
-
     if(ndi_sai_port_id_get( npu_id,port_id,&obj_id)!= STD_ERR_OK){
         NDI_STG_LOG(ERR,0,"Failed to get oid for npu %d and port %d",
                               npu_id,port_id);
         return STD_ERR(STG,FAIL,0);
     }
 
-    if((rc = ndi_stg_set_stp_port_state_internal(ndi_db_ptr,
-                    (sai_object_id_t)stg_id, obj_id, sai_stp_state))
-            != STD_ERR_OK) {
-        return rc;
+    if(!ndi_stg_set_brport_state(npu_id,stg_id,obj_id,port_stp_state)){
+        return STD_ERR(STG,FAIL,0);
     }
 
-    NDI_STG_LOG(INFO,3,"Set stp state %d to port %d in stg id %" PRIu64 "",
-                                            sai_stp_state,port_id,stg_id);
     return STD_ERR_OK;
 }
 
 
 t_std_error ndi_stg_get_stp_port_state(npu_id_t npu_id, ndi_stg_id_t stg_id,
-        npu_port_t port_id, BASE_STG_INTERFACE_STATE_t *port_stp_state)
-{
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    sai_object_id_t stp_port_id = SAI_NULL_OBJECT_ID;
-    sai_attribute_t attr;
-    sai_status_t sai_ret;
-    sai_stp_port_state_t sai_stp_state;
-
-    if(ndi_db_ptr == NULL){
-        NDI_STG_LOG(ERR,0,"Invalid NPU id %d",npu_id);
-        return STD_ERR(STG,PARAM,0);
-    }
+        npu_port_t port_id, BASE_STG_INTERFACE_STATE_t *port_stp_state) {
 
     sai_object_id_t obj_id;
     if(ndi_sai_port_id_get(npu_id,port_id,&obj_id)!= STD_ERR_OK){
@@ -427,44 +532,67 @@ t_std_error ndi_stg_get_stp_port_state(npu_id_t npu_id, ndi_stg_id_t stg_id,
         return STD_ERR(STG,FAIL,0);
     }
 
-    if((stp_port_id = ndi_stg_get_stp_port_id_from_cache(
-        (sai_object_id_t)stg_id, obj_id)) != SAI_NULL_OBJECT_ID) {
-        attr.id = SAI_STP_PORT_ATTR_STATE;
+    if(!ndi_stg_get_brport_state(npu_id,stg_id,obj_id,*port_stp_state)){
+        return STD_ERR(STG,FAIL,0);
+    }
 
-        if ((sai_ret = ndi_stp_api_get(ndi_db_ptr)->get_stp_port_attribute(
-                        stp_port_id,1,&attr)) != SAI_STATUS_SUCCESS) {
-            NDI_STG_LOG(ERR,0,"Failed to get the STP Port State for STG id %" PRIu64 ""
-                    "and Port id %d with return code %d",stg_id,port_id,sai_ret);
-            return STD_ERR(STG, FAIL, sai_ret);
+    return STD_ERR_OK;
+}
+
+
+static bool ndi_stg_get_stp_member_ports(nas_ndi_db_t * ndi_db_ptr, ndi_stg_id_t stg_id){
+
+    sai_status_t sai_ret;
+    sai_attribute_t attr;
+    size_t count = 0;
+
+    attr.id = SAI_STP_ATTR_PORT_LIST;
+    attr.value.objlist.count = 0;
+    attr.value.objlist.list = NULL;
+
+    sai_ret = ndi_stp_api_get(ndi_db_ptr)->get_stp_attribute(stg_id,1,&attr);
+
+    if((sai_ret != SAI_STATUS_BUFFER_OVERFLOW) && (sai_ret != SAI_STATUS_SUCCESS)) {
+        NDI_STG_LOG(ERR,0,"STG Id %" PRIu64 " port list count get failed with"
+                    " return code %d",stg_id,sai_ret);
+        return false;
+    }
+
+    count = attr.value.objlist.count;
+
+    if(count > 0) {
+        sai_object_id_t stp_port_list[count];
+        sai_attribute_t attr_list= {0};
+
+        attr.value.objlist.list = stp_port_list;
+
+        if((sai_ret = ndi_stp_api_get(ndi_db_ptr)->get_stp_attribute(stg_id,
+                            1,&attr)) != SAI_STATUS_SUCCESS) {
+            NDI_STG_LOG(ERR,0,"STG Id %" PRIu64 " port list get failed with"
+                        " return code %d",stg_id,sai_ret);
+            return false;
         }
 
-        sai_stp_state = (sai_stp_port_state_t)attr.value.s32;
-    } else {
-        NDI_STG_LOG(TRACE,0,"Failed to get STG port object id for stg id %d and"
-                " port %d",stg_id,obj_id);
-        /* If STP port object is not present then state SET has not happened
-         * yet hence assuming as BLOCKING state since the SAI STP port state
-         * for newly created STP instance is BLOCKING */
-        sai_stp_state = SAI_STP_PORT_STATE_BLOCKING;
+        const size_t attr_count = 1;
+        attr_list.id = SAI_STP_PORT_ATTR_BRIDGE_PORT;
+
+        for(size_t iter=0; iter<count; iter++) {
+            if ((sai_ret = ndi_stp_api_get(ndi_db_ptr)->get_stp_port_attribute(
+                    stp_port_list[iter],attr_count,&attr_list)) != SAI_STATUS_SUCCESS) {
+                NDI_STG_LOG(ERR,0,"STG port Id %" PRIu64 " port attribute get"
+                            " failed with return code %d",stg_id,sai_ret);
+                return false;
+            }
+
+            if(ndi_stg_add_port_to_cache(stg_id,attr_list.value.oid,
+                            stp_port_list[iter]) != STD_ERR_OK) {
+                NDI_STG_LOG(ERR,0,"STG port Id %" PRIu64 " remove from cache"
+                            " failed",stg_id);
+                return false;
+            }
+        }
     }
-
-    NDI_STG_LOG(INFO,3,"Got the STP Port State for STG id %" PRIu64 " "
-                                        "and Port id %d",stg_id,port_id);
-
-    static const auto sai_to_ndi_stp_state_map = new std::unordered_map<sai_stp_port_state_t, BASE_STG_INTERFACE_STATE_t, std::hash<int>>
-    {
-        {SAI_STP_PORT_STATE_BLOCKING,BASE_STG_INTERFACE_STATE_BLOCKING},
-        {SAI_STP_PORT_STATE_LEARNING,BASE_STG_INTERFACE_STATE_LEARNING},
-        {SAI_STP_PORT_STATE_FORWARDING,BASE_STG_INTERFACE_STATE_FORWARDING}
-    };
-
-    auto it = sai_to_ndi_stp_state_map->find(sai_stp_state);
-    if(it == sai_to_ndi_stp_state_map->end()){
-        NDI_STG_LOG(ERR,0,"NO SAI STP State found for %d",sai_stp_state);
-        return STD_ERR(STG,PARAM,0);
-    }
-    *port_stp_state = it->second;
-    return STD_ERR_OK;
+    return true;
 }
 
 
@@ -495,6 +623,7 @@ t_std_error ndi_stg_get_default_id(npu_id_t npu_id, ndi_stg_id_t *stg_id, hal_vl
     }
 
     *stg_id = default_stp.value.oid;
+    default_stg_id = default_stp.value.oid;
 
     NDI_STG_LOG(INFO,3,"Got the default STG instance id %" PRIu64 " ",*stg_id);
 
@@ -512,6 +641,10 @@ t_std_error ndi_stg_get_default_id(npu_id_t npu_id, ndi_stg_id_t *stg_id, hal_vl
     }
 
     NDI_STG_LOG(INFO,3,"Got the VLAN for default STG instance id %d ",*vlan_id);
+
+    if(!ndi_stg_get_stp_member_ports(ndi_db_ptr,*stg_id)){
+        return STD_ERR(STG,FAIL,0);
+    }
 
     return STD_ERR_OK;
 
@@ -551,8 +684,13 @@ t_std_error ndi_stg_set_all_stp_port_state(npu_id_t npu_id, ndi_stg_id_t stg_id,
     }
 
     for (auto sai_obj : sai_port_list){
+        /* Get bridge port id for sai port id */
+        sai_object_id_t brport;
+        if(!ndi_stg_get_brport(sai_obj,brport)){
+            return STD_ERR(STG,FAIL,0);
+        }
         if((rc = ndi_stg_set_stp_port_state_internal(ndi_db_ptr,
-                        (sai_object_id_t)stg_id,sai_obj,sai_stp_state))
+                        (sai_object_id_t)stg_id,brport,sai_stp_state))
                 != STD_ERR_OK) {
             return rc;
         }
@@ -561,12 +699,9 @@ t_std_error ndi_stg_set_all_stp_port_state(npu_id_t npu_id, ndi_stg_id_t stg_id,
     return STD_ERR_OK;
 }
 
-t_std_error ndi_stg_delete_port_stp_ports(npu_id_t npu_id,
-        npu_port_t npu_port_id)
-{
+t_std_error ndi_stg_delete_port_stp_ports(npu_id_t npu_id,sai_object_id_t brport) {
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     size_t count = 0;
-    sai_object_id_t port_id = SAI_NULL_OBJECT_ID;
     nas_ndi_map_key_t map_key;
     nas_ndi_map_val_t map_val;
     t_std_error rc = STD_ERR(STG, FAIL, 0);
@@ -577,14 +712,8 @@ t_std_error ndi_stg_delete_port_stp_ports(npu_id_t npu_id,
         return STD_ERR(STG,PARAM,0);
     }
 
-    if(ndi_sai_port_id_get(npu_id,npu_port_id,&port_id)!= STD_ERR_OK){
-        NDI_STG_LOG(ERR,0,"Failed to get oid for npu %d and port %d",
-                npu_id,npu_port_id);
-        return STD_ERR(STG,FAIL,0);
-    }
-
     map_key.type = NAS_NDI_MAP_TYPE_PORT_STP_PORTS;
-    map_key.id1 = port_id;
+    map_key.id1 = brport;
     map_key.id2 = SAI_NULL_OBJECT_ID;
 
     rc = nas_ndi_map_get_val_count(&map_key,&count);
@@ -614,11 +743,28 @@ t_std_error ndi_stg_delete_port_stp_ports(npu_id_t npu_id,
                 NDI_STG_LOG(ERR,0,"NDI STG Port 0x%lx remove failed - return"
                         " code %d",map_data[iter].val1,sai_ret);
             } else {
-                ndi_stg_del_port_from_cache(map_data[iter].val2,port_id);
+                ndi_stg_del_port_from_cache(map_data[iter].val2,brport);
             }
         }
     }
 
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_stg_set_stp_lag_state(npu_id_t npu_id,ndi_stg_id_t stg_id, ndi_lag_id_t lag_id,
+                                       BASE_STG_INTERFACE_STATE_t port_stp_state) {
+    if(!ndi_stg_set_brport_state(npu_id,stg_id,lag_id,port_stp_state)){
+        return STD_ERR(STG,FAIL,0);
+    }
+    return STD_ERR_OK;
+}
+
+
+t_std_error ndi_stg_get_stp_lag_state(npu_id_t npu_id,ndi_stg_id_t stg_id, ndi_lag_id_t lag_id,
+                                       BASE_STG_INTERFACE_STATE_t * port_stp_state) {
+    if(!ndi_stg_get_brport_state(npu_id,stg_id,lag_id,*port_stp_state)){
+        return STD_ERR(STG,FAIL,0);
+    }
     return STD_ERR_OK;
 }
 

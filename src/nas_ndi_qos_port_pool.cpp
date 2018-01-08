@@ -397,7 +397,7 @@ t_std_error ndi_qos_get_port_pool_stats(ndi_port_t ndi_port_id,
     if ((sai_ret = ndi_sai_qos_port_api(ndi_db_ptr)->
                         get_port_pool_stats(
                                 ndi2sai_port_pool_id(ndi_port_pool_id),
-                                number_of_counters,
+                                counter_id_list.size(),
                                 &counter_id_list[0],
                                 &counters[0]))
                          != SAI_STATUS_SUCCESS) {
@@ -408,12 +408,78 @@ t_std_error ndi_qos_get_port_pool_stats(ndi_port_t ndi_port_id,
     }
 
     // copy the stats out
-    for (uint i= 0; i<number_of_counters; i++) {
+    for (uint i= 0; i<counter_id_list.size(); i++) {
         _fill_counter_stat_by_type(counter_id_list[i], counters[i], stats);
     }
 
     return STD_ERR_OK;
 }
+
+/**
+ * This function gets the port pool statistics
+ * @param npu_id
+ * @param ndi_port_pool_id
+ * @param list of port_pool counter types to query
+ * @param number of port_pool counter types specified
+ * @param[out] counter: stats are filled in the same order of the counter_ids
+ * return standard error
+ */
+t_std_error ndi_qos_get_port_pool_statistics(ndi_port_t ndi_port_id,
+                                ndi_obj_id_t ndi_port_pool_id,
+                                BASE_QOS_PORT_POOL_STAT_t *counter_ids,
+                                uint_t number_of_counters,
+                                uint64_t * counters)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
+    if (ndi_db_ptr == NULL) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "npu_id %d not exist\n", ndi_port_id.npu_id);
+        return STD_ERR(QOS, CFG, 0);
+    }
+
+    std::vector<sai_port_pool_stat_t> sai_counter_id_list;
+    sai_port_pool_stat_t sai_stat_id;
+
+    for (uint_t i= 0; i<number_of_counters; i++) {
+        if (nas2sai_port_pool_counter_type_get(counter_ids[i], &sai_stat_id))
+            sai_counter_id_list.push_back(sai_stat_id);
+        else {
+            EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                    "NAS Port Pool Stat id %d is not mapped to any SAI stat id",
+                    counter_ids[i]);
+        }
+    }
+
+    std::vector<uint64_t> sai_counters(sai_counter_id_list.size());
+
+    if ((sai_ret = ndi_sai_qos_port_api(ndi_db_ptr)->
+                        get_port_pool_stats(
+                                ndi2sai_port_pool_id(ndi_port_pool_id),
+                                sai_counter_id_list.size(),
+                                &sai_counter_id_list[0],
+                                &sai_counters[0]))
+                         != SAI_STATUS_SUCCESS) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                "port_pool get stats fails: npu_id %u\n",
+                ndi_port_id.npu_id);
+        return STD_ERR(QOS, CFG, sai_ret);
+    }
+
+    for (uint_t i= 0, j= 0; i<number_of_counters; i++) {
+        if (nas2sai_port_pool_counter_type_get(counter_ids[i], &sai_stat_id)) {
+            counters[i] = sai_counters[j];
+            j++;
+        }
+        else {
+            // zero-filled for counters not able to poll
+            counters[i] = 0;
+        }
+    }
+
+    return STD_ERR_OK;
+}
+
 
 /**
  * This function clears the port_pool statistics
@@ -437,17 +503,22 @@ t_std_error ndi_qos_clear_port_pool_stats(ndi_port_t ndi_port_id,
     }
 
     std::vector<sai_port_pool_stat_t> counter_id_list;
-    std::vector<uint64_t> counters(number_of_counters);
 
     for (uint_t i= 0; i<number_of_counters; i++) {
         sai_port_pool_stat_t sai_stat_id;
         if (nas2sai_port_pool_counter_type_get(counter_ids[i], &sai_stat_id))
             counter_id_list.push_back(sai_stat_id);
     }
+
+    if (counter_id_list.size() == 0) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS", "no valid counter id \n");
+        return STD_ERR_OK;
+    }
+
     if ((sai_ret = ndi_sai_qos_port_api(ndi_db_ptr)->
                         clear_port_pool_stats(
                                 ndi2sai_port_pool_id(ndi_port_pool_id),
-                                number_of_counters,
+                                counter_id_list.size(),
                                 &counter_id_list[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",

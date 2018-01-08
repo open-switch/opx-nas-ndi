@@ -54,7 +54,7 @@ typedef enum{
 
 /* bridge port query type when querying the bridge port information */
 typedef enum{
-    ndi_brport_query_type_FROM_PORT_1Q=1,
+    ndi_brport_query_type_FROM_PORT=1,
     ndi_brport_query_type_FROM_BRPORT,
     ndi_brport_query_type_FROM_PORT_VLAN,
 }ndi_brport_query_type_t;

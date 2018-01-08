@@ -36,6 +36,8 @@
 #include "nas_ndi_vlan.h"
 #include "nas_ndi_sw_profile.h"
 #include "nas_switch.h"
+#include "nas_ndi_obj_cache.h"
+#include "nas_ndi_bridge_port.h"
 
 #include "std_thread_tools.h"
 #include "std_socket_tools.h"
@@ -192,6 +194,9 @@ static t_std_error nas_ndi_sai_api_table_init(ndi_sai_api_tbl_t *n_sai_api_tbl)
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
+
+        sai_ret = sai_api_query(SAI_API_BRIDGE, (void *)&(n_sai_api_tbl->n_sai_bridge_api_tbl));
+        if (sai_ret != SAI_STATUS_SUCCESS) {                                                                   break;                                                                                         }
         sai_ret = sai_api_query(SAI_API_SAMPLEPACKET, (void *)&(n_sai_api_tbl->n_sai_samplepacket_api_tbl));
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
@@ -209,6 +214,18 @@ static t_std_error nas_ndi_sai_api_table_init(ndi_sai_api_tbl_t *n_sai_api_tbl)
             break;
         }
         sai_ret = sai_api_query(SAI_API_UDF, (void *)&(n_sai_api_tbl->n_sai_udf_api_tbl));
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            break;
+        }
+        sai_ret = sai_api_query(SAI_API_L2MC, (void *)&(n_sai_api_tbl->n_sai_mcast_api_tbl));
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            break;
+        }
+        sai_ret = sai_api_query(SAI_API_L2MC_GROUP, (void *)&(n_sai_api_tbl->n_sai_l2mc_grp_api_tbl));
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            break;
+        }
+        sai_ret = sai_api_query(SAI_API_BRIDGE, (void *)&(n_sai_api_tbl->n_sai_bridge_api_tbl));
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
@@ -275,6 +292,7 @@ static void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *
     unsigned int attr_idx;
     unsigned int entry_idx;
     BASE_MAC_PACKET_ACTION_t action;
+    ndi_brport_obj_t blk;
     bool is_lag_index = false;
 
     npu_id_t npu_id = ndi_npu_id_get();
@@ -307,18 +325,28 @@ static void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *
         for (attr_idx = 0; attr_idx < data[entry_idx].attr_count; attr_idx++) {
             switch (data[entry_idx].attr[attr_idx].id) {
 
-                case SAI_FDB_ENTRY_ATTR_PORT_ID :
-                    if (ndi_npu_port_id_get(data[entry_idx].attr[attr_idx].value.oid,
-                                            &npu_id, &npu_port)!=STD_ERR_OK) {
-                        NDI_PORT_LOG_TRACE("Failed to map SAI port to NPU port :  : 0x%" PRIx64 " ",
-                                data[entry_idx].attr[attr_idx].value.oid);
-                        /* probably lag index */
-                        is_lag_index = true;
-                        ndi_mac_entry_temp.ndi_lag_id = data[entry_idx].attr[attr_idx].value.oid;
-                    } else {
+                case SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID:
+                    blk.brport_obj_id = data[entry_idx].attr[attr_idx].value.oid;
+                    if (!nas_ndi_get_bridge_port_obj(&blk, ndi_brport_query_type_FROM_BRPORT)) {
+                        NDI_PORT_LOG_ERROR("Failed to get bridge port maping for 0x%" PRIx64 " ",
+                              data[entry_idx].attr[attr_idx].value.oid);
+                        return;
+                    }
+
+                    if(blk.port_type == ndi_port_type_PORT){
+                        if (ndi_npu_port_id_get(blk.port_obj_id,&npu_id, &npu_port)!=STD_ERR_OK) {
+                            NDI_PORT_LOG_TRACE("Failed to map SAI port 0x% to NPU port" PRIx64 " ",
+                                blk.port_obj_id);
+                            return;
+                        }
                         ndi_mac_entry_temp.port_info.npu_id = npu_id;
                         ndi_mac_entry_temp.port_info.npu_port = npu_port;
+
+                    } else if(blk.port_type == ndi_port_type_LAG) {
+                        is_lag_index = true;
+                        ndi_mac_entry_temp.ndi_lag_id = blk.port_obj_id;
                     }
+
                     break;
 
                 case SAI_FDB_ENTRY_ATTR_TYPE :
@@ -340,8 +368,13 @@ static void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *
         }
 
         ndi_mac_event_type_temp = ndi_mac_event_type_get(data[entry_idx].event_type);
-
-        ndi_mac_entry_temp.vlan_id = data[entry_idx].fdb_entry.vlan_id;
+        ndi_virtual_obj_t obj;
+        obj.oid = data[entry_idx].fdb_entry.bv_id;
+        if(!nas_ndi_get_virtual_obj(&obj,ndi_virtual_obj_query_type_FROM_OBJ)){
+            NDI_INIT_LOG_ERROR("Failed to find vlan object id for vlan obj id %llx",obj.oid);
+            return;
+        }
+        ndi_mac_entry_temp.vlan_id = obj.vid ;
         memcpy(ndi_mac_entry_temp.mac_addr, data[entry_idx].fdb_entry.mac_address, HAL_MAC_ADDR_LEN);
 
         if (ndi_db_ptr->switch_notification->mac_event_notify_cb != NULL) {
@@ -607,7 +640,14 @@ t_std_error nas_ndi_init(void)
             return ret_code;
         }
 
-        ret_code = ndi_sai_port_map_create();
+        if ((ret_code = ndi_sai_port_map_create()) != STD_ERR_OK) {
+             NDI_INIT_LOG_TRACE("Unable to create sai_port_map %d \n", ret_code);
+             return ret_code;
+        }
+        if ((ret_code = ndi_init_brport_for_1Q()) != STD_ERR_OK) {
+             NDI_INIT_LOG_TRACE("Unable to init bridgeport for 1Q %d \n", ret_code);
+             return ret_code;
+        }
     }
     return ret_code;
 }

@@ -23,14 +23,14 @@
 
 #include "nas_ndi_port.h"
 #include "saiport.h"
+#include "saibridge.h"
 
 #ifdef __cplusplus
 extern "C"{
 #endif
 
-sai_port_fdb_learning_mode_t ndi_port_get_sai_mac_learn_mode
+sai_bridge_port_fdb_learning_mode_t ndi_port_get_sai_mac_learn_mode
                              (BASE_IF_PHY_MAC_LEARN_MODE_t ndi_fdb_learn_mode);
-
 
 BASE_IF_PHY_MAC_LEARN_MODE_t ndi_port_get_mac_learn_mode
                              (sai_port_fdb_learning_mode_t sai_fdb_learn_mode);

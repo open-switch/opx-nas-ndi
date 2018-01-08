@@ -45,6 +45,9 @@ nas_ndi_db_t *ndi_db_ptr_get(npu_id_t npu_id);
 
 npu_id_t ndi_npu_id_get(void);
 
+t_std_error ndi_flush_bridge_port_entry(sai_object_id_t br_oid);
+
+t_std_error ndi_switch_attr_get(npu_id_t npu,  sai_attribute_t *attr, size_t count);
 
 t_std_error ndi_sai_vlan_id_get(npu_id_t npu_id, hal_vlan_id_t vlan_id, sai_vlan_id_t *sai_vlan);
 
@@ -79,6 +82,8 @@ t_std_error ndi_sai_port_id_get(npu_id_t npu_id, npu_port_t ndi_port, sai_object
 t_std_error ndi_port_get_sai_ports_len(npu_id_t npu_id, size_t * len);
 
 t_std_error ndi_port_get_all_sai_ports(npu_id_t npu_id,sai_object_id_t *list , size_t len);
+
+bool ndi_stg_create_default_stp_port(sai_object_id_t brport);
 
 static inline t_std_error ndi_utl_mk_std_err (enum e_std_error_subsystems sub,
                                               sai_status_t st)

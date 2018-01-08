@@ -38,7 +38,7 @@ extern "C" {
 #include <algorithm>
 #include <vector>
 
-static t_std_error ndi_switch_attr_get(npu_id_t npu,  sai_attribute_t *attr, size_t count) {
+t_std_error ndi_switch_attr_get(npu_id_t npu,  sai_attribute_t *attr, size_t count) {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
 
     if (count==0) return STD_ERR_OK;
@@ -419,7 +419,7 @@ extern "C" t_std_error ndi_switch_get_queue_numbers(npu_id_t npu_id,
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
-        NDI_LOG_TRACE("NDI-MAC", "Invalid npu id %d to get queue value",
+        NDI_LOG_TRACE("NDI-SWITCH-QOS", "Invalid npu id %d to get queue value",
                       npu_id);
         return STD_ERR(NPU, PARAM, 0);
     }
@@ -433,7 +433,7 @@ extern "C" t_std_error ndi_switch_get_queue_numbers(npu_id_t npu_id,
 
     if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(ndi_switch_id_get(),
                 attr_count, sai_attr)) != SAI_STATUS_SUCCESS) {
-        NDI_LOG_TRACE("NDI-MAC", "Error from  SAI %d to get queue value",
+        NDI_LOG_TRACE("NDI-SWITCH-QOS", "Error from  SAI %d to get queue value",
                       sai_ret);
          return STD_ERR(NPU, CFG, sai_ret);
     }
@@ -451,4 +451,36 @@ extern "C" t_std_error ndi_switch_get_queue_numbers(npu_id_t npu_id,
         *cpu_queues = (sai_uint32_t) sai_attr[3].value.u32;
 
     return STD_ERR_OK;
+}
+
+extern "C" t_std_error ndi_switch_get_max_number_of_scheduler_group_level(npu_id_t npu_id,
+        uint32_t *max_level)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    sai_attribute_t sai_attr[1];
+    uint32_t attr_count = 1;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        NDI_LOG_TRACE("NDI-SWITCH-QOS", "Invalid npu id %d to get max scheduler group level",
+                      npu_id);
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    memset(&sai_attr, 0, sizeof(sai_attr));
+
+    sai_attr[0].id = SAI_SWITCH_ATTR_QOS_MAX_NUMBER_OF_SCHEDULER_GROUP_HIERARCHY_LEVELS;
+
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(ndi_switch_id_get(),
+                attr_count, sai_attr)) != SAI_STATUS_SUCCESS) {
+        NDI_LOG_TRACE("NDI-SWITCH-QOS", "Error from  SAI %d to get max scheduler group level",
+                      sai_ret);
+         return STD_ERR(NPU, CFG, sai_ret);
+    }
+
+    if (max_level)
+        *max_level = (sai_uint32_t) sai_attr[0].value.u32;
+
+    return STD_ERR_OK;
+
 }

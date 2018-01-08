@@ -24,6 +24,7 @@
 #include "nas_ndi_event_logs.h"
 #include "nas_ndi_lag.h"
 #include "nas_ndi_utils.h"
+#include "nas_ndi_bridge_port.h"
 #include "sai.h"
 #include "sailag.h"
 
@@ -32,9 +33,14 @@
 #include <string.h>
 
 #include <inttypes.h>
+#include <unordered_map>
 
 //@TODO Get this max_lag_port from platform Jira AR-710
 #define MAX_LAG_PORTS 32
+/*  LAG Member OID to SAI Port OID mapping  */
+static auto lag_member_to_port_map = new std::unordered_map<sai_object_id_t,sai_object_id_t>;
+
+extern "C" {
 
 static inline  sai_lag_api_t *ndi_sai_lag_api(nas_ndi_db_t *ndi_db_ptr)
 {
@@ -61,6 +67,10 @@ t_std_error ndi_create_lag(npu_id_t npu_id,ndi_obj_id_t *ndi_lag_id)
 
     NDI_LAG_LOG_INFO("Create LAG Group Id %lld",sai_local_lag_id);
     *ndi_lag_id = sai_local_lag_id;
+
+    if (nas_ndi_create_bridge_port_1Q(npu_id,sai_local_lag_id,true) != STD_ERR_OK) {
+        return STD_ERR(INTERFACE, CFG,0);
+    }
     return STD_ERR_OK;
 }
 
@@ -72,6 +82,9 @@ t_std_error ndi_delete_lag(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id)
         return STD_ERR(INTERFACE, CFG,0);
     }
 
+    if (nas_ndi_delete_bridge_port_1Q(npu_id, ndi_lag_id) != STD_ERR_OK) {
+        return STD_ERR(INTERFACE, CFG,0);
+    }
     NDI_LAG_LOG_INFO("Delete LAG Group  %lld ",ndi_lag_id);
     if ((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->remove_lag((sai_object_id_t) ndi_lag_id))
             != SAI_STATUS_SUCCESS) {
@@ -110,7 +123,7 @@ t_std_error ndi_add_ports_to_lag(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
     if(ndi_sai_port_id_get(ndi_port->npu_id,ndi_port->npu_port,&sai_port) != STD_ERR_OK) {
         NDI_LAG_LOG_ERROR("Failed to convert  npu %d and port %d to sai port",
                 ndi_port->npu_id, ndi_port->npu_port);
-        return STD_ERR(INTERFACE, CFG,0);
+        return STD_ERR(INTERFACE, CFG, 0);
     }
 
 
@@ -118,12 +131,20 @@ t_std_error ndi_add_ports_to_lag(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
     sai_lag_attr_list [count].value.oid = sai_port;
     count++;
 
+
+    /* Delete the member from  1Q */
+    if (nas_ndi_delete_bridge_port_1Q(npu_id, sai_port) != STD_ERR_OK) {
+        return STD_ERR(INTERFACE, CFG, 0);
+    }
+
     if((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->create_lag_member(ndi_lag_member_id,
                     ndi_switch_id_get(), count,
                     sai_lag_attr_list)) != SAI_STATUS_SUCCESS) {
         NDI_LAG_LOG_ERROR("Add ports to LAG Group Failure");
         return STD_ERR(INTERFACE, CFG, sai_ret);
     }
+    lag_member_to_port_map->insert({*ndi_lag_member_id,  sai_port});
+
     return STD_ERR_OK;
 }
 
@@ -146,6 +167,18 @@ t_std_error ndi_del_ports_from_lag(npu_id_t npu_id,ndi_obj_id_t ndi_lag_member_i
         return STD_ERR(INTERFACE, CFG, sai_ret);
     }
 
+    auto it = lag_member_to_port_map->find(ndi_lag_member_id);
+    if (it == lag_member_to_port_map->end()) {
+        NDI_LAG_LOG_ERROR(" Bridgeport creation failure: Can't find the corresponding SAI port");
+        return STD_ERR(INTERFACE, CFG, sai_ret);
+
+    }
+    sai_object_id_t sai_port = it->second;
+    lag_member_to_port_map->erase(ndi_lag_member_id);
+    /* Add the deleted lag member as a normal PORT type to .1Q */
+    if (nas_ndi_create_bridge_port_1Q(npu_id, sai_port, false) != STD_ERR_OK) {
+        return STD_ERR(INTERFACE, CFG,0);
+    }
     return STD_ERR_OK;
 }
 
@@ -231,3 +264,80 @@ t_std_error ndi_get_lag_member_attr(npu_id_t npu_id, ndi_obj_id_t ndi_lag_member
     }
     return STD_ERR_OK;
 }
+
+t_std_error ndi_set_lag_pvid(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
+        hal_vlan_id_t vlan_id)
+{
+
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        return STD_ERR(INTERFACE, CFG,0);
+    }
+
+    NDI_LAG_LOG_INFO("Set lag pvid in NPU %d lag id%lld",
+            npu_id,ndi_lag_id);
+
+    sai_attribute_t sai_lag_attr;
+    memset (&sai_lag_attr, 0, sizeof (sai_attribute_t));
+
+    sai_lag_attr.id = SAI_LAG_ATTR_PORT_VLAN_ID;
+    sai_lag_attr.value.u16 = (sai_vlan_id_t)vlan_id;
+
+    if((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->set_lag_attribute(ndi_lag_id,
+                    &sai_lag_attr)) != SAI_STATUS_SUCCESS) {
+        NDI_LAG_LOG_ERROR("Lag PVID set Failure %d, lag id %lld ", vlan_id, ndi_lag_id);
+        return STD_ERR(INTERFACE, CFG, sai_ret);
+    }
+
+    return STD_ERR_OK;
+}
+
+
+static sai_bridge_port_fdb_learning_mode_t ndi_lag_get_sai_mac_learn_mode
+                             (BASE_IF_MAC_LEARN_MODE_t ndi_fdb_learn_mode){
+
+    static const auto ndi_to_sai_fdb_learn_mode = new std::unordered_map<BASE_IF_MAC_LEARN_MODE_t,
+                                                            sai_bridge_port_fdb_learning_mode_t,std::hash<int>>
+    {
+        {BASE_IF_MAC_LEARN_MODE_DROP, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DROP},
+        {BASE_IF_MAC_LEARN_MODE_DISABLE, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DISABLE},
+        {BASE_IF_MAC_LEARN_MODE_HW, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW},
+        {BASE_IF_MAC_LEARN_MODE_CPU_TRAP, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_TRAP},
+        {BASE_IF_MAC_LEARN_MODE_CPU_LOG, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_LOG},
+    };
+
+    sai_bridge_port_fdb_learning_mode_t mode;
+
+    auto it = ndi_to_sai_fdb_learn_mode->find(ndi_fdb_learn_mode);
+
+    if(it != ndi_to_sai_fdb_learn_mode->end()){
+        mode = it->second;
+    } else {
+        NDI_LAG_LOG_ERROR("Invalid ndi learn mode %d , setting to HW ", ndi_fdb_learn_mode);
+        mode = SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW;
+    }
+    return mode;
+}
+
+t_std_error ndi_set_lag_learn_mode(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
+          BASE_IF_MAC_LEARN_MODE_t mode)
+{
+    sai_attribute_t sai_attr;
+
+    NDI_LAG_LOG_INFO("Set lag learn mode to %d lag id %lld",
+            mode, ndi_lag_id);
+
+    sai_attr.value.u32 = (sai_port_fdb_learning_mode_t )ndi_lag_get_sai_mac_learn_mode(mode);
+    sai_attr.id = SAI_BRIDGE_PORT_ATTR_FDB_LEARNING_MODE;
+
+    return ndi_brport_attr_set_or_get_1Q(npu_id, ndi_lag_id, true, &sai_attr);
+
+}
+
+
+}
+
+
+

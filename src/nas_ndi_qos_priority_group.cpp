@@ -292,7 +292,7 @@ t_std_error ndi_qos_get_priority_group_stats(ndi_port_t ndi_port_id,
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
                         get_ingress_priority_group_stats(ndi2sai_priority_group_id(ndi_priority_group_id),
                                 &counter_id_list[0],
-                                number_of_counters,
+                                counter_id_list.size(),
                                 &counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -302,7 +302,7 @@ t_std_error ndi_qos_get_priority_group_stats(ndi_port_t ndi_port_id,
     }
 
     // copy the stats out
-    for (uint i= 0; i<number_of_counters; i++) {
+    for (uint i= 0; i<counter_id_list.size(); i++) {
         _fill_counter_stat_by_type(counter_id_list[i], counters[i], stats);
     }
 
@@ -331,16 +331,21 @@ t_std_error ndi_qos_clear_priority_group_stats(ndi_port_t ndi_port_id,
     }
 
     std::vector<sai_ingress_priority_group_stat_t> counter_id_list;
-    std::vector<uint64_t> counters(number_of_counters);
 
     for (uint_t i= 0; i<number_of_counters; i++) {
         sai_ingress_priority_group_stat_t sai_stat_id;
         if (nas2sai_priority_group_counter_type_get(counter_ids[i], &sai_stat_id) == true)
             counter_id_list.push_back(sai_stat_id);
     }
+
+    if (counter_id_list.size() == 0) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS", "no valid counter id \n");
+        return STD_ERR_OK;
+    }
+
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
                         clear_ingress_priority_group_stats(ndi2sai_priority_group_id(ndi_priority_group_id),
-                                number_of_counters, &counter_id_list[0]))
+                                counter_id_list.size(), &counter_id_list[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "priority_group clear stats fails: npu_id %u\n",
@@ -349,6 +354,62 @@ t_std_error ndi_qos_clear_priority_group_stats(ndi_port_t ndi_port_id,
     }
 
     return STD_ERR_OK;
+
+}
+
+/**
+ * This function gets the list of shadow priority group object on different MMUs
+ * @param npu_id
+ * @param ndi_pg_id
+ * @param count, size of ndi_shadow_pg_list[]
+ * @param[out] ndi_shadow_pg_list[] will be filled if successful
+ * @Return The total number of shadow pg objects on different MMUs.
+ *         If the count is smaller than the actual number of shadow pg
+ *         objects, ndi_shadow_pg_list[] will not be filled.
+ */
+uint_t ndi_qos_get_shadow_priority_group_list(npu_id_t npu_id,
+                            ndi_obj_id_t ndi_pg_id,
+                            uint_t count,
+                            ndi_obj_id_t * ndi_shadow_pg_list)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    sai_attribute_t sai_attr;
+    std::vector<sai_object_id_t> shadow_pg_list(count);
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "npu_id %d not exist\n", npu_id);
+        return 0;
+    }
+
+    sai_attr.id = SAI_INGRESS_PRIORITY_GROUP_ATTR_SHADOW_PG_LIST;
+    sai_attr.value.objlist.count = count;
+    sai_attr.value.objlist.list = &(shadow_pg_list[0]);
+
+    if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
+                        get_ingress_priority_group_attr(
+                                ndi2sai_priority_group_id(ndi_pg_id),
+                                1, &sai_attr))
+                         != SAI_STATUS_SUCCESS) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                "shadow PG object get: npu_id %u, ndi_pg_id 0x%016lx, rc %d, count %d\n",
+                npu_id, ndi_pg_id, sai_ret, sai_attr.value.objlist.count);
+
+        if (sai_ret == SAI_STATUS_BUFFER_OVERFLOW)
+            return sai_attr.value.objlist.count;
+        else
+            return 0;
+    }
+
+    for (uint i= 0; i< sai_attr.value.objlist.count; i++) {
+        ndi_shadow_pg_list[i] = sai2ndi_priority_group_id(shadow_pg_list[i]);
+    }
+
+    EV_LOGGING(NDI, DEBUG, "NDI-QOS-PG",
+                  "getting shadow PG count %d\n", sai_attr.value.objlist.count);
+
+    return sai_attr.value.objlist.count;
 
 }
 

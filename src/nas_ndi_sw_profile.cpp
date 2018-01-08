@@ -143,7 +143,7 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
         }
     }
 
-    ret = nas_sw_profile_conf_profile_get(switch_id, conf_profile,
+    ret = nas_sw_profile_current_profile_get(switch_id, conf_profile,
                                             sizeof(conf_profile));
     if (ret != STD_ERR_OK)
     {
@@ -171,7 +171,7 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
         }
         else
         {
-            ndi_profile_set_value(switch_id, "SAI_KEY_NUM_ECMP_MEMBERS",
+            ndi_profile_set_value(switch_id, "SAI_NUM_ECMP_MEMBERS",
                                     std::to_string(cur_max_ecmp_per_grp));
         }
     }

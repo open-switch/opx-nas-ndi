@@ -34,6 +34,7 @@
 #include "saitypes.h"
 #include "nas_ndi_vlan.h"
 #include "nas_ndi_stg_util.h"
+#include "nas_ndi_bridge_port.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -499,6 +500,21 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_3M:
         case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_5M:
         case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_SR4_HALFM:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_SR:
+        case PLATFORM_MEDIA_TYPE_SFP28_32GBASE_FC_SW:
+        case PLATFORM_MEDIA_TYPE_SFP28_32GBASE_FC_LW:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_SR_NOF:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_ESR:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_LR:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_LR_LITE:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_SR_AOCXXM:
+
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_PSM4_IR:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_CWDM4:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_2X100GBASE_SR4_AOC:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_2SR4_AOC:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_8X25GBASE_2SR4_AOC:
+
             sal_media_type = SAI_PORT_MEDIA_TYPE_FIBER;
             break;
 
@@ -586,6 +602,17 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_1GBASE_COPPER:
         case PLATFORM_MEDIA_TYPE_10GBASE_COPPER:
         case PLATFORM_MEDIA_TYPE_25GBASE_BACKPLANE:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_HALFM:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_1M:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_2M:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_3M:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_LPBK:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_2X100GBASE_CR4:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_2X100GBASE_CR4_1_HALFM:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_8X25GBASE_CR1:
+        case PLATFORM_MEDIA_TYPE_QSFP28_DD_8X25GBASE_CR4_1_HALFM:
+
             sal_media_type = SAI_PORT_MEDIA_TYPE_COPPER;
             break;
         default:
@@ -652,6 +679,23 @@ t_std_error ndi_port_identification_led_set (npu_id_t npu_id, npu_port_t port_id
     return ret_code;
 }
 
+t_std_error ndi_port_hw_profile_set (npu_id_t npu_id, npu_port_t port_id, uint64_t hw_profile)
+{
+    t_std_error rc = STD_ERR_OK;
+    sai_attribute_t sai_attr;
+    sai_attr.value.u64 = hw_profile;
+    sai_attr.id = SAI_PORT_ATTR_HW_PROFILE_ID;
+
+    NDI_PORT_LOG_TRACE("Port hw_profile for npu %d, port %d, value %d \n", npu_id, port_id, hw_profile);
+
+    /* don't return error incase of failure, we want to proceed futher with other configurations */
+    rc = _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_SET, &sai_attr,1);
+    if (rc != STD_ERR_OK) {
+        NDI_PORT_LOG_ERROR("Error in setting hw_profile for npu %d, port %d, value %d \n", npu_id, port_id, hw_profile);
+    }
+
+    return STD_ERR_OK;
+}
 
 static t_std_error ndi_port_speed_get_int(npu_id_t npu_id, npu_port_t port_id,
                                           BASE_IF_SPEED_t *speed,
@@ -867,18 +911,29 @@ t_std_error ndi_port_mac_learn_mode_set(npu_id_t npu_id, npu_port_t port_id,
                                         BASE_IF_PHY_MAC_LEARN_MODE_t mode){
     sai_attribute_t sai_attr;
     sai_attr.value.u32 = (sai_port_fdb_learning_mode_t )ndi_port_get_sai_mac_learn_mode(mode);
-    sai_attr.id = SAI_PORT_ATTR_FDB_LEARNING_MODE;
+    sai_attr.id = SAI_BRIDGE_PORT_ATTR_FDB_LEARNING_MODE;
+    sai_object_id_t sai_port;
 
-    return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
+    if (ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK) {
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    return ndi_brport_attr_set_or_get_1Q(npu_id, sai_port, true, &sai_attr);
 }
 
 t_std_error ndi_port_mac_learn_mode_get(npu_id_t npu_id, npu_port_t port_id,
                                         BASE_IF_PHY_MAC_LEARN_MODE_t * mode){
     sai_attribute_t sai_attr;
-    sai_attr.id = SAI_PORT_ATTR_FDB_LEARNING_MODE;
+    sai_attr.id = SAI_BRIDGE_PORT_ATTR_FDB_LEARNING_MODE;
+    sai_object_id_t sai_port;
 
     t_std_error rc;
-    if((rc = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_GET,&sai_attr,1)) != STD_ERR_OK){
+
+    if (ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK) {
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    if((rc = ndi_brport_attr_set_or_get_1Q(npu_id,sai_port, false,&sai_attr)) != STD_ERR_OK){
         return rc;
     }
 
@@ -914,12 +969,19 @@ t_std_error ndi_port_clear_all_stat(npu_id_t npu_id, npu_port_t port_id){
     return STD_ERR_OK;
 }
 
+
 t_std_error ndi_port_set_ingress_filtering(npu_id_t npu_id, npu_port_t port_id, bool ing_filter) {
     sai_attribute_t sai_attr;
     sai_attr.value.booldata = ing_filter;
-    sai_attr.id = SAI_PORT_ATTR_INGRESS_FILTERING;
+    sai_attr.id = SAI_BRIDGE_PORT_ATTR_INGRESS_FILTERING;
 
-    return _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_SET, &sai_attr, 1);
+    sai_object_id_t sai_port;
+
+    if (ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK) {
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    return ndi_brport_attr_set_or_get_1Q(npu_id, sai_port, true, &sai_attr);
 }
 
 t_std_error ndi_port_auto_neg_set(npu_id_t npu_id, npu_port_t port_id,
@@ -1118,7 +1180,12 @@ t_std_error ndi_phy_port_create(npu_id_t npu_id, BASE_IF_SPEED_t speed,
         return rc;
     }
 
-    ndi_del_new_member_from_default_vlan(npu_id,npu_port,false);
+    if ((rc = nas_ndi_create_bridge_port_1Q(npu_id, sai_port, false)) != STD_ERR_OK) {
+        NDI_PORT_LOG_TRACE("Bridge port  create failed for npu %d, port  %llu ",
+               npu_id, sai_port);
+        return rc;
+    }
+    // ndi_del_new_member_from_default_vlan(npu_id,npu_port,false);
 
     if (port_id_p != NULL) {
         *port_id_p = npu_port;
@@ -1162,6 +1229,11 @@ t_std_error ndi_phy_port_delete(npu_id_t npu_id, npu_port_t port_id)
         return rc;
     }
 
+    if ((rc = nas_ndi_delete_bridge_port_1Q(npu_id, sai_port)) != STD_ERR_OK) {
+        NDI_PORT_LOG_TRACE("Bridge port  create failed for npu %d, port  %llu ",
+               npu_id, sai_port);
+        return rc;
+    }
     sai_status_t sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->
                             remove_port(sai_port);
     if (sai_ret != SAI_STATUS_SUCCESS) {

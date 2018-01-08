@@ -20,16 +20,15 @@
  */
 
 #include "hal_shell.h"
-#include "sai_shell.h"
 
 bool hal_shell_cmd_add_flexable(void * param, hal_shell_check_run_function fun) {
-    return sai_shell_cmd_add_flexible(param,(sai_shell_check_run_function)fun);
+    return false;
 }
 
 bool hal_shell_cmd_add(const char *name,hal_shell_function fun,const char *description) {
-    return sai_shell_cmd_add(name,(sai_shell_function)fun,description);
+    return false;
 }
 
 void hal_shell_run_command(const char *str) {
-    sai_shell_run_command(str);
+    return;
 }

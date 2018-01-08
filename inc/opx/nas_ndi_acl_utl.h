@@ -70,6 +70,7 @@ t_std_error ndi_acl_utl_set_counter_attr (npu_id_t npu_id,
 
 t_std_error ndi_acl_utl_get_counter_attr (npu_id_t npu_id,
                                           ndi_obj_id_t ndi_counter_id,
-                                          sai_attribute_t* sai_counter_attr_p);
+                                          sai_attribute_t* sai_counter_attr_p,
+                                          size_t attr_cnt);
 
 #endif

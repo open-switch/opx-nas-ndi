@@ -94,6 +94,7 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
             {BASE_ACL_MATCH_TYPE_UDF,                SAI_ACL_ENTRY_ATTR_USER_DEFINED_FIELD_MIN},
             {BASE_ACL_MATCH_TYPE_IPV6_NEXT_HEADER,   SAI_ACL_ENTRY_ATTR_FIELD_IPV6_NEXT_HEADER},
             {BASE_ACL_MATCH_TYPE_RANGE_CHECK,        SAI_ACL_ENTRY_ATTR_FIELD_ACL_RANGE_TYPE},
+            {BASE_ACL_MATCH_TYPE_DROP_MARKED,        SAI_ACL_ENTRY_ATTR_FIELD_DROP_MARKED},
         };
 
     auto type_map_itr = _nas2sai_entry_filter_type_map.find (ndi_filter_type);
@@ -199,6 +200,7 @@ uint_t ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_t ndi_action_type)
             {BASE_ACL_ACTION_TYPE_EGRESS_MASK,          SAI_ACL_ACTION_TYPE_EGRESS_BLOCK_PORT_LIST},
             {BASE_ACL_ACTION_TYPE_EGRESS_INTF_MASK,     SAI_ACL_ACTION_TYPE_EGRESS_BLOCK_PORT_LIST},
             {BASE_ACL_ACTION_TYPE_SET_USER_TRAP_ID,     SAI_ACL_ACTION_TYPE_SET_USER_TRAP_ID},
+            {BASE_ACL_ACTION_TYPE_SET_PACKET_COLOR,     SAI_ACL_ACTION_TYPE_SET_PACKET_COLOR},
         };
 
     auto type_map_itr = _nas2sai_action_type_map.find (ndi_action_type);
@@ -267,7 +269,8 @@ t_std_error ndi_acl_utl_ndi2sai_tbl_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filte
             {BASE_ACL_MATCH_TYPE_UDF,                SAI_ACL_TABLE_ATTR_USER_DEFINED_FIELD_GROUP_MIN},
             {BASE_ACL_MATCH_TYPE_IPV6_NEXT_HEADER,   SAI_ACL_TABLE_ATTR_FIELD_IPV6_NEXT_HEADER},
             {BASE_ACL_MATCH_TYPE_RANGE_CHECK,        SAI_ACL_TABLE_ATTR_FIELD_ACL_RANGE_TYPE},
-        };
+            {BASE_ACL_MATCH_TYPE_DROP_MARKED,        SAI_ACL_TABLE_ATTR_FIELD_DROP_MARKED},
+       };
 
     auto filter_type_itr = _nas2sai_tbl_filter_type_map.find (ndi_filter_type);
 
@@ -811,7 +814,8 @@ t_std_error ndi_acl_utl_set_counter_attr (npu_id_t npu_id,
 
 t_std_error ndi_acl_utl_get_counter_attr (npu_id_t npu_id,
                                           ndi_obj_id_t ndi_counter_id,
-                                          sai_attribute_t* sai_counter_attr_p)
+                                          sai_attribute_t* sai_counter_attr_p,
+                                          size_t attr_cnt)
 {
     sai_status_t      sai_ret = SAI_STATUS_FAILURE;
     nas_ndi_db_t     *ndi_db_ptr = ndi_db_ptr_get(npu_id);
@@ -823,7 +827,8 @@ t_std_error ndi_acl_utl_get_counter_attr (npu_id_t npu_id,
     sai_object_id_t sai_counter_id = ndi_acl_utl_ndi2sai_counter_id (ndi_counter_id);
 
     // Call SAI API
-    if ((sai_ret = ndi_acl_utl_api_get (ndi_db_ptr)->get_acl_counter_attribute (sai_counter_id, 1,
+    if ((sai_ret = ndi_acl_utl_api_get (ndi_db_ptr)->get_acl_counter_attribute (sai_counter_id,
+                                                                                attr_cnt,
                                                                                 sai_counter_attr_p))
         != SAI_STATUS_SUCCESS) {
         return STD_ERR(ACL, FAIL, sai_ret);

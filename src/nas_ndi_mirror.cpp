@@ -114,8 +114,10 @@ static void ndi_mirror_fill_rspan_attr(ndi_mirror_entry_t * entry, sai_attribute
     attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_VLAN_TPID;
     attr_list[attr_ix++].value.u16 =NDI_VLAN_TPID;
 
-    attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_VLAN_ID;
-    attr_list[attr_ix++].value.u16 = entry->vlan_id;
+    if(entry->vlan_id){
+        attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_VLAN_ID;
+        attr_list[attr_ix++].value.u16 = entry->vlan_id;
+    }
 
     attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_VLAN_PRI;
     attr_list[attr_ix++].value.u8 = 0;
@@ -278,9 +280,10 @@ static bool ndi_mirror_get_port_to_id_list(port_to_mirror_id_map_key & key,sai_a
 t_std_error ndi_mirror_update_direction(ndi_mirror_entry_t *entry, ndi_mirror_src_port_t port,
                                         bool enable){
 
+    t_std_error rc  = STD_ERR(MIRROR,FAIL,0);
     if(entry == NULL ){
         NDI_MIRROR_LOG(ERR,0,"NDI Mirror entry passed to update Mirror session is NULL");
-        return STD_ERR(MIRROR,PARAM,0);
+        return rc;
     }
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(port.src_port.npu_id);
@@ -295,7 +298,7 @@ t_std_error ndi_mirror_update_direction(ndi_mirror_entry_t *entry, ndi_mirror_sr
     if(it == ndi_mirror_dir_to_sai_map->end()){
         NDI_MIRROR_LOG(ERR,0,"Invalid Direction %d passed to updated entry %d",port.direction
                                                                     ,entry->ndi_mirror_id);
-        return STD_ERR(MIRROR,PARAM,0);
+        return rc;
     }
 
     sai_attribute_t mirror_attr;
@@ -305,7 +308,7 @@ t_std_error ndi_mirror_update_direction(ndi_mirror_entry_t *entry, ndi_mirror_sr
     key.dir = it->second;
     key.port = port.src_port.npu_port;
     if(!ndi_mirror_get_port_to_id_list(key,&mirror_attr,entry->ndi_mirror_id,enable)){
-        return false;
+        return rc;
     }
 
     sai_status_t  sai_ret;
@@ -320,11 +323,14 @@ t_std_error ndi_mirror_update_direction(ndi_mirror_entry_t *entry, ndi_mirror_sr
          * IF new source port can not be added because of resource constraints
          * remove the port to mirror id mapping
          */
+        if(sai_ret == SAI_STATUS_INSUFFICIENT_RESOURCES){
+            rc = STD_ERR(MIRROR,NORESOURCE,0);
+        }
         if(!ndi_mirror_get_port_to_id_list(key,&mirror_attr,entry->ndi_mirror_id,!enable)){
-            return STD_ERR(MIRROR,FAIL,sai_ret);
+            return rc;
         }
 
-        return STD_ERR(MIRROR, FAIL,sai_ret);
+        return rc;
     }
 
     NDI_MIRROR_LOG(INFO,0,"Updated Mirror Direction to %d for entry %" PRIu64 " ",
@@ -362,6 +368,11 @@ t_std_error ndi_mirror_update_session(ndi_mirror_entry_t * entry, BASE_MIRROR_EN
         case BASE_MIRROR_ENTRY_DST_INTF:
             mirror_attr.id = SAI_MIRROR_SESSION_ATTR_MONITOR_PORT;
             if(!ndi_port_to_sai_oid(&entry->dst_port,&mirror_attr.value.oid)) return false;
+            break;
+
+        case BASE_MIRROR_ENTRY_LAG_OPAQUE_DATA:
+            mirror_attr.id = SAI_MIRROR_SESSION_ATTR_MONITOR_PORT;
+            mirror_attr.value.oid = (sai_object_id_t)entry->ndi_lag_id;;
             break;
 
         case BASE_MIRROR_ENTRY_VLAN:

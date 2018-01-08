@@ -173,13 +173,14 @@ t_std_error ndi_qos_set_queue_attr(npu_id_t npu_id,
         return STD_ERR(QOS, CFG, 0);
 
     sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
-            set_queue_attribute(
+                set_queue_attribute(
                     ndi2sai_queue_id(ndi_queue_id),
                     &sai_attr);
 
     if (sai_ret != SAI_STATUS_SUCCESS && sai_ret != SAI_STATUS_ITEM_ALREADY_EXISTS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                      "npu_id %d queue set failed\n", npu_id);
+                      "npu_id %d queue 0x%016lx set failed, rc %d\n",
+                      npu_id, ndi_queue_id, sai_ret);
         return STD_ERR(QOS, CFG, sai_ret);
     }
     return STD_ERR_OK;
@@ -262,6 +263,8 @@ t_std_error ndi_qos_get_queue(npu_id_t npu_id,
 
     try {
         for (uint_t i = 0; i < num_attr; i++) {
+            if (nas_attr_list[i] == BASE_QOS_QUEUE_MMU_INDEX_LIST)
+                continue; // use new api for the attribute
             memset(&sai_attr, 0, sizeof(sai_attr));
             sai_attr.id = ndi2sai_queue_attr_id_map.at(nas_attr_list[i]);
             attr_list.push_back(sai_attr);
@@ -591,7 +594,7 @@ t_std_error ndi_qos_get_queue_stats(ndi_port_t ndi_port_id,
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
                         get_queue_stats(ndi2sai_queue_id(ndi_queue_id),
                                 &counter_id_list[0],
-                                number_of_counters,
+                                counter_id_list.size(),
                                 &counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -601,8 +604,73 @@ t_std_error ndi_qos_get_queue_stats(ndi_port_t ndi_port_id,
     }
 
     // copy the stats out
-    for (uint i= 0; i<number_of_counters; i++) {
+    for (uint i= 0; i<counter_id_list.size(); i++) {
         _fill_counter_stat_by_type(counter_id_list[i], counters[i], stats);
+    }
+
+    return STD_ERR_OK;
+}
+
+/**
+ * This function gets the queue statistics
+ * @param ndi_port_id
+ * @param ndi_queue_id
+ * @param list of queue counter types to query
+ * @param number of queue counter types specified
+ * @param[out] counters: stats will be stored in the same order of the counter_ids
+  * return standard error
+ */
+t_std_error ndi_qos_get_queue_statistics(ndi_port_t ndi_port_id,
+                                ndi_obj_id_t ndi_queue_id,
+                                BASE_QOS_QUEUE_STAT_t *counter_ids,
+                                uint_t number_of_counters,
+                                uint64_t *counters)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
+    if (ndi_db_ptr == NULL) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "npu_id %d not exist\n", ndi_port_id.npu_id);
+        return STD_ERR(QOS, CFG, 0);
+    }
+
+    std::vector<sai_queue_stat_t> sai_counter_id_list;
+    sai_queue_stat_t sai_stat_id;
+    uint_t i, j;
+
+    for (i= 0; i<number_of_counters; i++) {
+        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id))
+            sai_counter_id_list.push_back(sai_stat_id);
+        else {
+            EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                    "NAS Queue Stat id %d is not mapped to any SAI stat id",
+                    counter_ids[i]);
+        }
+    }
+
+    std::vector<uint64_t> sai_counters(sai_counter_id_list.size());
+
+    if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
+                        get_queue_stats(ndi2sai_queue_id(ndi_queue_id),
+                                &sai_counter_id_list[0],
+                                sai_counter_id_list.size(),
+                                &sai_counters[0]))
+                         != SAI_STATUS_SUCCESS) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                "queue get stats fails: npu_id %u\n",
+                ndi_port_id.npu_id);
+        return STD_ERR(QOS, CFG, sai_ret);
+    }
+
+    for (i= 0, j= 0; i<number_of_counters; i++) {
+        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id)) {
+            counters[i] = sai_counters[j];
+            j++;
+        }
+        else {
+            // zero-filled for counters not able to poll
+            counters[i] = 0;
+        }
     }
 
     return STD_ERR_OK;
@@ -630,17 +698,22 @@ t_std_error ndi_qos_clear_queue_stats(ndi_port_t ndi_port_id,
     }
 
     std::vector<sai_queue_stat_t> counter_id_list;
-    std::vector<uint64_t> counters(number_of_counters);
 
     for (uint_t i= 0; i<number_of_counters; i++) {
         sai_queue_stat_t sai_stat_id;
         if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id))
             counter_id_list.push_back(sai_stat_id);
     }
+
+    if (counter_id_list.size() == 0) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS", "no valid counter id \n");
+        return STD_ERR_OK;
+    }
+
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
                         clear_queue_stats(ndi2sai_queue_id(ndi_queue_id),
                                 &counter_id_list[0],
-                                number_of_counters))
+                                counter_id_list.size()))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "queue clear stats fails: npu_id %u\n",
@@ -649,6 +722,57 @@ t_std_error ndi_qos_clear_queue_stats(ndi_port_t ndi_port_id,
     }
 
     return STD_ERR_OK;
+
+}
+
+/**
+ * This function gets the list of shadow queue object on different MMUs
+ * @param npu_id
+ * @param ndi_queue_id
+ * @param count, size of ndi_shadow_q_list[]
+ * @param[out] ndi_shadow_q_list[] will be filled if successful
+ * @Return The total number of shadow queue objects on different MMUs.
+ *         If the count is smaller than the actual number of shadow queue
+ *         objects, ndi_shadow_q_list[] will not be filled.
+ */
+uint_t ndi_qos_get_shadow_queue_list(npu_id_t npu_id,
+                            ndi_obj_id_t ndi_queue_id,
+                            uint_t count,
+                            ndi_obj_id_t * ndi_shadow_q_list)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    sai_attribute_t sai_attr;
+    std::vector<sai_object_id_t> shadow_q_list(count);
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "npu_id %d not exist\n", npu_id);
+        return 0;
+    }
+
+    sai_attr.id = SAI_QUEUE_ATTR_SHADOW_QUEUE_LIST;
+    sai_attr.value.objlist.count = count;
+    sai_attr.value.objlist.list = &(shadow_q_list[0]);
+
+    if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
+                        get_queue_attribute(ndi2sai_queue_id(ndi_queue_id),
+                                1, &sai_attr))
+                         != SAI_STATUS_SUCCESS) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                "shadow queue object get fails: npu_id %u, ndi_queue_id 0x%016lx\n sai queue id 0x%016lx",
+                npu_id, ndi_queue_id, ndi2sai_queue_id(ndi_queue_id));
+        if (sai_ret == SAI_STATUS_BUFFER_OVERFLOW)
+            return sai_attr.value.objlist.count;
+        else
+            return 0;
+    }
+
+    for (uint i= 0; i< sai_attr.value.objlist.count; i++) {
+        ndi_shadow_q_list[i] = sai2ndi_queue_id(shadow_q_list[i]);
+    }
+
+    return sai_attr.value.objlist.count;
 
 }
 

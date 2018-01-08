@@ -77,6 +77,9 @@ typedef struct _ndi_sai_api_tbl_t
     sai_buffer_api_t            *n_sai_buffer_api_tbl;
     sai_hash_api_t              *n_sai_hash_api_tbl;
     sai_udf_api_t               *n_sai_udf_api_tbl;
+    sai_l2mc_group_api_t        *n_sai_l2mc_grp_api_tbl;
+    sai_l2mc_api_t              *n_sai_mcast_api_tbl;
+    sai_bridge_api_t            *n_sai_bridge_api_tbl;
  } ndi_sai_api_tbl_t;
 
 typedef struct _ndi_switch_notification_t_

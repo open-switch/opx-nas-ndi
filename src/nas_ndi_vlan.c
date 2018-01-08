@@ -18,10 +18,6 @@
  * filename: nas_ndi_vlan.c
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "std_error_codes.h"
 #include "std_assert.h"
 #include "nas_ndi_event_logs.h"
@@ -31,6 +27,16 @@
 #include "saivlan.h"
 #include "nas_vlan_consts.h"
 #include "nas_ndi_map.h"
+#include "nas_ndi_obj_cache.h"
+#include "nas_ndi_bridge_port.h"
+#include "nas_ndi_mac_utl.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+
+static const hal_vlan_id_t default_vlan_id = 1;
 
 sai_object_id_t ndi_get_sai_vlan_obj_id(npu_id_t npu_id,
         hal_vlan_id_t vlan_id)
@@ -361,8 +367,15 @@ static t_std_error ndi_add_port_to_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
             ndi_get_sai_vlan_obj_id(npu_id,vlan_id);
         attr_count++;
 
-        vlan_mem_attr[attr_count].id = SAI_VLAN_MEMBER_ATTR_PORT_ID;
-        vlan_mem_attr[attr_count].value.oid = port_id;
+        /* Get bridge port id for sai port id */
+        sai_object_id_t  brport_id;
+
+        if (!ndi_get_1q_bridge_port(&brport_id, port_id)) {
+            NDI_VLAN_LOG_ERROR("VLAN member : get bridge port failed for port %llu \n", port_id);
+            return STD_ERR(NPU, CFG, 0);
+        }
+        vlan_mem_attr[attr_count].id = SAI_VLAN_MEMBER_ATTR_BRIDGE_PORT_ID;
+        vlan_mem_attr[attr_count].value.oid = brport_id;
         attr_count++;
 
         vlan_mem_attr[attr_count].id =
@@ -454,6 +467,10 @@ t_std_error ndi_create_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id)
                     vlan_id);
             return rc;
         }
+        ndi_virtual_obj_t v_obj = {vlan_obj_id,vlan_id};
+        if(!nas_ndi_add_virtual_obj(&v_obj)){
+            NDI_VLAN_LOG_ERROR("Failed to add virtual obj cache mapping");
+        }
     } else {
         NDI_VLAN_LOG_ERROR("VLAN-id:%d already exists",
                 vlan_id);
@@ -509,6 +526,9 @@ t_std_error ndi_delete_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id)
 
     if(SAI_NULL_OBJECT_ID != vlan_obj_id) {
         if((rc = ndi_delete_vlan_members(npu_id, vlan_id)) == STD_ERR_OK) {
+            if(!ndi_mac_flush_vlan(vlan_id)){
+                NDI_VLAN_LOG_ERROR("MAC flush on VLAN %d failed",vlan_id);
+            }
             if ((sai_ret = ndi_sai_vlan_api(ndi_db_ptr)->remove_vlan(
                             vlan_obj_id))
                     != SAI_STATUS_SUCCESS) {
@@ -520,6 +540,11 @@ t_std_error ndi_delete_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id)
                 NDI_VLAN_LOG_ERROR("VLAN add failed for VLAN-id:%d",
                         vlan_id);
                 return rc;
+            }
+
+            ndi_virtual_obj_t v_obj = {vlan_obj_id,vlan_id};
+            if(!nas_ndi_remove_virtual_obj(&v_obj)){
+                NDI_VLAN_LOG_ERROR("Failed to remove virtual obj cache mapping");
             }
         } else {
             return rc;
@@ -660,7 +685,7 @@ t_std_error ndi_vlan_stats_get(npu_id_t npu_id, hal_vlan_id_t vlan_id,
     }
 
     if ((sai_ret = ndi_sai_vlan_api(ndi_db_ptr)->get_vlan_stats(vlan_obj_id,
-                    sai_vlan_stats_ids, len, stats_val)) != SAI_STATUS_SUCCESS) {
+                    len, sai_vlan_stats_ids, stats_val)) != SAI_STATUS_SUCCESS) {
         NDI_VLAN_LOG_ERROR("Vlan stats Get failed for npu %d, vlan %d, ret %d \n",
                             npu_id, vlan_id, sai_ret);
         return STD_ERR(NPU, FAIL, sai_ret);
@@ -753,44 +778,49 @@ t_std_error ndi_set_vlan_stp_instance(npu_id_t npu_id, hal_vlan_id_t vlan_id,
     return STD_ERR_OK;
 }
 
-t_std_error ndi_del_new_member_from_default_vlan(npu_id_t npu_id,
-        npu_port_t npu_port, bool del_all)
-{
+bool ndi_vlan_get_default_obj_id(npu_id_t npu_id){
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if(ndi_db_ptr == NULL){
+        return false;
+    }
+
+    hal_vlan_id_t vlan_id = (hal_vlan_id_t)default_vlan_id;
+    sai_object_id_t sai_vlan_id = SAI_NULL_OBJECT_ID;
+    sai_status_t sai_ret;
+    sai_attribute_t sai_attr;
+    sai_attr.id = SAI_SWITCH_ATTR_DEFAULT_VLAN_ID;
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(
+                   ndi_switch_id_get(),1,&sai_attr)) != SAI_STATUS_SUCCESS) {
+        NDI_VLAN_LOG_ERROR("Default VLAN SAI obj id get failed %d",sai_ret);
+        return false;
+    }
+    sai_vlan_id = sai_attr.value.oid;
+    if(SAI_NULL_OBJECT_ID != sai_vlan_id) {
+        ndi_add_sai_vlan_obj_id(npu_id,vlan_id,sai_vlan_id);
+        ndi_virtual_obj_t v_obj = {sai_vlan_id,vlan_id};
+        return nas_ndi_add_virtual_obj(&v_obj);
+    }
+
+    return false;
+}
+
+t_std_error ndi_vlan_delete_default_member_brports(npu_id_t npu_id, sai_object_id_t brport, bool del_all) {
+
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if(ndi_db_ptr == NULL){
         return STD_ERR(NPU, PARAM, 0);
     }
+
     sai_status_t sai_ret;
     sai_attribute_t sai_attr[2];
-    hal_vlan_id_t vlan_id = (hal_vlan_id_t)1;
+    hal_vlan_id_t vlan_id = (hal_vlan_id_t)default_vlan_id;
     int count = 0;
     sai_object_id_t sai_vlan_id = SAI_NULL_OBJECT_ID;
-    sai_object_id_t port_id = SAI_NULL_OBJECT_ID;
 
-    if(!(del_all) &&
-            (ndi_sai_port_id_get(npu_id,npu_port,&port_id) != STD_ERR_OK)) {
-        NDI_VLAN_LOG_ERROR("SAI port id get failed for NPU-id:%d"
-                " NPU-port:%d",npu_id,npu_port);
-        return STD_ERR(NPU, PARAM, 0);
-    }
-
-    if((sai_vlan_id = ndi_get_sai_vlan_obj_id(npu_id,vlan_id))
-            == SAI_NULL_OBJECT_ID) {
-        sai_attr[0].id = SAI_SWITCH_ATTR_DEFAULT_VLAN_ID;
-        if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(
-                        ndi_switch_id_get(),1,&sai_attr[0])) != SAI_STATUS_SUCCESS) {
-            NDI_VLAN_LOG_ERROR("Default VLAN SAI obj id get failed %d",sai_ret);
-            return STD_ERR(NPU, FAIL, sai_ret);
-        }
-        sai_vlan_id = sai_attr[0].value.oid;
-        if(SAI_NULL_OBJECT_ID != sai_vlan_id) {
-            ndi_add_sai_vlan_obj_id(npu_id,vlan_id,sai_vlan_id);
-        }
-    }
-
-    if(SAI_NULL_OBJECT_ID == sai_vlan_id) {
+    if((sai_vlan_id = ndi_get_sai_vlan_obj_id(npu_id,vlan_id)) == SAI_NULL_OBJECT_ID) {
         NDI_VLAN_LOG_ERROR("Default VLAN SAI obj id is SAI_NULL_OBJECT_ID");
-        return STD_ERR(NPU, FAIL, 0);
+        return STD_ERR(NPU,FAIL,0);
     }
 
     sai_attr[0].id = SAI_VLAN_ATTR_MEMBER_LIST;
@@ -823,8 +853,8 @@ t_std_error ndi_del_new_member_from_default_vlan(npu_id_t npu_id,
                     " for default VLAN",sai_ret);
             return STD_ERR(NPU, FAIL, sai_ret);
         }
-
-        sai_attr[0].id = SAI_VLAN_MEMBER_ATTR_PORT_ID;
+        /* TODO: check if vlan member is correct */
+        sai_attr[0].id = SAI_VLAN_MEMBER_ATTR_BRIDGE_PORT_ID;
         sai_attr[1].id = SAI_VLAN_MEMBER_ATTR_VLAN_TAGGING_MODE;
         for(iter=0; iter<count; iter++) {
             if ((sai_ret = ndi_sai_vlan_api(ndi_db_ptr)->get_vlan_member_attribute(
@@ -835,7 +865,7 @@ t_std_error ndi_del_new_member_from_default_vlan(npu_id_t npu_id,
                 continue;
             }
 
-            if((del_all) || (sai_attr[0].value.oid == port_id)){
+            if((sai_attr[0].value.oid == brport) || del_all) {
                 if ((sai_ret = ndi_sai_vlan_api(ndi_db_ptr)->remove_vlan_member(
                                 member_list[iter]))
                         != SAI_STATUS_SUCCESS) {
@@ -845,23 +875,39 @@ t_std_error ndi_del_new_member_from_default_vlan(npu_id_t npu_id,
                     return STD_ERR(NPU, FAIL, sai_ret);
                 }
 
-                if(!(del_all)) {
+                if(!del_all){
                     break;
                 }
             }
         }
-
-        if((iter == count) && !(del_all)) {
-            NDI_VLAN_LOG_ERROR("SAI-port:%lu not found in default"
-                    " VLAN member list", port_id);
-            return STD_ERR(NPU, FAIL, 0);
-        }
-    } else {
-        NDI_LOG_TRACE("NDI-VLAN","Default vlan memberlist get is empty");
     }
 
     return STD_ERR_OK;
 }
+
+
+t_std_error ndi_del_new_member_from_default_vlan(npu_id_t npu_id,
+        npu_port_t npu_port, bool del_all)
+{
+    sai_object_id_t sai_port_id = SAI_NULL_OBJECT_ID;
+    sai_object_id_t brport_id = SAI_NULL_OBJECT_ID;
+    if(!del_all){
+        if(ndi_sai_port_id_get(npu_id, npu_port, &sai_port_id) != STD_ERR_OK) {
+            NDI_VLAN_LOG_ERROR("SAI port id get failed for NPU-id:%d"
+                               " NPU-port:%d",npu_id,npu_port);
+            return STD_ERR(NPU, PARAM, 0);
+        }
+
+        if (!ndi_get_1q_bridge_port(&brport_id, sai_port_id)) {
+            NDI_VLAN_LOG_ERROR("VLAN member : get bridge port failed for port %llx \n", sai_port_id);
+            return STD_ERR(NPU,PARAM,0);
+        }
+    }
+    return ndi_vlan_delete_default_member_brports(npu_id, brport_id, del_all);
+}
+
+
+
 
 t_std_error ndi_get_sai_vlan_id(npu_id_t npu_id, sai_object_id_t vlan_obj_id,
         hal_vlan_id_t *vlan_id)
@@ -887,3 +933,82 @@ t_std_error ndi_get_sai_vlan_id(npu_id_t npu_id, sai_object_id_t vlan_obj_id,
 
     return STD_ERR_OK;
 }
+
+
+t_std_error ndi_add_lag_to_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
+                                           ndi_obj_id_t *tagged_lag_list, size_t  tagged_lag_cnt,
+                                           ndi_obj_id_t *untagged_lag_list ,size_t untag_lag_cnt) {
+
+    int iter = 0;
+    t_std_error rc;
+    sai_object_id_t lag_id = SAI_NULL_OBJECT_ID;
+    sai_object_id_t vlan_obj_id = SAI_NULL_OBJECT_ID;
+
+    if ((vlan_obj_id = ndi_get_sai_vlan_obj_id(npu_id,vlan_id))
+                == SAI_NULL_OBJECT_ID) {
+        return STD_ERR(NPU, FAIL, SAI_STATUS_FAILURE);
+    }
+
+    while((iter < tagged_lag_cnt) || (iter < untag_lag_cnt )) {
+        if(iter < tagged_lag_cnt) {
+            lag_id = tagged_lag_list[iter];
+            if((rc = ndi_add_port_to_vlan(npu_id,vlan_id,lag_id,true)) !=
+                STD_ERR_OK) {
+                return rc;
+            }
+            NDI_LOG_TRACE("NDI_VLAN","Add Tag lag to vlan %d success for lagid 0x%llx",
+               vlan_id, lag_id);
+        }
+        if(iter < untag_lag_cnt) {
+            lag_id = untagged_lag_list[iter];
+            if((rc = ndi_add_port_to_vlan(npu_id,vlan_id,lag_id,false)) !=
+                STD_ERR_OK) {
+                return rc;
+            }
+            NDI_LOG_TRACE("NDI_VLAN","Add Untag lag to vlan %d success for lagid 0x%llx",
+               vlan_id, lag_id);
+        }
+        iter++;
+    }
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_del_lag_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
+                                           ndi_obj_id_t *tagged_lag_list, size_t  tagged_lag_cnt,
+                                           ndi_obj_id_t *untagged_lag_list ,size_t untag_lag_cnt) {
+
+    int iter = 0;
+    sai_object_id_t lag_id = SAI_NULL_OBJECT_ID;
+    sai_object_id_t vlan_obj_id = SAI_NULL_OBJECT_ID;
+    t_std_error rc;
+
+    if ((vlan_obj_id = ndi_get_sai_vlan_obj_id(npu_id,vlan_id))
+                == SAI_NULL_OBJECT_ID) {
+        return STD_ERR(NPU, FAIL, SAI_STATUS_FAILURE);
+    }
+
+    while((iter < tagged_lag_cnt) || (iter < untag_lag_cnt )) {
+        if(iter < tagged_lag_cnt) {
+            lag_id = tagged_lag_list[iter];
+            if((rc = ndi_del_port_from_vlan(npu_id,vlan_id,lag_id)) !=
+                        STD_ERR_OK) {
+                return rc;
+            }
+            NDI_LOG_TRACE("NDI_VLAN","Del tag lag from vlan %d success for lagid 0x%llx",
+                            vlan_id, lag_id);
+        }
+        if(iter < untag_lag_cnt) {
+            lag_id = untagged_lag_list[iter];
+            if((rc = ndi_del_port_from_vlan(npu_id,vlan_id,lag_id)) !=
+                        STD_ERR_OK) {
+                return rc;
+            }
+            NDI_LOG_TRACE("NDI_VLAN","Del untag lag from vlan %d success for lagid 0x%llx",
+                            vlan_id, lag_id);
+        }
+        iter++;
+    }
+
+    return STD_ERR_OK;
+}
+

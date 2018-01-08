@@ -94,7 +94,7 @@ TEST(std_nas_ndi_obj_cache_test, ndi_virtual_obj_cache_test) {
 
     ndi_brport_obj_t obj_get;
     obj_get.port_obj_id = 4098;
-    ASSERT_TRUE(nas_ndi_get_bridge_port_obj(&obj_get, ndi_brport_query_type_FROM_PORT_1Q));
+    ASSERT_TRUE(nas_ndi_get_bridge_port_obj(&obj_get, ndi_brport_query_type_FROM_PORT));
     cout << "query_FROM_PORT_1Q for 4098 " << obj_get.brport_obj_id << " " << obj_get.port_obj_id << endl;
 
     /* TO DO FOR PORT to brport queRY */
@@ -124,7 +124,7 @@ TEST(std_nas_ndi_obj_cache_test, ndi_virtual_obj_cache_test) {
    ASSERT_TRUE(nas_ndi_remove_bridge_port_obj(&subport_obj1));
 
    ASSERT_FALSE(nas_ndi_get_bridge_port_obj(&subport_obj, ndi_brport_query_type_FROM_PORT_VLAN));
-   ASSERT_FALSE(nas_ndi_get_bridge_port_obj(&port_obj2, ndi_brport_query_type_FROM_PORT_1Q));
+   ASSERT_FALSE(nas_ndi_get_bridge_port_obj(&port_obj2, ndi_brport_query_type_FROM_PORT));
    ASSERT_FALSE(nas_ndi_get_bridge_port_obj(&port_obj1, ndi_brport_query_type_FROM_BRPORT));
 
 }

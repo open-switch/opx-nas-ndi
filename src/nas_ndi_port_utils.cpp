@@ -23,20 +23,21 @@
 #include <algorithm>
 
 
-sai_port_fdb_learning_mode_t ndi_port_get_sai_mac_learn_mode
+/* TODO: add SAI_BRIDGE_PORT_FDB_LEARNING_MODE_FDB_NOTIFICATION */
+sai_bridge_port_fdb_learning_mode_t ndi_port_get_sai_mac_learn_mode
                              (BASE_IF_PHY_MAC_LEARN_MODE_t ndi_fdb_learn_mode){
 
     static const auto ndi_to_sai_fdb_learn_mode = new std::unordered_map<BASE_IF_PHY_MAC_LEARN_MODE_t,
-                                                            sai_port_fdb_learning_mode_t,std::hash<int>>
+                                                            sai_bridge_port_fdb_learning_mode_t,std::hash<int>>
     {
-        {BASE_IF_PHY_MAC_LEARN_MODE_DROP, SAI_PORT_FDB_LEARNING_MODE_DROP},
-        {BASE_IF_PHY_MAC_LEARN_MODE_DISABLE, SAI_PORT_FDB_LEARNING_MODE_DISABLE},
-        {BASE_IF_PHY_MAC_LEARN_MODE_HW, SAI_PORT_FDB_LEARNING_MODE_HW},
-        {BASE_IF_PHY_MAC_LEARN_MODE_CPU_TRAP, SAI_PORT_FDB_LEARNING_MODE_CPU_TRAP},
-        {BASE_IF_PHY_MAC_LEARN_MODE_CPU_LOG, SAI_PORT_FDB_LEARNING_MODE_CPU_LOG},
+        {BASE_IF_PHY_MAC_LEARN_MODE_DROP, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DROP},
+        {BASE_IF_PHY_MAC_LEARN_MODE_DISABLE, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DISABLE},
+        {BASE_IF_PHY_MAC_LEARN_MODE_HW, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW},
+        {BASE_IF_PHY_MAC_LEARN_MODE_CPU_TRAP, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_TRAP},
+        {BASE_IF_PHY_MAC_LEARN_MODE_CPU_LOG, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_LOG},
     };
 
-    sai_port_fdb_learning_mode_t mode = SAI_PORT_FDB_LEARNING_MODE_HW;
+    sai_bridge_port_fdb_learning_mode_t mode = SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW;
 
     auto it = ndi_to_sai_fdb_learn_mode->find(ndi_fdb_learn_mode);
 

@@ -603,34 +603,61 @@ t_std_error ndi_acl_counter_set_byte_count (npu_id_t npu_id,
     return ndi_acl_utl_set_counter_attr (npu_id, ndi_counter_id, &sai_counter_attr);
 }
 
+t_std_error ndi_acl_counter_get_count (npu_id_t npu_id,
+                                       ndi_obj_id_t ndi_counter_id,
+                                       uint64_t*  byte_count_p,
+                                       uint64_t*  pkt_count_p)
+{
+    if (byte_count_p == nullptr && pkt_count_p == nullptr) {
+        NDI_ACL_LOG_ERROR("Invalid input arguments");
+        return STD_ERR(ACL, PARAM, 0);
+    }
+
+    uint_t attr_idx = 0;
+    sai_attribute_t   sai_counter_attr[2] = {0};
+
+    if (byte_count_p != nullptr) {
+        sai_counter_attr[attr_idx].id = SAI_ACL_COUNTER_ATTR_BYTES;
+        attr_idx ++;
+    }
+
+    if (pkt_count_p != nullptr) {
+        sai_counter_attr[attr_idx].id = SAI_ACL_COUNTER_ATTR_PACKETS;
+        attr_idx ++;
+    }
+
+
+    t_std_error rc = ndi_acl_utl_get_counter_attr (npu_id, ndi_counter_id,
+                                                   sai_counter_attr, attr_idx);
+    if (rc != STD_ERR_OK) {
+        NDI_ACL_LOG_ERROR("Failed to get counter value");
+        return rc;
+    }
+
+    attr_idx = 0;
+    if (byte_count_p != nullptr) {
+        *byte_count_p = sai_counter_attr[attr_idx].value.u64;
+        attr_idx ++;
+    }
+    if (pkt_count_p != nullptr) {
+        *pkt_count_p = sai_counter_attr[attr_idx].value.u64;
+    }
+
+    return STD_ERR_OK;
+}
+
 t_std_error ndi_acl_counter_get_pkt_count (npu_id_t npu_id,
                                            ndi_obj_id_t ndi_counter_id,
                                            uint64_t*  pkt_count_p)
 {
-    sai_attribute_t   sai_counter_attr = {0};
-
-    sai_counter_attr.id = SAI_ACL_COUNTER_ATTR_PACKETS;
-
-    t_std_error rc = ndi_acl_utl_get_counter_attr (npu_id, ndi_counter_id,
-                                                    &sai_counter_attr);
-    *pkt_count_p = sai_counter_attr.value.u64;
-
-    return rc;
+    return ndi_acl_counter_get_count(npu_id, ndi_counter_id, nullptr, pkt_count_p);
 }
 
 t_std_error ndi_acl_counter_get_byte_count (npu_id_t npu_id,
                                            ndi_obj_id_t ndi_counter_id,
                                            uint64_t*  byte_count_p)
 {
-    sai_attribute_t   sai_counter_attr = {0};
-
-    sai_counter_attr.id = SAI_ACL_COUNTER_ATTR_BYTES;
-
-    t_std_error rc = ndi_acl_utl_get_counter_attr (npu_id, ndi_counter_id,
-                                                    &sai_counter_attr);
-    *byte_count_p = sai_counter_attr.value.u64;
-
-    return rc;
+    return ndi_acl_counter_get_count(npu_id, ndi_counter_id, byte_count_p, nullptr);
 }
 
 t_std_error ndi_acl_range_create(npu_id_t npu_id, const ndi_acl_range_t *acl_range_p,

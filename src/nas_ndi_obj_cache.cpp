@@ -188,9 +188,9 @@ bool ndi_brport_cache::get_brport_block(ndi_brport_obj_t * obj, ndi_brport_query
                 break;
             }
 
-        case ndi_brport_query_type_FROM_PORT_1Q:
+        case ndi_brport_query_type_FROM_PORT:
             {
-                /* use for port type in 1Q bridge */
+                /* use for physical/lag port  */
                 auto blk_it = _port_to_brport_blk.find(obj->port_obj_id);
                 if ( blk_it == _port_to_brport_blk.end())  return false;
                 memcpy(obj, &(*(blk_it->second)), sizeof(ndi_brport_obj_t));

@@ -41,7 +41,7 @@ extern "C" {
  */
 
 t_std_error ndi_stg_delete_port_stp_ports(npu_id_t npu_id,
-        npu_port_t npu_port_id);
+        sai_object_id_t brport);
 
 #ifdef __cplusplus
 }

@@ -39,6 +39,8 @@ BASE_MAC_PACKET_ACTION_t ndi_mac_packet_action_get(sai_packet_action_t action);
 
 ndi_mac_event_type_t ndi_mac_event_type_get(sai_fdb_event_t sai_event_type);
 
+bool ndi_mac_flush_vlan(hal_vlan_id_t vlan_id);
+
 #ifdef __cplusplus
 }
 #endif
