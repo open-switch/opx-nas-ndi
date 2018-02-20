@@ -71,6 +71,7 @@ static void ndi_route_params_copy(sai_route_entry_t *p_sai_route,
     hal_ip_addr_t    ip_mask;
     uint32_t         af_index;
 
+    p_sai_route->switch_id = ndi_switch_id_get();
     p_sai_route->vr_id = p_route_entry->vrf_id;
 
     p_ip_prefix = &p_sai_route->destination;
