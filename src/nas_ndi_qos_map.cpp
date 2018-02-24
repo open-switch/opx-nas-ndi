@@ -176,7 +176,7 @@ t_std_error ndi_qos_create_map(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d map creation failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
     *ndi_map_id = sai2ndi_qos_map_id(sai_qos_map_id);
 
@@ -223,7 +223,7 @@ t_std_error ndi_qos_set_map_attr(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d map set failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -252,7 +252,7 @@ t_std_error ndi_qos_delete_map(npu_id_t npu_id,
     if ((sai_ret = ndi_sai_qos_map_api(ndi_db_ptr)->
                         remove_qos_map(sai_qos_map_id))
                          != SAI_STATUS_SUCCESS) {
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -324,7 +324,7 @@ t_std_error ndi_qos_get_map(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d map get fails\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // fill the outgoing parameters

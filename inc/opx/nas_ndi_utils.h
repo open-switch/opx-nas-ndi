@@ -100,6 +100,13 @@ int ndi_profile_get_next_value(sai_switch_profile_id_t profile_id, const char **
 
 const char *ndi_profile_get_value(sai_switch_profile_id_t profile_id, const char *variable);
 
+static inline t_std_error ndi_utl_mk_qos_std_err(sai_status_t st)
+{
+    return ((st == SAI_STATUS_TABLE_FULL) || (st == SAI_STATUS_INSUFFICIENT_RESOURCES)) ?
+             STD_ERR_MK (e_std_err_QOS, e_std_err_code_NORESOURCE, st) :
+             STD_ERR_MK (e_std_err_QOS, e_std_err_code_FAIL, st);
+}
+
 #ifdef __cplusplus
 }
 #endif

@@ -115,45 +115,6 @@ t_std_error ndi_del_sai_vlan_obj_id(npu_id_t npu_id,
     }
     return rc;
 }
-
-t_std_error ndi_get_vlan_member_list_from_cache(npu_id_t npu_id,
-        hal_vlan_id_t vlan_id,
-        nas_ndi_map_data_t *p_map_data,
-        size_t *count)
-{
-    nas_ndi_map_key_t map_key;
-    nas_ndi_map_val_t map_val;
-    t_std_error rc = STD_ERR(NPU, FAIL, 0);
-
-    if(!count) {
-        return rc;
-    }
-
-    map_key.type = NAS_NDI_MAP_TYPE_VLAN_PORTS;
-    map_key.id1 = (((sai_object_id_t)npu_id << 32) |
-            ((sai_object_id_t)vlan_id));
-    map_key.id2 = SAI_NULL_OBJECT_ID;
-
-    if(p_map_data) {
-        map_val.count = *count;
-        map_val.data = p_map_data;
-
-        rc = nas_ndi_map_get(&map_key, &map_val);
-        if(STD_ERR_OK == rc) {
-            *count = map_val.count;
-        }
-    } else {
-        rc = nas_ndi_map_get_val_count(&map_key, count);
-    }
-
-    if(STD_ERR(NPU, NEXIST, 0) == rc) {
-        *count = 0;
-        rc = STD_ERR_OK;
-    }
-
-    return rc;
-}
-
 t_std_error ndi_get_vlan_member_info_from_cache(npu_id_t npu_id,
         hal_vlan_id_t vlan_id,
         sai_object_id_t  port_id,
@@ -204,22 +165,6 @@ t_std_error ndi_add_vlan_member_to_cache(npu_id_t npu_id,
 
     if(ndi_get_vlan_member_info_from_cache(npu_id,vlan_id,port_id,&tmp_vlan_member_id,
                 &tmp_tagging_mode) != STD_ERR_OK) {
-        map_key.type = NAS_NDI_MAP_TYPE_VLAN_PORTS;
-        map_key.id1 = (((sai_object_id_t)npu_id << 32) |
-                ((sai_object_id_t)vlan_id));
-        map_key.id2 = SAI_NULL_OBJECT_ID;
-
-        map_data.val1 = port_id;
-        map_data.val2 = vlan_member_id;
-
-        map_val.count = 1;
-        map_val.data = &map_data;
-
-        rc = nas_ndi_map_insert(&map_key,&map_val);
-        if(STD_ERR_OK != rc) {
-            return rc;
-        }
-
         map_key.type = NAS_NDI_MAP_TYPE_VLAN_MEMBER_ID;
         map_key.id1 = (((sai_object_id_t)npu_id << 32) |
                 ((sai_object_id_t)vlan_id));
@@ -270,23 +215,7 @@ t_std_error ndi_del_vlan_member_from_cache(npu_id_t npu_id,
         sai_object_id_t port_id)
 {
     nas_ndi_map_key_t map_key;
-    nas_ndi_map_val_filter_t filter;
     t_std_error rc = STD_ERR(NPU, FAIL, 0);
-
-    map_key.type = NAS_NDI_MAP_TYPE_VLAN_PORTS;
-    map_key.id1 = (((sai_object_id_t)npu_id << 32) |
-            ((sai_object_id_t)vlan_id));
-    map_key.id2 = SAI_NULL_OBJECT_ID;
-
-    filter.value.val1 = port_id;
-    filter.value.val2 = SAI_NULL_OBJECT_ID;
-    filter.type = NAS_NDI_MAP_VAL_FILTER_VAL1;
-
-    rc = nas_ndi_map_delete_elements(&map_key,&filter);
-    if(STD_ERR_OK != rc) {
-        return rc;
-    }
-
     map_key.type = NAS_NDI_MAP_TYPE_VLAN_MEMBER_ID;
     map_key.id1 = (((sai_object_id_t)npu_id << 32) |
             ((sai_object_id_t)vlan_id));
@@ -478,42 +407,6 @@ t_std_error ndi_create_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id)
 
     return STD_ERR_OK;
 }
-
-t_std_error ndi_delete_vlan_members(npu_id_t npu_id, hal_vlan_id_t vlan_id)
-{
-    sai_object_id_t vlan_obj_id = SAI_NULL_OBJECT_ID;
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    size_t count = 0;
-    int i = 0;
-    t_std_error rc = STD_ERR(NPU, FAIL, 0);
-
-    STD_ASSERT(ndi_db_ptr != NULL);
-
-    vlan_obj_id = ndi_get_sai_vlan_obj_id(npu_id,vlan_id);
-
-    if(SAI_NULL_OBJECT_ID != vlan_obj_id) {
-        if((rc = ndi_get_vlan_member_list_from_cache(npu_id,vlan_id,NULL,
-                        &count)) == STD_ERR_OK) {
-            if(count > 0) {
-                nas_ndi_map_data_t map_data[count];
-
-                if((rc = ndi_get_vlan_member_list_from_cache(npu_id,vlan_id,
-                                map_data,&count)) == STD_ERR_OK) {
-                    for(i=0; i<count; i++) {
-                        rc |= ndi_del_port_from_vlan(npu_id,vlan_id,
-                                map_data[i].val1);
-                    }
-                }
-            }
-        }
-    } else {
-        NDI_VLAN_LOG_ERROR("VLAN delete members failed for VLAN-id:%d",
-                vlan_id);
-        return STD_ERR(NPU, FAIL, 0);
-    }
-    return rc;
-}
-
 t_std_error ndi_delete_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
@@ -525,7 +418,6 @@ t_std_error ndi_delete_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id)
     vlan_obj_id = ndi_get_sai_vlan_obj_id(npu_id,vlan_id);
 
     if(SAI_NULL_OBJECT_ID != vlan_obj_id) {
-        if((rc = ndi_delete_vlan_members(npu_id, vlan_id)) == STD_ERR_OK) {
             if(!ndi_mac_flush_vlan(vlan_id)){
                 NDI_VLAN_LOG_ERROR("MAC flush on VLAN %d failed",vlan_id);
             }
@@ -546,10 +438,7 @@ t_std_error ndi_delete_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id)
             if(!nas_ndi_remove_virtual_obj(&v_obj)){
                 NDI_VLAN_LOG_ERROR("Failed to remove virtual obj cache mapping");
             }
-        } else {
-            return rc;
         }
-    }
     return STD_ERR_OK;
 }
 

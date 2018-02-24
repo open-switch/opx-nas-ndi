@@ -189,7 +189,7 @@ t_std_error ndi_qos_create_wred_profile(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d wred profile creation failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
     *ndi_wred_id = sai2ndi_wred_profile_id(sai_qos_wred_profile_id);
 
@@ -227,7 +227,7 @@ t_std_error ndi_qos_set_wred_profile_attr(npu_id_t npu_id, ndi_obj_id_t ndi_wred
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d wred profile set failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -255,7 +255,7 @@ t_std_error ndi_qos_delete_wred_profile(npu_id_t npu_id, ndi_obj_id_t ndi_wred_i
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d wred profile deletion failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -363,7 +363,7 @@ t_std_error ndi_qos_get_wred_profile(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d wred profile get failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // convert sai result to NAS format

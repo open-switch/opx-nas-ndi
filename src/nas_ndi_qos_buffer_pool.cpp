@@ -145,7 +145,7 @@ t_std_error ndi_qos_create_buffer_pool(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d buffer_pool creation failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
     *ndi_buffer_pool_id = sai2ndi_buffer_pool_id(sai_qos_buffer_pool_id);
 
@@ -184,7 +184,7 @@ t_std_error ndi_qos_set_buffer_pool_attr(npu_id_t npu_id, ndi_obj_id_t ndi_buffe
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d buffer_pool profile set failed, rc = 0x%x\n",
                       npu_id, sai_ret);
-        return STD_ERR(QOS, CFG, sai_ret);
+       return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -212,7 +212,7 @@ t_std_error ndi_qos_delete_buffer_pool(npu_id_t npu_id, ndi_obj_id_t ndi_buffer_
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d buffer_pool profile deletion failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -290,7 +290,7 @@ t_std_error ndi_qos_get_buffer_pool(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d buffer_pool get failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // convert sai result to NAS format
@@ -388,7 +388,7 @@ t_std_error ndi_qos_get_buffer_pool_stats(npu_id_t npu_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "buffer_pool get stats fails: buffer pool id %u\n",
                 ndi_buffer_pool_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // copy the stats out
@@ -447,7 +447,7 @@ t_std_error ndi_qos_get_buffer_pool_statistics(npu_id_t npu_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "buffer_pool get stats fails: buffer pool id %u\n",
                 ndi_buffer_pool_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     for (i= 0, j= 0; i<number_of_counters; i++) {
@@ -564,7 +564,7 @@ t_std_error ndi_qos_clear_buffer_pool_stats(npu_id_t npu_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "buffer_pool clear stats fails: npu_id %u\n",
                 npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;

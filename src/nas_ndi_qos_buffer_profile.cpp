@@ -160,7 +160,7 @@ t_std_error ndi_qos_create_buffer_profile(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d buffer_profile creation failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
     *ndi_buffer_profile_id = sai2ndi_buffer_profile_id(sai_qos_buffer_profile_id);
 
@@ -201,7 +201,7 @@ t_std_error ndi_qos_set_buffer_profile_attr(npu_id_t npu_id, ndi_obj_id_t ndi_bu
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d buffer_profile profile set failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -229,7 +229,7 @@ t_std_error ndi_qos_delete_buffer_profile(npu_id_t npu_id, ndi_obj_id_t ndi_buff
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d buffer_profile profile deletion failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -308,7 +308,7 @@ t_std_error ndi_qos_get_buffer_profile(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d buffer_profile get failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // convert sai result to NAS format

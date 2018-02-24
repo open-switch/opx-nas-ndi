@@ -409,7 +409,7 @@ t_std_error ndi_qos_set_policer_attr(npu_id_t npu_id,
     if ((sai_ret = ndi_sai_qos_policer_api(ndi_db_ptr)->
                     set_policer_attribute(sai_policer_id, &sai_attr))
                          != SAI_STATUS_SUCCESS) {
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -472,7 +472,7 @@ t_std_error ndi_qos_create_policer(npu_id_t npu_id,
                                 sai_policer_attr_list.size(),
                                 &sai_policer_attr_list[0]))
                          != SAI_STATUS_SUCCESS) {
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
     *ndi_policer_id = sai2ndi_policer_id(sai_policer_id);
 
@@ -498,7 +498,7 @@ t_std_error ndi_qos_delete_policer(npu_id_t npu_id, ndi_obj_id_t ndi_policer_id)
     if ((sai_ret = ndi_sai_qos_policer_api(ndi_db_ptr)->
                     remove_policer(sai_policer_id))
             != SAI_STATUS_SUCCESS) {
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return ret_code;
@@ -533,7 +533,7 @@ t_std_error ndi_qos_get_policer(npu_id_t npu_id,
                     get_policer_attribute(ndi2sai_policer_id(ndi_policer_id),
                             attr_list.size(), &attr_list[0]))
             != SAI_STATUS_SUCCESS) {
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     //convert attr_list[] to qos_policer_struct_t
@@ -600,7 +600,7 @@ t_std_error ndi_qos_get_policer_stat(npu_id_t npu_id,
                             &counter_ids[0], stat_list_count,
                             &counters[0]))
             != SAI_STATUS_SUCCESS) {
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     /* copy out SAI-returned value  */

@@ -139,7 +139,7 @@ t_std_error ndi_qos_create_queue(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d queue creation failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
     *ndi_queue_id = sai2ndi_queue_id(sai_qos_queue_id);
     return STD_ERR_OK;
@@ -181,7 +181,7 @@ t_std_error ndi_qos_set_queue_attr(npu_id_t npu_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d queue 0x%016lx set failed, rc %d\n",
                       npu_id, ndi_queue_id, sai_ret);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
     return STD_ERR_OK;
 
@@ -210,7 +210,7 @@ t_std_error ndi_qos_delete_queue(npu_id_t npu_id,
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d queue deletion failed\n", npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -285,7 +285,7 @@ t_std_error ndi_qos_get_queue(npu_id_t npu_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "queue get fails: npu_id %u, ndi_queue_id 0x%016lx\n sai queue id 0x%016lx",
                 npu_id, ndi_queue_id, ndi2sai_queue_id(ndi_queue_id));
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     for (auto attr: attr_list) {
@@ -600,7 +600,7 @@ t_std_error ndi_qos_get_queue_stats(ndi_port_t ndi_port_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "queue get stats fails: npu_id %u\n",
                 ndi_port_id.npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // copy the stats out
@@ -659,7 +659,7 @@ t_std_error ndi_qos_get_queue_statistics(ndi_port_t ndi_port_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "queue get stats fails: npu_id %u\n",
                 ndi_port_id.npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     for (i= 0, j= 0; i<number_of_counters; i++) {
@@ -718,7 +718,7 @@ t_std_error ndi_qos_clear_queue_stats(ndi_port_t ndi_port_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "queue clear stats fails: npu_id %u\n",
                 ndi_port_id.npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;

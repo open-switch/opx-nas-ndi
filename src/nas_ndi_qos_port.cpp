@@ -198,7 +198,7 @@ t_std_error ndi_qos_set_port_ing_profile_attr(npu_id_t npu_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "port ingress qos set fails: npu_id %u, port_id %u, sai attr_id %u, rc = %d\n",
                 npu_id, port_id, attr.id, sai_ret);
-        rc = STD_ERR(QOS, CFG, sai_ret);
+        rc = ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     if (attr_id == BASE_QOS_PORT_INGRESS_BUFFER_PROFILE_ID_LIST &&
@@ -348,7 +348,7 @@ t_std_error ndi_qos_get_port_ing_profile(npu_id_t npu_id,
         EV_LOGGING(NDI, DEBUG, "NDI-QOS",
                 "port ingress qos get fails: npu_id %u, port_id %u, sai attr_id[0] %u\n",
                 npu_id, port_id, attr_list[0].id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // fill the outgoing parameters
@@ -488,7 +488,7 @@ t_std_error ndi_qos_set_port_egr_profile_attr(npu_id_t npu_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "port egress qos set fails: npu_id %u, port_id %u, sai attr_id %u\n",
                 npu_id, port_id, attr.id);
-        rc = STD_ERR(QOS, CFG, sai_ret);
+        rc = ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     if (attr_id == BASE_QOS_PORT_EGRESS_BUFFER_PROFILE_ID_LIST &&
@@ -650,7 +650,7 @@ t_std_error ndi_qos_get_port_egr_profile(npu_id_t npu_id,
         EV_LOGGING(NDI, DEBUG, "NDI-QOS",
                 "port egress qos get fails: npu_id %u, port_id %u, sai attr_id[0] %u\n",
                 npu_id, port_id, attr_list[0].id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // fill the outgoing parameters

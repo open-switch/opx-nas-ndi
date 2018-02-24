@@ -67,7 +67,7 @@ t_std_error ndi_qos_set_priority_group_buffer_profile_id(ndi_port_t ndi_port_id,
                    "sai_buf_profile_id 0x%016lx set failed, rc= %d\n",
                    ndi_port_id.npu_id, ndi_priority_group_id,
                    buffer_profile_id, sai_attr.value.oid, sai_ret);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;
@@ -120,7 +120,7 @@ t_std_error ndi_qos_get_priority_group_attribute(ndi_port_t ndi_port_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d priority_group 0x%016lx get failed\n",
                       ndi_port_id.npu_id, ndi_priority_group_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // convert sai result to NAS format
@@ -298,7 +298,7 @@ t_std_error ndi_qos_get_priority_group_stats(ndi_port_t ndi_port_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "priority_group get stats fails: npu_id %u\n",
                 ndi_port_id.npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     // copy the stats out
@@ -350,7 +350,7 @@ t_std_error ndi_qos_clear_priority_group_stats(ndi_port_t ndi_port_id,
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "priority_group clear stats fails: npu_id %u\n",
                 ndi_port_id.npu_id);
-        return STD_ERR(QOS, CFG, sai_ret);
+        return ndi_utl_mk_qos_std_err(sai_ret);
     }
 
     return STD_ERR_OK;

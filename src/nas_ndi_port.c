@@ -645,7 +645,7 @@ t_std_error ndi_port_media_type_set(npu_id_t npu_id, npu_port_t port_id, PLATFOR
     NDI_PORT_LOG_TRACE("Setting media type %d on npu %d and port %d", sai_attr.value.s32,npu_id,port_id);
     if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->set_port_attribute(sai_port, &sai_attr))
                          != SAI_STATUS_SUCCESS) {
-        return STD_ERR(NPU, CFG, sai_ret);
+        NDI_PORT_LOG_ERROR("Setting media type %d on npu %d and port %d failed", sai_attr.value.s32,npu_id,port_id);
     }
 
     return ret_code;
