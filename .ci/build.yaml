@@ -14,7 +14,7 @@ run:
   - -ec
   - |
     # workaround for hard-coded /mnt directory in opx_build script
-    git clone src /mnt/src
+    cp -r src /mnt/src
     # build packages
     pushd /mnt/
     /opt/opx-build/scripts/opx_build src
