@@ -62,7 +62,7 @@ static bool ndi2sai_buffer_profile_attr_id_get(nas_attr_id_t attr_id, sai_attr_i
     }
     catch (...) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                      "attr_id %u not supported\n", attr_id);
+                      "attr_id %lu not supported\n", attr_id);
         return false;
     }
     return true;
@@ -195,7 +195,7 @@ t_std_error ndi_qos_set_buffer_profile_attr(npu_id_t npu_id, ndi_obj_id_t ndi_bu
     }
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-            set_buffer_profile_attr(
+            set_buffer_profile_attribute(
                     ndi2sai_buffer_profile_id(ndi_buffer_profile_id),
                     &sai_attr))
                          != SAI_STATUS_SUCCESS) {
@@ -301,7 +301,7 @@ t_std_error ndi_qos_get_buffer_profile(npu_id_t npu_id,
     }
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-            get_buffer_profile_attr(
+            get_buffer_profile_attribute(
                     ndi2sai_buffer_profile_id(ndi_buffer_profile_id),
                     num_attr,
                     &attr_list[0]))

@@ -57,7 +57,7 @@ t_std_error ndi_qos_set_priority_group_buffer_profile_id(ndi_port_t ndi_port_id,
     sai_attr.value.oid = ndi2sai_buffer_profile_id(buffer_profile_id);
 
     sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-            set_ingress_priority_group_attr(
+            set_ingress_priority_group_attribute(
                     ndi2sai_priority_group_id(ndi_priority_group_id),
                     &sai_attr);
 
@@ -112,7 +112,7 @@ t_std_error ndi_qos_get_priority_group_attribute(ndi_port_t ndi_port_id,
     attr_list.push_back(sai_attr);
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-            get_ingress_priority_group_attr(
+            get_ingress_priority_group_attribute(
                     ndi2sai_priority_group_id(ndi_priority_group_id),
                     attr_list.size(),
                     &attr_list[0]))
@@ -291,8 +291,8 @@ t_std_error ndi_qos_get_priority_group_stats(ndi_port_t ndi_port_id,
     }
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
                         get_ingress_priority_group_stats(ndi2sai_priority_group_id(ndi_priority_group_id),
-                                &counter_id_list[0],
                                 counter_id_list.size(),
+                                &counter_id_list[0],
                                 &counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -388,7 +388,7 @@ uint_t ndi_qos_get_shadow_priority_group_list(npu_id_t npu_id,
     sai_attr.value.objlist.list = &(shadow_pg_list[0]);
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-                        get_ingress_priority_group_attr(
+                        get_ingress_priority_group_attribute(
                                 ndi2sai_priority_group_id(ndi_pg_id),
                                 1, &sai_attr))
                          != SAI_STATUS_SUCCESS) {

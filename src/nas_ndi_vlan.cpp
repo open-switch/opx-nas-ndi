@@ -15,7 +15,7 @@
  */
 
 /*
- * filename: nas_ndi_vlan.c
+ * filename: nas_ndi_vlan.cpp
  */
 
 #include "std_error_codes.h"
@@ -34,87 +34,56 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unordered_map>
 
 
 static const hal_vlan_id_t default_vlan_id = 1;
 
+static std::unordered_map <hal_vlan_id_t, sai_object_id_t> g_ndi_vlan_map;
+static std_rw_lock_t ndi_vlan_map_rwlock;
+
+extern "C" {
+
+
 sai_object_id_t ndi_get_sai_vlan_obj_id(npu_id_t npu_id,
         hal_vlan_id_t vlan_id)
 {
-    nas_ndi_map_key_t map_key;
-    nas_ndi_map_data_t map_data;
-    nas_ndi_map_val_t map_val;
-
-    if((vlan_id > 0) && (vlan_id < NAS_MAX_VLAN_ID)) {
-        map_key.type = NAS_NDI_MAP_TYPE_NPU_VLAN_ID;
-        map_key.id1 = (((sai_object_id_t)npu_id << 32) |
-                ((sai_object_id_t)vlan_id));
-        map_key.id2 = SAI_NULL_OBJECT_ID;
-
-        map_data.val1 = SAI_NULL_OBJECT_ID;
-        map_data.val2 = SAI_NULL_OBJECT_ID;
-
-        map_val.count = 1;
-        map_val.data = &map_data;
-
-        nas_ndi_map_get(&map_key,&map_val);
-
-        return(map_data.val1);
+    std_rw_lock_read_guard m(&ndi_vlan_map_rwlock);
+    auto it = g_ndi_vlan_map.find(vlan_id);
+    if (it != g_ndi_vlan_map.end()) {
+        return it->second;
     }
     return SAI_NULL_OBJECT_ID;
 }
 
-t_std_error ndi_add_sai_vlan_obj_id(npu_id_t npu_id,
+static t_std_error ndi_add_sai_vlan_obj_id(npu_id_t npu_id,
         hal_vlan_id_t vlan_id,
         sai_object_id_t vlan_obj_id)
 {
-    nas_ndi_map_key_t map_key;
-    nas_ndi_map_data_t map_data;
-    nas_ndi_map_val_t map_val;
     t_std_error rc = STD_ERR(NPU, FAIL, 0);
-
-    if((vlan_id > 0) && (vlan_id < NAS_MAX_VLAN_ID)) {
-        if(SAI_NULL_OBJECT_ID ==
-                ndi_get_sai_vlan_obj_id(npu_id,vlan_id)) {
-            map_key.type = NAS_NDI_MAP_TYPE_NPU_VLAN_ID;
-            map_key.id1 = (((sai_object_id_t)npu_id << 32) |
-                    ((sai_object_id_t)vlan_id));
-            map_key.id2 = SAI_NULL_OBJECT_ID;
-
-            map_data.val1 = vlan_obj_id;
-            map_data.val2 = SAI_NULL_OBJECT_ID;
-
-            map_val.count = 1;
-            map_val.data = &map_data;
-
-            rc = nas_ndi_map_insert(&map_key,&map_val);
-        } else {
-            rc = STD_ERR_OK;
-        }
-    } else {
-        rc = STD_ERR(NPU, PARAM, 0);
+    std_rw_lock_write_guard m(&ndi_vlan_map_rwlock);
+    auto it = g_ndi_vlan_map.find(vlan_id);
+    if (it != g_ndi_vlan_map.end()) {
+        return rc;
     }
-    return rc;
+    g_ndi_vlan_map[vlan_id] = vlan_obj_id;
+    return STD_ERR_OK;
 }
 
-t_std_error ndi_del_sai_vlan_obj_id(npu_id_t npu_id,
+static t_std_error ndi_del_sai_vlan_obj_id(npu_id_t npu_id,
         hal_vlan_id_t vlan_id)
 {
-    nas_ndi_map_key_t map_key;
     t_std_error rc = STD_ERR(NPU, FAIL, 0);
-
-    if((vlan_id > 0) && (vlan_id < NAS_MAX_VLAN_ID)) {
-        map_key.type = NAS_NDI_MAP_TYPE_NPU_VLAN_ID;
-        map_key.id1 = (((sai_object_id_t)npu_id << 32) |
-                ((sai_object_id_t)vlan_id));
-        map_key.id2 = SAI_NULL_OBJECT_ID;
-
-        rc = nas_ndi_map_delete(&map_key);
-    } else {
-        rc = STD_ERR(NPU, PARAM, 0);
+    std_rw_lock_write_guard m(&ndi_vlan_map_rwlock);
+    auto it = g_ndi_vlan_map.find(vlan_id);
+    if (it == g_ndi_vlan_map.end()) {
+        return rc;
     }
-    return rc;
+    g_ndi_vlan_map.erase(it);
+    return STD_ERR_OK;
 }
+
+
 t_std_error ndi_get_vlan_member_info_from_cache(npu_id_t npu_id,
         hal_vlan_id_t vlan_id,
         sai_object_id_t  port_id,
@@ -143,7 +112,7 @@ t_std_error ndi_get_vlan_member_info_from_cache(npu_id_t npu_id,
         }
 
         if(tagging_mode) {
-            *tagging_mode = map_data.val2;
+            *tagging_mode = (sai_vlan_tagging_mode_t)map_data.val2;
         }
     }
 
@@ -265,7 +234,7 @@ static t_std_error ndi_del_port_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id
         }
     } else {
         NDI_VLAN_LOG_ERROR("VLAN member cache search failed for VLAN-id:%d"
-                " SAI-port:%d",
+                " SAI-port:%lu",
                 vlan_id, port_id);
     }
 
@@ -300,7 +269,7 @@ static t_std_error ndi_add_port_to_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
         sai_object_id_t  brport_id;
 
         if (!ndi_get_1q_bridge_port(&brport_id, port_id)) {
-            NDI_VLAN_LOG_ERROR("VLAN member : get bridge port failed for port %llu \n", port_id);
+            NDI_VLAN_LOG_ERROR("VLAN member : get bridge port failed for port %lu \n", port_id);
             return STD_ERR(NPU, CFG, 0);
         }
         vlan_mem_attr[attr_count].id = SAI_VLAN_MEMBER_ATTR_BRIDGE_PORT_ID;
@@ -750,7 +719,7 @@ t_std_error ndi_vlan_delete_default_member_brports(npu_id_t npu_id, sai_object_i
                             member_list[iter],2,sai_attr)) !=
                     SAI_STATUS_SUCCESS) {
                 NDI_VLAN_LOG_ERROR("Vlan member port get failed %d"
-                        " for VLAN member ID %d",sai_ret,member_list[iter]);
+                        " for VLAN member ID %lu",sai_ret,member_list[iter]);
                 continue;
             }
 
@@ -788,7 +757,7 @@ t_std_error ndi_del_new_member_from_default_vlan(npu_id_t npu_id,
         }
 
         if (!ndi_get_1q_bridge_port(&brport_id, sai_port_id)) {
-            NDI_VLAN_LOG_ERROR("VLAN member : get bridge port failed for port %llx \n", sai_port_id);
+            NDI_VLAN_LOG_ERROR("VLAN member : get bridge port failed for port %lx \n", sai_port_id);
             return STD_ERR(NPU,PARAM,0);
         }
     }
@@ -828,7 +797,7 @@ t_std_error ndi_add_lag_to_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
                                            ndi_obj_id_t *tagged_lag_list, size_t  tagged_lag_cnt,
                                            ndi_obj_id_t *untagged_lag_list ,size_t untag_lag_cnt) {
 
-    int iter = 0;
+    size_t iter = 0;
     t_std_error rc;
     sai_object_id_t lag_id = SAI_NULL_OBJECT_ID;
     sai_object_id_t vlan_obj_id = SAI_NULL_OBJECT_ID;
@@ -845,7 +814,7 @@ t_std_error ndi_add_lag_to_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
                 STD_ERR_OK) {
                 return rc;
             }
-            NDI_LOG_TRACE("NDI_VLAN","Add Tag lag to vlan %d success for lagid 0x%llx",
+            NDI_LOG_TRACE("NDI_VLAN","Add Tag lag to vlan %d success for lagid 0x%lx",
                vlan_id, lag_id);
         }
         if(iter < untag_lag_cnt) {
@@ -854,7 +823,7 @@ t_std_error ndi_add_lag_to_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
                 STD_ERR_OK) {
                 return rc;
             }
-            NDI_LOG_TRACE("NDI_VLAN","Add Untag lag to vlan %d success for lagid 0x%llx",
+            NDI_LOG_TRACE("NDI_VLAN","Add Untag lag to vlan %d success for lagid 0x%lx",
                vlan_id, lag_id);
         }
         iter++;
@@ -866,7 +835,7 @@ t_std_error ndi_del_lag_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
                                            ndi_obj_id_t *tagged_lag_list, size_t  tagged_lag_cnt,
                                            ndi_obj_id_t *untagged_lag_list ,size_t untag_lag_cnt) {
 
-    int iter = 0;
+    size_t iter = 0;
     sai_object_id_t lag_id = SAI_NULL_OBJECT_ID;
     sai_object_id_t vlan_obj_id = SAI_NULL_OBJECT_ID;
     t_std_error rc;
@@ -883,7 +852,7 @@ t_std_error ndi_del_lag_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
                         STD_ERR_OK) {
                 return rc;
             }
-            NDI_LOG_TRACE("NDI_VLAN","Del tag lag from vlan %d success for lagid 0x%llx",
+            NDI_LOG_TRACE("NDI_VLAN","Del tag lag from vlan %d success for lagid 0x%lx",
                             vlan_id, lag_id);
         }
         if(iter < untag_lag_cnt) {
@@ -892,7 +861,7 @@ t_std_error ndi_del_lag_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
                         STD_ERR_OK) {
                 return rc;
             }
-            NDI_LOG_TRACE("NDI_VLAN","Del untag lag from vlan %d success for lagid 0x%llx",
+            NDI_LOG_TRACE("NDI_VLAN","Del untag lag from vlan %d success for lagid 0x%lx",
                             vlan_id, lag_id);
         }
         iter++;
@@ -901,3 +870,4 @@ t_std_error ndi_del_lag_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
     return STD_ERR_OK;
 }
 
+} // extern "C"

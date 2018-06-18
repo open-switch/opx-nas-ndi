@@ -572,7 +572,7 @@ t_std_error ndi_qos_get_policer_stat(npu_id_t npu_id,
 
     if (stat_list_count > BASE_QOS_POLICER_STAT_TYPE_MAX) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                      "sai_id: %d, ndi_policer_id %u, too many statistics types!\n",
+                      "sai_id: %d, ndi_policer_id %lu, too many statistics types!\n",
                       npu_id, ndi_policer_id);
         return STD_ERR(QOS, CFG, 0);
     }
@@ -596,8 +596,8 @@ t_std_error ndi_qos_get_policer_stat(npu_id_t npu_id,
     STD_ASSERT(ndi_db_ptr != NULL);
 
     if ((sai_ret = ndi_sai_qos_policer_api(ndi_db_ptr)->
-                    get_policer_statistics(ndi2sai_policer_id(ndi_policer_id),
-                            &counter_ids[0], stat_list_count,
+                    get_policer_stats(ndi2sai_policer_id(ndi_policer_id),
+                            stat_list_count, &counter_ids[0],
                             &counters[0]))
             != SAI_STATUS_SUCCESS) {
         return ndi_utl_mk_qos_std_err(sai_ret);

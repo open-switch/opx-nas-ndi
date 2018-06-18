@@ -70,7 +70,7 @@ t_std_error ndi_port_state_change_cb_register(npu_id_t npu_id,
                       sai_port_state_change_notification_fn port_state_change_cb);
 
 t_std_error ndi_switch_shutdown_request_cb_register (npu_id_t npu_id,
-                      sai_switch_shutdown_request_fn switch_shutdown_request_cb);
+                      sai_switch_shutdown_request_notification_fn switch_shutdown_request_cb);
 
 void ndi_packet_rx_cb(sai_object_id_t switch_id, const void *buffer, sai_size_t buffer_size,
                       uint32_t attr_count, const sai_attribute_t *attr_list);

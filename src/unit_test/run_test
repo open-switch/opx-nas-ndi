@@ -1,0 +1,47 @@
+#!/bin/bash -e
+
+#Script will kill the base_nas svc and then execute ./run_test
+
+touch /etc/no-reboot
+nas_pid=`ps aux | grep '/opt/dell/os10/bin/base_nas$' | grep -v 'grep' | awk '{print $2}'`
+if [ -n "$nas_pid" ]; then
+    echo "Kill base_nas daemon with PID $nas_pid"
+    kill -9 $nas_pid
+fi
+
+./nas_ndi_acl_ut
+if [ "$?" != "0" ]; then
+    echo "Test Failed for NDI-ACL UT"
+    exit 1
+fi
+
+./nas_ndi_init_unittest
+if [ "$?" != "0" ]; then
+    echo "Test Failed for NDI-INIT UT"
+    exit 1
+fi
+
+./nas_ndi_obj_cache_ut
+if [ "$?" != "0" ]; then
+    echo "Test Failed for NDI-OBJ-CACHE UT"
+    exit 1
+fi
+
+./nas_ndi_router_interface_unittest
+if [ "$?" != "0" ]; then
+    echo "Test Failed for NDI-ROUTER-INTERFACE UT"
+    exit 1
+fi
+
+./nas_ndi_port_unittest
+
+./nas_ndi_stats_unittest
+if [ "$?" != "0" ]; then
+    echo "Test Failed for NDI-STATS UT"
+    exit 1
+fi
+
+
+echo "UT execution result: Pass"
+exit 0
+

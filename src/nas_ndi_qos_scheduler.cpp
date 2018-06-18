@@ -157,7 +157,7 @@ t_std_error ndi_qos_create_scheduler_profile(npu_id_t npu_id,
 
     sai_object_id_t sai_scheduler_id;
     if ((sai_ret = ndi_sai_qos_scheduler_api(ndi_db_ptr)->
-                    create_scheduler_profile(&sai_scheduler_id,
+                    create_scheduler(&sai_scheduler_id,
                                 ndi_switch_id_get(),
                                 sai_scheduler_attr_list.size(),
                                 &sai_scheduler_attr_list[0]))
@@ -230,7 +230,7 @@ t_std_error ndi_qos_delete_scheduler_profile(npu_id_t npu_id, ndi_obj_id_t ndi_s
     }
 
     if ((sai_ret = ndi_sai_qos_scheduler_api(ndi_db_ptr)->
-                    remove_scheduler_profile(sai_scheduler_id))
+                    remove_scheduler(sai_scheduler_id))
             != SAI_STATUS_SUCCESS) {
         return ndi_utl_mk_qos_std_err(sai_ret);
     }

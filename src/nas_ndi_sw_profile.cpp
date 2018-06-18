@@ -107,6 +107,8 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
 {
     char conf_profile[64] = {0};
     char file_name[256] = {0};
+    char key[NAS_CMN_NPU_PROFILE_ATTR_SIZE] = { 0 };
+    char value[NAS_CMN_NPU_PROFILE_ATTR_SIZE] = { 0 };
 
     uint32_t conf_uft_mode,l2_size,l3_size,l3_host_size;
     uint32_t cur_max_ecmp_per_grp = 0;
@@ -173,6 +175,18 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
         {
             ndi_profile_set_value(switch_id, "SAI_NUM_ECMP_MEMBERS",
                                     std::to_string(cur_max_ecmp_per_grp));
+        }
+    }
+    ret = nas_switch_npu_profile_get_next_value(key, value);
+    if (ret != STD_ERR_OK)
+    {
+        NDI_INIT_LOG_TRACE("No NPU Switch Profile Configured");
+    }
+    else
+    {
+        for (; (ret == STD_ERR_OK);
+                (ret = nas_switch_npu_profile_get_next_value(key, value))) {
+           ndi_profile_set_value(switch_id, key, value);
         }
     }
 

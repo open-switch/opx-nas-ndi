@@ -66,7 +66,7 @@ t_std_error ndi_packet_tx (uint8_t* buf, uint32_t len, ndi_packet_attr_t *p_attr
         ++attr_idx;
     } else { /* default case is SAI_HOSTIF_TX_TYPE_PIPELINE_BYPASS */
 
-        if ((ret_code = ndi_sai_port_id_get(p_attr->npu_id, p_attr->tx_port, &sai_port) != STD_ERR_OK)) {
+        if ((ret_code = ndi_sai_port_id_get(p_attr->npu_id, p_attr->tx_port, &sai_port)) != STD_ERR_OK) {
              return ret_code;
         }
         sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_EGRESS_PORT_OR_LAG;
@@ -78,7 +78,7 @@ t_std_error ndi_packet_tx (uint8_t* buf, uint32_t len, ndi_packet_attr_t *p_attr
         ++attr_idx;
     }
 
-    if ((sai_ret = ndi_packet_hostif_api_tbl_get(ndi_db_ptr)->send_packet(ndi_switch_id_get(), buf,
+    if ((sai_ret = ndi_packet_hostif_api_tbl_get(ndi_db_ptr)->send_hostif_packet(ndi_switch_id_get(), buf,
                                              buf_len, attr_idx, sai_attr)) != SAI_STATUS_SUCCESS) {
         return STD_ERR(INTERFACE, FAIL, sai_ret);
     }
@@ -96,7 +96,7 @@ static t_std_error ndi_packet_get_attr (const sai_attribute_t *p_attr, ndi_packe
         case SAI_HOSTIF_PACKET_ATTR_INGRESS_PORT:
             sai_port = p_attr->value.oid;
             if (ndi_npu_port_id_get(sai_port, &ndi_port.npu_id, &ndi_port.npu_port) != STD_ERR_OK) {
-                EV_LOGGING(NDI,DEBUG, "NDI-PKT", "Port get failed: sai port 0x%llx", sai_port);
+                EV_LOGGING(NDI,DEBUG, "NDI-PKT", "Port get failed: sai port 0x%lx", sai_port);
                 return STD_ERR(INTERFACE, FAIL, 0);
             }
             p_ndi_attr->npu_id = ndi_port.npu_id;
@@ -106,7 +106,7 @@ static t_std_error ndi_packet_get_attr (const sai_attribute_t *p_attr, ndi_packe
         case SAI_HOSTIF_PACKET_ATTR_EGRESS_PORT_OR_LAG:
             sai_port = p_attr->value.oid;
             if (ndi_npu_port_id_get(sai_port, &ndi_port.npu_id, &ndi_port.npu_port) != STD_ERR_OK) {
-                EV_LOGGING(NDI,DEBUG, "NDI-PKT", "Port get failed: sai port 0x%llx", sai_port);
+                EV_LOGGING(NDI,DEBUG, "NDI-PKT", "Port get failed: sai port 0x%lx", sai_port);
                 return STD_ERR(INTERFACE, FAIL, 0);
             }
             p_ndi_attr->npu_id = ndi_port.npu_id;

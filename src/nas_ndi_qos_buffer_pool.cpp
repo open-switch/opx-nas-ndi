@@ -50,7 +50,7 @@ static bool ndi2sai_buffer_pool_attr_id_get(nas_attr_id_t attr_id, sai_attr_id_t
     }
     catch (...) {
          EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                       "attr_id %u not supported\n", attr_id);
+                       "attr_id %lu not supported\n", attr_id);
          return false;
     }
 
@@ -177,7 +177,7 @@ t_std_error ndi_qos_set_buffer_pool_attr(npu_id_t npu_id, ndi_obj_id_t ndi_buffe
         return STD_ERR(QOS, CFG, 0);
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-            set_buffer_pool_attr(
+            set_buffer_pool_attribute(
                     ndi2sai_buffer_pool_id(ndi_buffer_pool_id),
                     &sai_attr))
                          != SAI_STATUS_SUCCESS) {
@@ -283,7 +283,7 @@ t_std_error ndi_qos_get_buffer_pool(npu_id_t npu_id,
     }
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-            get_buffer_pool_attr(
+            get_buffer_pool_attribute(
                     ndi2sai_buffer_pool_id(ndi_buffer_pool_id),
                     num_attr,
                     &attr_list[0]))
@@ -381,12 +381,12 @@ t_std_error ndi_qos_get_buffer_pool_stats(npu_id_t npu_id,
     }
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
                         get_buffer_pool_stats(ndi2sai_buffer_pool_id(ndi_buffer_pool_id),
-                                &counter_id_list[0],
                                 counter_id_list.size(),
+                                &counter_id_list[0],
                                 &counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                "buffer_pool get stats fails: buffer pool id %u\n",
+                "buffer_pool get stats fails: buffer pool id %lu\n",
                 ndi_buffer_pool_id);
         return ndi_utl_mk_qos_std_err(sai_ret);
     }
@@ -440,12 +440,12 @@ t_std_error ndi_qos_get_buffer_pool_statistics(npu_id_t npu_id,
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
                         get_buffer_pool_stats(ndi2sai_buffer_pool_id(ndi_buffer_pool_id),
-                                &sai_counter_id_list[0],
                                 sai_counter_id_list.size(),
+                                &sai_counter_id_list[0],
                                 &sai_counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                "buffer_pool get stats fails: buffer pool id %u\n",
+                "buffer_pool get stats fails: buffer pool id %lu\n",
                 ndi_buffer_pool_id);
         return ndi_utl_mk_qos_std_err(sai_ret);
     }
@@ -495,7 +495,7 @@ uint_t ndi_qos_get_shadow_buffer_pool_list(npu_id_t npu_id,
     sai_attr.value.objlist.list = &(shadow_pool_list[0]);
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-                        get_buffer_pool_attr(
+                        get_buffer_pool_attribute(
                                 ndi2sai_buffer_pool_id(ndi_buffer_pool_id),
                                 1, &sai_attr))
                          != SAI_STATUS_SUCCESS) {

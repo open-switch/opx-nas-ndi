@@ -16,6 +16,9 @@
 
 /*
  * filename: nas_ndi_qos_wred.cpp
+ *
+ * THIS FILE WILL BE DEPRACEATED.
+ * Any new development after Rel4.1 shall be done on nas_ndi_qos_wred_ecn.cpp instead.
  */
 
 #include "std_error_codes.h"
@@ -60,7 +63,7 @@ static bool ndi2sai_wred_profile_attr_id_get(nas_attr_id_t attr_id, sai_attr_id_
     }
     catch(...) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                    "attr_id not mapped: %u\n", attr_id);
+                    "attr_id not mapped: %lu\n", attr_id);
         return false;
     }
 
@@ -182,7 +185,7 @@ t_std_error ndi_qos_create_wred_profile(npu_id_t npu_id,
 
     sai_object_id_t sai_qos_wred_profile_id;
     if ((sai_ret = ndi_sai_qos_wred_api(ndi_db_ptr)->
-            create_wred_profile(&sai_qos_wred_profile_id,
+            create_wred(&sai_qos_wred_profile_id,
                                 ndi_switch_id_get(),
                                 attr_list.size(),
                                 &attr_list[0]))
@@ -251,7 +254,7 @@ t_std_error ndi_qos_delete_wred_profile(npu_id_t npu_id, ndi_obj_id_t ndi_wred_i
     }
 
     if ((sai_ret = ndi_sai_qos_wred_api(ndi_db_ptr)->
-            remove_wred_profile(ndi2sai_wred_profile_id(ndi_wred_id)))
+            remove_wred(ndi2sai_wred_profile_id(ndi_wred_id)))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "npu_id %d wred profile deletion failed\n", npu_id);

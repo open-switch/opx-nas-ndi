@@ -33,7 +33,7 @@ sai_bridge_port_fdb_learning_mode_t ndi_port_get_sai_mac_learn_mode
                              (BASE_IF_PHY_MAC_LEARN_MODE_t ndi_fdb_learn_mode);
 
 BASE_IF_PHY_MAC_LEARN_MODE_t ndi_port_get_mac_learn_mode
-                             (sai_port_fdb_learning_mode_t sai_fdb_learn_mode);
+                             (sai_bridge_port_fdb_learning_mode_t sai_fdb_learn_mode);
 
 sai_port_internal_loopback_mode_t ndi_port_get_sai_loopback_mode(BASE_CMN_LOOPBACK_TYPE_t lpbk_mode);
 BASE_CMN_LOOPBACK_TYPE_t ndi_port_get_ndi_loopback_mode(sai_port_internal_loopback_mode_t lpbk_mode);
