@@ -65,7 +65,7 @@ t_std_error ndi_create_lag(npu_id_t npu_id,ndi_obj_id_t *ndi_lag_id)
         return STD_ERR(INTERFACE, CFG, sai_ret);
     }
 
-    NDI_LAG_LOG_INFO("Create LAG Group Id %lld",sai_local_lag_id);
+    NDI_LAG_LOG_INFO("Create LAG Group Id %lu",sai_local_lag_id);
     *ndi_lag_id = sai_local_lag_id;
 
     if (nas_ndi_create_bridge_port_1Q(npu_id,sai_local_lag_id,true) != STD_ERR_OK) {
@@ -85,7 +85,7 @@ t_std_error ndi_delete_lag(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id)
     if (nas_ndi_delete_bridge_port_1Q(npu_id, ndi_lag_id) != STD_ERR_OK) {
         return STD_ERR(INTERFACE, CFG,0);
     }
-    NDI_LAG_LOG_INFO("Delete LAG Group  %lld ",ndi_lag_id);
+    NDI_LAG_LOG_INFO("Delete LAG Group  %lu",ndi_lag_id);
     if ((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->remove_lag((sai_object_id_t) ndi_lag_id))
             != SAI_STATUS_SUCCESS) {
         NDI_LAG_LOG_ERROR("SAI_LAG_Delete Failure");
@@ -106,7 +106,7 @@ t_std_error ndi_add_ports_to_lag(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
     ndi_port_t *ndi_port = NULL;
     unsigned int count = 0;
 
-    NDI_LAG_LOG_INFO("Add ports to Lag ID  %lld ",ndi_lag_id);
+    NDI_LAG_LOG_INFO("Add ports to Lag ID  %lu",ndi_lag_id);
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
@@ -154,7 +154,7 @@ t_std_error ndi_del_ports_from_lag(npu_id_t npu_id,ndi_obj_id_t ndi_lag_member_i
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
 
-    NDI_LAG_LOG_INFO("Deletting lag member id %lld ",ndi_lag_member_id);
+    NDI_LAG_LOG_INFO("Deletting lag member id %lu",ndi_lag_member_id);
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
@@ -193,7 +193,7 @@ t_std_error ndi_set_lag_port_mode (npu_id_t npu_id,ndi_obj_id_t ndi_lag_member_i
         return STD_ERR(INTERFACE, CFG,0);
     }
 
-    NDI_LAG_LOG_INFO("Set port mode in NPU %d lag member id%lld  egr_disable %d",
+    NDI_LAG_LOG_INFO("Set port mode in NPU %d lag member id %lu egr_disable %d",
             npu_id,ndi_lag_member_id,egr_disable);
 
     sai_attribute_t sai_lag_member_attr;
@@ -233,7 +233,7 @@ t_std_error ndi_get_lag_port_mode (npu_id_t npu_id,ndi_obj_id_t ndi_lag_member_i
         return STD_ERR(INTERFACE, CFG,0);
     }
 
-    NDI_LAG_LOG_INFO("Get port mode in NPU %d lag member id%lld",
+    NDI_LAG_LOG_INFO("Get port mode in NPU %d lag member id %lu",
             npu_id,ndi_lag_member_id);
 
     sai_attribute_t sai_lag_member_attr;
@@ -276,7 +276,7 @@ t_std_error ndi_set_lag_pvid(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
         return STD_ERR(INTERFACE, CFG,0);
     }
 
-    NDI_LAG_LOG_INFO("Set lag pvid in NPU %d lag id%lld",
+    NDI_LAG_LOG_INFO("Set lag pvid in NPU %d lag id %lu",
             npu_id,ndi_lag_id);
 
     sai_attribute_t sai_lag_attr;
@@ -287,7 +287,7 @@ t_std_error ndi_set_lag_pvid(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
 
     if((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->set_lag_attribute(ndi_lag_id,
                     &sai_lag_attr)) != SAI_STATUS_SUCCESS) {
-        NDI_LAG_LOG_ERROR("Lag PVID set Failure %d, lag id %lld ", vlan_id, ndi_lag_id);
+        NDI_LAG_LOG_ERROR("Lag PVID set Failure %d, lag id %lu ", vlan_id, ndi_lag_id);
         return STD_ERR(INTERFACE, CFG, sai_ret);
     }
 
@@ -326,10 +326,10 @@ t_std_error ndi_set_lag_learn_mode(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
 {
     sai_attribute_t sai_attr;
 
-    NDI_LAG_LOG_INFO("Set lag learn mode to %d lag id %lld",
+    NDI_LAG_LOG_INFO("Set lag learn mode to %d lag id %lu",
             mode, ndi_lag_id);
 
-    sai_attr.value.u32 = (sai_port_fdb_learning_mode_t )ndi_lag_get_sai_mac_learn_mode(mode);
+    sai_attr.value.u32 = (sai_bridge_port_fdb_learning_mode_t )ndi_lag_get_sai_mac_learn_mode(mode);
     sai_attr.id = SAI_BRIDGE_PORT_ATTR_FDB_LEARNING_MODE;
 
     return ndi_brport_attr_set_or_get_1Q(npu_id, ndi_lag_id, true, &sai_attr);

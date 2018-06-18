@@ -35,8 +35,8 @@
 #include "nas_ndi_utils.h"
 #include "nas_ndi_vlan_util.h"
 #include "sai.h"
-#include "sairouterintf.h"
-#include "sairouter.h"
+#include "sairouterinterface.h"
+#include "saivirtualrouter.h"
 #include "saistatus.h"
 #include "saitypes.h"
 
@@ -215,6 +215,14 @@ t_std_error ndi_rif_set_attribute (ndi_rif_entry_t *rif_entry)
             sai_attr.value.u32 = rif_entry->mtu;
             sai_attr.id = SAI_ROUTER_INTERFACE_ATTR_MTU;
             break;
+
+        case NDI_RIF_ATTR_IP_REDIRECT:
+            //@@TODO - program SAI when IP redirect support is available.
+            //sai_attr.value.booldata = rif_entry->ip_redirect_state;
+            //sai_attr.id = SAI_ROUTER_INTERFACE_ATTR_IP_REDIRECT_STATE;
+            //break;
+            NDI_LOG_TRACE("NDI-ROUTE-RIF", "IP Redirect attribute set - Not supported.");
+            return STD_ERR_OK;
 
         default:
             NDI_LOG_TRACE("NDI-ROUTE-RIF", "Invalid attribute");

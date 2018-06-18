@@ -254,7 +254,7 @@ static t_std_error _fill_ndi_qos_scheduler_group_struct(sai_attribute_t *attr_li
             break;
         default:
             EV_LOG_TRACE(ev_log_t_QOS, ev_log_s_MAJOR, "QOS",
-                         "SAI attribute %lu is not supported by NDI and will be ignored",
+                         "SAI attribute %u is not supported by NDI and will be ignored",
                          attr->id);
             continue;
         }

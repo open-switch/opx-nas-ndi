@@ -33,7 +33,7 @@
 #include "saimirror.h"
 #include "saipolicer.h"
 #include "saiwred.h"
-#include "saiqosmaps.h"
+#include "saiqosmap.h"
 #include "saiqueue.h"
 #include "saischeduler.h"
 #include "saischedulergroup.h"
@@ -112,7 +112,7 @@ typedef struct _nas_ndi_db_t {
     const char *npu_chip_id;
     const char *microcode;
     void *npu_key_value_tbl;
-    service_method_table_t *ndi_services;
+    sai_service_method_table_t *ndi_services;
     ndi_sai_api_tbl_t ndi_sai_api_tbl; /*  pointer to the SAI API table */
     ndi_switch_notification_t *switch_notification;
 

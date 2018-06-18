@@ -146,7 +146,7 @@ t_std_error ndi_route_add (ndi_route_t *p_route_entry)
         sai_attr[attr_idx].id = SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID;
         attr_idx++;
     }
-    if ((sai_ret = ndi_route_api_get(ndi_db_ptr)->create_route(&sai_route, attr_idx, sai_attr))
+    if ((sai_ret = ndi_route_api_get(ndi_db_ptr)->create_route_entry(&sai_route, attr_idx, sai_attr))
                           != SAI_STATUS_SUCCESS) {
         return STD_ERR(ROUTE, FAIL, sai_ret);
     }
@@ -164,7 +164,7 @@ t_std_error ndi_route_delete (ndi_route_t *p_route_entry)
 
     ndi_route_params_copy(&sai_route, p_route_entry);
 
-    if ((sai_ret = ndi_route_api_get(ndi_db_ptr)->remove_route(&sai_route))!= SAI_STATUS_SUCCESS){
+    if ((sai_ret = ndi_route_api_get(ndi_db_ptr)->remove_route_entry(&sai_route))!= SAI_STATUS_SUCCESS){
         return STD_ERR(ROUTE, FAIL, sai_ret);
     }
     return STD_ERR_OK;
@@ -203,7 +203,7 @@ t_std_error ndi_route_set_attribute (ndi_route_t *p_route_entry)
             return STD_ERR(ROUTE, FAIL, 0);
     }
 
-    if ((sai_ret = ndi_route_api_get(ndi_db_ptr)->set_route_attribute(&sai_route, &sai_attr))
+    if ((sai_ret = ndi_route_api_get(ndi_db_ptr)->set_route_entry_attribute(&sai_route, &sai_attr))
                           != SAI_STATUS_SUCCESS) {
         return STD_ERR(ROUTE, FAIL, sai_ret);
     }

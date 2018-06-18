@@ -66,7 +66,7 @@ typedef struct _ndi_npu_port_map_t {
 /*  two dimentional vector based on the [npu_id][npu_port_id] */
 typedef std::vector <std::vector<ndi_port_map_t > > ndi_port_to_sai_port_map_tbl_t;
 
-static ndi_port_to_sai_port_map_tbl_t g_ndi_port_map_tbl;
+static ndi_port_to_sai_port_map_tbl_t& g_ndi_port_map_tbl = *new ndi_port_to_sai_port_map_tbl_t{};
 
 /*  following is for sai_port to ndi_port  */
 
@@ -78,7 +78,7 @@ typedef struct ndi_saiport_map_t {
 typedef std::unordered_map<sai_object_id_t, ndi_saiport_map_t> saiport_map_t;
 
 /*  Global saiport to ndi port map table */
-saiport_map_t g_saiport_map;
+static saiport_map_t& g_saiport_map = *new saiport_map_t{};
 
 std_rw_lock_t ndi_port_map_rwlock;
 
@@ -494,7 +494,7 @@ static t_std_error ndi_per_npu_sai_port_map_update(npu_id_t npu_id)
             /*  Now add the sai port and hw port in the port map */
 
             if ((rc = ndi_port_map_sai_port_add(npu_id, sai_port_list[p_idx],
-                                                nullptr, 0, &npu_port) != STD_ERR_OK)) {
+                                                nullptr, 0, &npu_port)) != STD_ERR_OK) {
                 NDI_PORT_LOG_ERROR("unable to add sai port index %d into the port map table for npu %d ",
                                     p_idx, npu_id);
                 break; /*  from the for loop */
@@ -503,7 +503,7 @@ static t_std_error ndi_per_npu_sai_port_map_update(npu_id_t npu_id)
 
         if (p_idx != port_count) {
             /*  Not all sai ports are added in the port map  */
-            NDI_PORT_LOG_ERROR("unable to create the saiport map table size %d \n", port_count);
+            NDI_PORT_LOG_ERROR("unable to create the saiport map table size %lu \n", port_count);
         }
 
         /*  Imp: no return inside while  */
@@ -662,8 +662,8 @@ t_std_error ndi_port_get_all_sai_ports(npu_id_t npu,sai_object_id_t *list , size
     --cur_len;
 
     if (cur_len > len){
-        EV_LOGGING(NDI,ERR,"NDI-ALL-PORT","List legnth %d passed to get all sai "
-                "ports is shorter than actual length %d",len,cur_len);
+        EV_LOGGING(NDI,ERR,"NDI-ALL-PORT","List legnth %lu passed to get all sai "
+                "ports is shorter than actual length %lu",len,cur_len);
         return STD_ERR(NPU,FAIL,0);
     }
     size_t list_ix = 0;

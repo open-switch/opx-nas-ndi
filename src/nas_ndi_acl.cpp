@@ -128,7 +128,7 @@ t_std_error ndi_acl_table_create (npu_id_t npu_id, const ndi_acl_table_t* ndi_tb
 
     // Set of Actions allowed in Table
     sai_tbl_attr = nil_attr;
-    sai_tbl_attr.id = SAI_ACL_TABLE_ATTR_ACTION_LIST;
+    sai_tbl_attr.id = SAI_ACL_TABLE_ATTR_ACL_ACTION_TYPE_LIST;
     std::vector<int32_t> sai_type_list;
     for (uint_t count = 0; count < ndi_tbl_p->action_count; count++) {
         auto action_type = ndi_tbl_p->action_list[count];
@@ -148,7 +148,7 @@ t_std_error ndi_acl_table_create (npu_id_t npu_id, const ndi_acl_table_t* ndi_tb
         sai_tbl_attr_list.push_back (sai_tbl_attr);
     }
 
-    NDI_ACL_LOG_DETAIL ("Creating ACL Table with %d attributes",
+    NDI_ACL_LOG_DETAIL ("Creating ACL Table with %lu attributes",
                         sai_tbl_attr_list.size());
 
     // Call SAI API
@@ -275,11 +275,11 @@ t_std_error ndi_acl_entry_create (npu_id_t npu_id,
                                                 malloc_tracker)) != STD_ERR_OK) {
             return rc;
         }
-        sai_entry_attr.value.aclfield.enable = true;
+        sai_entry_attr.value.aclaction.enable = true;
         sai_entry_attr_list.push_back (sai_entry_attr);
     }
 
-    NDI_ACL_LOG_DETAIL ("Creating ACL Entry with %d attributes",
+    NDI_ACL_LOG_DETAIL ("Creating ACL Entry with %lu attributes",
                         sai_entry_attr_list.size());
 
     // Call SAI API
@@ -435,7 +435,7 @@ t_std_error ndi_acl_entry_set_action (npu_id_t npu_id,
         return rc;
     }
 
-    sai_entry_attr.value.aclfield.enable = true;
+    sai_entry_attr.value.aclaction.enable = true;
 
     // Call SAI API
     if ((sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->set_acl_entry_attribute (sai_entry_id,
@@ -480,6 +480,41 @@ t_std_error ndi_acl_entry_disable_action (npu_id_t npu_id,
 
     NDI_ACL_LOG_INFO ("Successfully disabled action type %d for ACL Table NDI ID %" PRIx64,
                       action_type, ndi_entry_id);
+    return rc;
+}
+
+t_std_error ndi_acl_entry_disable_counter_action (npu_id_t npu_id,
+                                                  ndi_obj_id_t ndi_entry_id,
+                                                  ndi_obj_id_t ndi_counter_id)
+{
+    t_std_error           rc = STD_ERR_OK;
+    sai_status_t          sai_ret = SAI_STATUS_FAILURE;
+    sai_attribute_t       sai_entry_attr = {0};
+    nas_ndi_db_t         *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+
+    if (ndi_db_ptr == NULL) return STD_ERR(ACL, FAIL, 0);
+
+    sai_object_id_t sai_entry_id = ndi_acl_utl_ndi2sai_entry_id (ndi_entry_id);
+
+    // Action ID
+    if ((rc = ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_SET_COUNTER, &sai_entry_attr))
+        != STD_ERR_OK) {
+        NDI_ACL_LOG_ERROR ("Action type set_counter is not supported by SAI");
+        return rc;
+    }
+    sai_entry_attr.value.aclaction.enable = false;
+    auto sai_oid = static_cast<sai_object_id_t>(ndi_counter_id);
+    sai_entry_attr.value.aclaction.parameter.oid = sai_oid;
+
+    // Call SAI API
+    if ((sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->set_acl_entry_attribute (sai_entry_id,
+                                                                          &sai_entry_attr))
+        != SAI_STATUS_SUCCESS) {
+        return _sai_to_ndi_err (sai_ret);
+    }
+
+    NDI_ACL_LOG_INFO ("Successfully disabled Counter NDI ID %" PRIx64" for ACL Entry NDI ID %" PRIx64,
+                      ndi_counter_id, ndi_entry_id);
     return rc;
 }
 

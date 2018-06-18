@@ -68,7 +68,7 @@ bool ndi_mac_get_vlan_id(sai_object_id_t oid, hal_vlan_id_t & vlan_id){
     ndi_virtual_obj_t obj;
     obj.oid = oid;
     if(!nas_ndi_get_virtual_obj(&obj,ndi_virtual_obj_query_type_FROM_OBJ)){
-        NDI_MAC_LOG(ERR,"Failed to find vlan object id for vlan obj id %llx",oid);
+        NDI_MAC_LOG(ERR,"Failed to find vlan object id for vlan obj id %lu",oid);
         return false;
     }
     vlan_id = obj.vid;
@@ -90,7 +90,7 @@ static bool ndi_mac_get_brport(ndi_mac_entry_t * entry, sai_object_id_t & br_por
     }
 
     if(!nas_ndi_get_bridge_port_obj(&brport_obj,ndi_brport_query_type_FROM_PORT)){
-        NDI_MAC_LOG(ERR,"Failed to find bridge port for port %llx",brport_obj.port_obj_id);
+        NDI_MAC_LOG(ERR,"Failed to find bridge port for port %lu",brport_obj.port_obj_id);
         return false;
     }
 
@@ -104,7 +104,7 @@ static bool ndi_mac_get_port(sai_object_id_t brport, sai_object_id_t & port, ndi
     brport_obj.brport_obj_id = brport;
 
     if(!nas_ndi_get_bridge_port_obj(&brport_obj,ndi_brport_query_type_FROM_BRPORT)){
-        NDI_MAC_LOG(ERR,"Failed to find bridge port for port %llx",brport_obj.port_obj_id);
+        NDI_MAC_LOG(ERR,"Failed to find bridge port for port %lu",brport_obj.port_obj_id);
         return false;
     }
 
@@ -394,7 +394,7 @@ t_std_error ndi_get_mac_entry_attr(ndi_mac_entry_t *mac_entry)
     }else if(port_type == ndi_port_type_PORT){
         if (ndi_npu_port_id_get(port_oid,&mac_entry->port_info.npu_id,
                                 &mac_entry->port_info.npu_port) != STD_ERR_OK) {
-            EV_LOGGING(NDI,DEBUG, "NDI-MAC", "Port get failed: sai port 0x%llx", port_oid);
+            EV_LOGGING(NDI,DEBUG, "NDI-MAC", "Port get failed: sai port 0x%lu", port_oid);
             return STD_ERR(INTERFACE, FAIL, 0);
         }
     }else{
@@ -435,7 +435,7 @@ t_std_error ndi_flush_bridge_port_entry(sai_object_id_t brport_oid) {
     fdb_flush_attr.value.oid = brport_oid;
     if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(ndi_switch_id_get(),
         fdb_flush_attr_count, (const sai_attribute_t *)&fdb_flush_attr)) != SAI_STATUS_SUCCESS) {
-        NDI_MAC_LOG(ERR,"NDI-MAC", "Failed to remove mac entries for bridge port 0x%llx", brport_oid);
+        NDI_MAC_LOG(ERR, "Failed to remove mac entries for bridge port 0x%lu", brport_oid);
         return sai_to_ndi_err_translate(sai_ret);
     }
     return STD_ERR_OK;
@@ -450,13 +450,14 @@ bool ndi_mac_flush_vlan(hal_vlan_id_t vlan_id){
 
     if (ndi_db_ptr == NULL) {
         NDI_MAC_LOG(ERR, "Not able to find MAC NDI function table entry");
-        return (STD_ERR(MAC, FAIL, 0));
+        return false;
     }
 
     size_t attr_idx = 0;
     sai_attribute_t fdb_flush_attr[2];
 
     memset(fdb_flush_attr, 0, sizeof(fdb_flush_attr));
+    fdb_flush_attr[attr_idx].id = SAI_FDB_FLUSH_ATTR_ENTRY_TYPE;
     fdb_flush_attr[attr_idx++].value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_DYNAMIC;
 
     sai_object_id_t vlan_oid;
@@ -471,9 +472,9 @@ bool ndi_mac_flush_vlan(hal_vlan_id_t vlan_id){
     if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(ndi_switch_id_get(),
                     attr_idx, (const sai_attribute_t *)fdb_flush_attr)) != SAI_STATUS_SUCCESS){
         NDI_MAC_LOG(ERR, "Failed to remove mac entries for vlan %d",vlan_id);
-        return sai_to_ndi_err_translate(sai_ret);
+        return false;
     }
 
-    return STD_ERR_OK;
+    return true;
 
 }

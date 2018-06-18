@@ -212,11 +212,11 @@ t_std_error ndi_mirror_delete_session(ndi_mirror_entry_t * entry){
 
     if ((sai_ret = ndi_mirror_api_get(ndi_db_ptr)->remove_mirror_session((sai_object_id_t)
                             entry->ndi_mirror_id))!= SAI_STATUS_SUCCESS) {
-        NDI_MIRROR_LOG(ERR,0,"Failed to delete Mirroring Session %d",entry->ndi_mirror_id);
+        NDI_MIRROR_LOG(ERR,0,"Failed to delete Mirroring Session %lu",entry->ndi_mirror_id);
         return STD_ERR(MIRROR, FAIL, sai_ret);
     }
 
-    NDI_MIRROR_LOG(INFO,3,"Deleted mirroring session with Id %d",entry->ndi_mirror_id);
+    NDI_MIRROR_LOG(INFO,3,"Deleted mirroring session with Id %lu",entry->ndi_mirror_id);
 
     return STD_ERR_OK;
 }
@@ -263,7 +263,7 @@ static bool ndi_mirror_get_port_to_id_list(port_to_mirror_id_map_key & key,sai_a
         mirror_ids & ndi_mirror_ids = port_it->second;
         auto it = std::find(ndi_mirror_ids.begin(),ndi_mirror_ids.end(),id);
         if(it == ndi_mirror_ids.end()){
-            NDI_MIRROR_LOG(ERR,0,"No port has mirror id %d configured on port %d in direction %d"
+            NDI_MIRROR_LOG(ERR,0,"No port has mirror id %lu configured on port %d in direction %d"
                         ,id,key.port,key.dir);
             return false;
         }
@@ -296,7 +296,7 @@ t_std_error ndi_mirror_update_direction(ndi_mirror_entry_t *entry, ndi_mirror_sr
 
     auto it = ndi_mirror_dir_to_sai_map->find(port.direction);
     if(it == ndi_mirror_dir_to_sai_map->end()){
-        NDI_MIRROR_LOG(ERR,0,"Invalid Direction %d passed to updated entry %d",port.direction
+        NDI_MIRROR_LOG(ERR,0,"Invalid Direction %d passed to updated entry %lu",port.direction
                                                                     ,entry->ndi_mirror_id);
         return rc;
     }
@@ -420,7 +420,7 @@ t_std_error ndi_mirror_update_session(ndi_mirror_entry_t * entry, BASE_MIRROR_EN
 
 
         default:
-            NDI_MIRROR_LOG(ERR,0,"Invalid Attribute Id passed to update Mirror Session"
+            NDI_MIRROR_LOG(ERR,0,"Invalid Attribute Id %d passed to update Mirror Session"
                     " %" PRIu64 "",attr_id,entry->ndi_mirror_id);
             return STD_ERR(MIRROR,PARAM,0);
     }

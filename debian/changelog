@@ -1,3 +1,17 @@
+opx-nas-ndi (4.5.0) unstable; urgency=medium
+
+  * Update: Add speed advertisement while setting speed
+  * Update: Add function to set port packet drop status
+  * Update: Support NPU Key Value Pairs from NAS COMMON
+  * Update: Support ethernet interface statistics
+  * Update: Add global ECN ECT flag
+  * Feature: Routing VRF
+  * Feature: Stats for ether-like interface
+  * Feature: Support IP redirection configuration
+  * Feature: Global ECN support for 4200
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Wed, 23 May 2018 17:44:33 -0800
+
 opx-nas-ndi (3.26.0+opx2) unstable; urgency=medium
 
   * Update: Use more specific e_std_err_code_NORESOURCE for two sai_ret codes

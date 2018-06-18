@@ -53,7 +53,7 @@ typedef enum  {
     SAI_SG_ACT_GET
 } SAI_SET_OR_GET_ACTION_t;
 
-t_std_error _sai_port_attr_set_or_get(npu_id_t npu, port_t port, SAI_SET_OR_GET_ACTION_t set,
+static t_std_error _sai_port_attr_set_or_get(npu_id_t npu, port_t port, SAI_SET_OR_GET_ACTION_t set,
         sai_attribute_t *attr, size_t count) {
     STD_ASSERT(attr != NULL);
 
@@ -69,7 +69,7 @@ t_std_error _sai_port_attr_set_or_get(npu_id_t npu, port_t port, SAI_SET_OR_GET_
     sai_object_id_t sai_port;
     t_std_error ret_code = STD_ERR_OK;
 
-    if ((ret_code = ndi_sai_port_id_get(npu, port, &sai_port) != STD_ERR_OK)) {
+    if ((ret_code = ndi_sai_port_id_get(npu, port, &sai_port)) != STD_ERR_OK) {
         return STD_ERR(NPU, PARAM, 0);
     }
 
@@ -78,17 +78,20 @@ t_std_error _sai_port_attr_set_or_get(npu_id_t npu, port_t port, SAI_SET_OR_GET_
         sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->set_port_attribute(sai_port,attr);
         if (sai_ret != SAI_STATUS_SUCCESS) {
             NDI_PORT_LOG_ERROR("Error in setting attr %d on npu %d and port %d",attr->id,npu,port);
-            return STD_ERR(NPU, CFG, sai_ret);
         } else {
             NDI_PORT_LOG_TRACE("Successful in setting attr %d on npu %d and port %d",attr->id,npu,port);
         }
     } else {
         sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->get_port_attribute(sai_port, count, attr);
-        if (sai_ret != SAI_STATUS_SUCCESS) {
-            return STD_ERR(NPU, CFG, sai_ret);
-        }
     }
-    return STD_ERR_OK;
+
+    if (sai_ret == SAI_STATUS_SUCCESS) {
+        return STD_ERR_OK;
+    } else if (sai_ret == SAI_STATUS_NOT_SUPPORTED) {
+        return STD_ERR(NPU, NOTSUPPORTED, 0);
+    }
+
+    return STD_ERR(NPU, CFG, sai_ret);
 }
 
 t_std_error ndi_port_oper_state_notify_register(ndi_port_oper_status_change_fn reg_fn)
@@ -116,8 +119,9 @@ t_std_error ndi_port_supported_breakout_mode_get(npu_id_t npu_id, npu_port_t ndi
     sai_attr.value.s32list.count = SAI_PORT_BREAKOUT_MODE_TYPE_MAX;
     int32_t modes[SAI_PORT_BREAKOUT_MODE_TYPE_MAX];
     sai_attr.value.s32list.list = modes;
-    if (_sai_port_attr_set_or_get(npu_id,ndi_port,SAI_SG_ACT_GET,&sai_attr,1)!=STD_ERR_OK) {
-        return STD_ERR(NPU, PARAM, 0);
+    t_std_error rc;
+    if ((rc = _sai_port_attr_set_or_get(npu_id,ndi_port,SAI_SG_ACT_GET,&sai_attr,1))!=STD_ERR_OK) {
+        return rc;
     }
     size_t ix = 0;
     size_t mx = (*mode_count > sai_attr.value.s32list.count) ?
@@ -156,33 +160,17 @@ t_std_error ndi_port_admin_state_get(npu_id_t npu_id, npu_port_t port_id, IF_INT
 t_std_error ndi_port_link_state_get(npu_id_t npu_id, npu_port_t port_id,
         ndi_intf_link_state_t *link_state)
 {
-
-    t_std_error ret_code = STD_ERR_OK;
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-
-    sai_port_oper_status_t sai_port_status;
-    sai_object_id_t sai_port;
-    sai_attribute_t sai_attr;
-
     STD_ASSERT(link_state != NULL);
 
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    if (ndi_db_ptr == NULL) {
-        return STD_ERR(NPU, PARAM, 0);
-    }
-
-    if ((ret_code = ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK)) {
+    sai_attribute_t sai_attr;
+    sai_attr.id = SAI_PORT_ATTR_OPER_STATUS;
+    t_std_error ret_code = _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_GET, &sai_attr, 1);
+    if (ret_code != STD_ERR_OK) {
         return ret_code;
     }
 
-    sai_attr.id = SAI_PORT_ATTR_OPER_STATUS;
-    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->get_port_attribute(sai_port, 1, &sai_attr))
-                         != SAI_STATUS_SUCCESS) {
-        return STD_ERR(NPU, CFG, sai_ret);
-    }
-    sai_port_status = (sai_port_oper_status_t) sai_attr.value.s32;
+    sai_port_oper_status_t sai_port_status = (sai_port_oper_status_t) sai_attr.value.s32;
     ret_code = ndi_sai_oper_state_to_link_state_get(sai_port_status, &(link_state->oper_status));
-
 
     return ret_code;
 }
@@ -241,8 +229,9 @@ t_std_error ndi_port_supported_speed_get(npu_id_t npu_id, npu_port_t ndi_port,
     sai_attr.value.s32list.count = NDI_PORT_SUPPORTED_SPEED_MAX;
     int32_t speeds[NDI_PORT_SUPPORTED_SPEED_MAX];
     sai_attr.value.s32list.list = speeds;
-    if (_sai_port_attr_set_or_get(npu_id,ndi_port,SAI_SG_ACT_GET,&sai_attr,1)!=STD_ERR_OK) {
-        return STD_ERR(NPU, PARAM, 0);
+    t_std_error rc;
+    if ((rc = _sai_port_attr_set_or_get(npu_id,ndi_port,SAI_SG_ACT_GET,&sai_attr,1))!=STD_ERR_OK) {
+        return rc;
     }
     size_t ix = 0;
     size_t mx = (*speed_count > sai_attr.value.s32list.count) ?
@@ -261,8 +250,11 @@ t_std_error ndi_port_supported_speed_get(npu_id_t npu_id, npu_port_t ndi_port,
     return(STD_ERR_OK);
 }
 t_std_error ndi_port_speed_set(npu_id_t npu_id, npu_port_t port_id, BASE_IF_SPEED_t speed) {
+    t_std_error ret_code = STD_ERR_OK;
     sai_attribute_t sai_attr;
     sai_attr.id = SAI_PORT_ATTR_SPEED;
+    sai_attribute_t sai_adv_speed_attr;
+    sai_adv_speed_attr.id = SAI_PORT_ATTR_ADVERTISED_SPEED;
     if (speed == BASE_IF_SPEED_AUTO)  {
         /*  speed==AUTO is not supported at BASE level
          *  TODO just return ok for the time being until it is supported at application layer
@@ -270,12 +262,18 @@ t_std_error ndi_port_speed_set(npu_id_t npu_id, npu_port_t port_id, BASE_IF_SPEE
         NDI_PORT_LOG_TRACE("Speed AUTO is not supported at BASE level");
         return STD_ERR_OK;
     }
-    if (!ndi_port_get_sai_speed(speed, (uint32_t *)&sai_attr.value.u32)) {
+    uint32_t speed_val;
+    if (!ndi_port_get_sai_speed(speed, &speed_val)){
         NDI_PORT_LOG_ERROR("unsupported Speed %d", (uint32_t)speed);
         return STD_ERR(NPU, PARAM, 0);
     }
-
+    sai_attr.value.u32 = speed_val;
+    sai_adv_speed_attr.value.u32list.count = 1;
+    sai_adv_speed_attr.value.u32list.list = &speed_val;
     NDI_PORT_LOG_TRACE("Setting %d speed on npu %d and port %d", (uint32_t)speed,npu_id,port_id);
+    if((ret_code = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_adv_speed_attr,1))!=STD_ERR_OK){
+        NDI_PORT_LOG_TRACE("Speed advertisement set error for sai attribute %d", ret_code);
+    }
     return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
 }
 
@@ -377,8 +375,8 @@ t_std_error ndi_port_clear_eee_stats (npu_id_t npu_id, npu_port_t port_id)
 
     sai_port_stats_id = SAI_PORT_STAT_EEE_TX_EVENT_COUNT;
 
-    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->clear_port_stats(sai_port,
-                   &sai_port_stats_id, 1))
+    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->clear_port_stats(sai_port,1,
+                   &sai_port_stats_id))
                    != SAI_STATUS_SUCCESS) {
         NDI_PORT_LOG_TRACE("Port stats Get failed for npu %d, port %d, ret %d \n", npu_id, port_id, sai_ret);
         return STD_ERR(NPU, FAIL, sai_ret);
@@ -514,6 +512,18 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_QSFP28_DD_2X100GBASE_SR4_AOC:
         case PLATFORM_MEDIA_TYPE_QSFP28_DD_200GBASE_2SR4_AOC:
         case PLATFORM_MEDIA_TYPE_QSFP28_DD_8X25GBASE_2SR4_AOC:
+        case PLATFORM_MEDIA_TYPE_QSFP28_4X25GBASE_SR_AOC_XXM:
+        case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_BIDI:
+        case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_ESR4:
+        case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_SR4_NOF:
+        case PLATFORM_MEDIA_TYPE_SFP_PLUS_10GBASE_BX10_UP:
+        case PLATFORM_MEDIA_TYPE_SFP_PLUS_10GBASE_BX10_DOWN:
+        case PLATFORM_MEDIA_TYPE_SFP_PLUS_10GBASE_BX40_UP:
+        case PLATFORM_MEDIA_TYPE_SFP_PLUS_10GBASE_BX40_DOWN:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_40GBASE_BIDI:
+        case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_DWDM2:
+        case PLATFORM_MEDIA_TYPE_QSFP28_100GBASE_ER4_LITE:
+        case PLATFORM_MEDIA_TYPE_QSFPPLUS_40GBASE_SR4_AOC1M:
 
             sal_media_type = SAI_PORT_MEDIA_TYPE_FIBER;
             break;
@@ -607,6 +617,7 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
         case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_1M:
         case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_2M:
         case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_3M:
+        case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_5M:
         case PLATFORM_MEDIA_TYPE_SFP28_25GBASE_CR1_LPBK:
         case PLATFORM_MEDIA_TYPE_QSFP28_DD_2X100GBASE_CR4:
         case PLATFORM_MEDIA_TYPE_QSFP28_DD_2X100GBASE_CR4_1_HALFM:
@@ -624,59 +635,27 @@ static inline sai_port_media_type_t ndi_sai_port_media_type_translate (PLATFORM_
 
 t_std_error ndi_port_media_type_set(npu_id_t npu_id, npu_port_t port_id, PLATFORM_MEDIA_TYPE_t media)
 {
-    t_std_error ret_code = STD_ERR_OK;
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-
     sai_attribute_t sai_attr;
-    sai_object_id_t sai_port;
-
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    if (ndi_db_ptr == NULL) {
-        return STD_ERR(NPU, PARAM, 0);
-    }
-
-    if ((ret_code = ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK)) {
-        return ret_code;
-    }
-
     sai_attr.value.s32 = ndi_sai_port_media_type_translate(media);
     sai_attr.id = SAI_PORT_ATTR_MEDIA_TYPE;
 
     NDI_PORT_LOG_TRACE("Setting media type %d on npu %d and port %d", sai_attr.value.s32,npu_id,port_id);
-    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->set_port_attribute(sai_port, &sai_attr))
-                         != SAI_STATUS_SUCCESS) {
+    t_std_error ret_code = STD_ERR_OK;
+    if ((ret_code = _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_SET, &sai_attr, 1))
+                         != STD_ERR_OK) {
         NDI_PORT_LOG_ERROR("Setting media type %d on npu %d and port %d failed", sai_attr.value.s32,npu_id,port_id);
     }
 
-    return ret_code;
+    return STD_ERR_OK;
 }
 
 t_std_error ndi_port_identification_led_set (npu_id_t npu_id, npu_port_t port_id, bool state)
 {
-    t_std_error ret_code = STD_ERR_OK;
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-
     sai_attribute_t sai_attr;
-    sai_object_id_t sai_port;
-
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    if (ndi_db_ptr == NULL) {
-        return STD_ERR(NPU, PARAM, 0);
-    }
-
-    if ((ret_code = ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK)) {
-        return ret_code;
-    }
-
     sai_attr.value.booldata = state;
     sai_attr.id = SAI_PORT_ATTR_LOCATION_LED;
 
-    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->set_port_attribute(sai_port, &sai_attr))
-            != SAI_STATUS_SUCCESS) {
-        return STD_ERR(NPU, CFG, sai_ret);
-    }
-
-    return ret_code;
+    return _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_SET, &sai_attr, 1);
 }
 
 t_std_error ndi_port_hw_profile_set (npu_id_t npu_id, npu_port_t port_id, uint64_t hw_profile)
@@ -686,12 +665,12 @@ t_std_error ndi_port_hw_profile_set (npu_id_t npu_id, npu_port_t port_id, uint64
     sai_attr.value.u64 = hw_profile;
     sai_attr.id = SAI_PORT_ATTR_HW_PROFILE_ID;
 
-    NDI_PORT_LOG_TRACE("Port hw_profile for npu %d, port %d, value %d \n", npu_id, port_id, hw_profile);
+    NDI_PORT_LOG_TRACE("Port hw_profile for npu %d, port %d, value %lu \n", npu_id, port_id, hw_profile);
 
     /* don't return error incase of failure, we want to proceed futher with other configurations */
     rc = _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_SET, &sai_attr,1);
     if (rc != STD_ERR_OK) {
-        NDI_PORT_LOG_ERROR("Error in setting hw_profile for npu %d, port %d, value %d \n", npu_id, port_id, hw_profile);
+        NDI_PORT_LOG_ERROR("Error in setting hw_profile for npu %d, port %d, value %lu \n", npu_id, port_id, hw_profile);
     }
 
     return STD_ERR_OK;
@@ -767,8 +746,8 @@ t_std_error ndi_port_stats_get(npu_id_t npu_id, npu_port_t port_id,
         }
     }
 
-    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->get_port_stats(sai_port,
-                   sai_port_stats_ids, len, stats_val))
+    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->get_port_stats(sai_port, len,
+                   sai_port_stats_ids, stats_val))
                    != SAI_STATUS_SUCCESS) {
         NDI_PORT_LOG_TRACE("Port stats Get failed for npu %d, port %d, ret %d \n",
                             npu_id, port_id, sai_ret);
@@ -808,8 +787,8 @@ t_std_error ndi_port_stats_clear(npu_id_t npu_id, npu_port_t port_id,
         }
     }
 
-    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->clear_port_stats(sai_port,
-                   sai_port_stats_ids, len))
+    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->clear_port_stats(sai_port, len,
+                   sai_port_stats_ids))
                    != SAI_STATUS_SUCCESS) {
         NDI_PORT_LOG_TRACE("Port stats Get failed for npu %d, port %d, ret %d \n", npu_id, port_id, sai_ret);
         return STD_ERR(NPU, FAIL, sai_ret);
@@ -880,37 +859,17 @@ t_std_error ndi_port_get_untagged_port_attrib(npu_id_t npu_id,
 t_std_error ndi_set_port_vid(npu_id_t npu_id, npu_port_t port_id,
                              hal_vlan_id_t vlan_id)
 {
-    t_std_error ret_code = STD_ERR_OK;
-    sai_status_t sai_ret = SAI_STATUS_FAILURE;
-
-    sai_object_id_t sai_port;
     sai_attribute_t sai_attr;
-
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-    if (ndi_db_ptr == NULL) {
-        return STD_ERR(NPU, PARAM, 0);
-    }
-
-
-    if ((ret_code = ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK)) {
-        return ret_code;
-    }
-
     sai_attr.value.u16 = (sai_vlan_id_t)vlan_id;
     sai_attr.id = SAI_PORT_ATTR_PORT_VLAN_ID;
 
-    if ((sai_ret = ndi_sai_port_api_tbl_get(ndi_db_ptr)->set_port_attribute(sai_port, &sai_attr))
-                                  != SAI_STATUS_SUCCESS) {
-        return STD_ERR(INTERFACE, CFG, sai_ret);
-    }
-
-    return STD_ERR_OK;
+    return _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_SET, &sai_attr, 1);
 }
 
 t_std_error ndi_port_mac_learn_mode_set(npu_id_t npu_id, npu_port_t port_id,
                                         BASE_IF_PHY_MAC_LEARN_MODE_t mode){
     sai_attribute_t sai_attr;
-    sai_attr.value.u32 = (sai_port_fdb_learning_mode_t )ndi_port_get_sai_mac_learn_mode(mode);
+    sai_attr.value.u32 = (sai_bridge_port_fdb_learning_mode_t )ndi_port_get_sai_mac_learn_mode(mode);
     sai_attr.id = SAI_BRIDGE_PORT_ATTR_FDB_LEARNING_MODE;
     sai_object_id_t sai_port;
 
@@ -1038,11 +997,44 @@ t_std_error ndi_port_duplex_get(npu_id_t npu_id, npu_port_t port_id,  BASE_CMN_D
 t_std_error ndi_port_fec_set(npu_id_t npu_id, npu_port_t port_id,
         BASE_CMN_FEC_TYPE_t fec_mode) {
 
+    t_std_error ret_code = STD_ERR_OK;
     sai_attribute_t sai_attr;
-    sai_attr.value.u32 = (uint32_t)ndi_port_get_sai_fec_mode(fec_mode);
     sai_attr.id = SAI_PORT_ATTR_FEC_MODE;
+    int32_t fec_val = (int32_t)ndi_port_get_sai_fec_mode(fec_mode);
+    sai_attr.value.s32 = fec_val;
+    sai_attribute_t sai_attr_fec_adv;
+    sai_attr_fec_adv.value.s32list.count =1;
+    sai_attr_fec_adv.value.s32list.list  = &fec_val;
+    sai_attr_fec_adv.id = SAI_PORT_ATTR_ADVERTISED_FEC_MODE;
+    NDI_PORT_LOG_TRACE("Setting FEC attribute %d to npu %d and port %d",fec_mode,npu_id,port_id);
 
-    return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
+    if((ret_code = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1)) != STD_ERR_OK){
+    /*
+     *Tomahawk and Maverick A0 platform doesn't support CL108.
+     *SAI returns error as not supported and we are overriding FEC
+     *FEC value as CL74 and so hardcoding the values.
+     *fec_mode = 5 (cl108) & fec_mode = 4
+   */
+        if((ret_code == STD_ERR(NPU,NOTSUPPORTED,0)) && (fec_mode == BASE_CMN_FEC_TYPE_CL108_RS)){
+            fec_mode = BASE_CMN_FEC_TYPE_CL74_FC;
+            int32_t fec_val = (int32_t)ndi_port_get_sai_fec_mode(fec_mode);
+            sai_attr.value.s32 = fec_val;
+            sai_attr_fec_adv.value.s32list.count =1;
+            sai_attr_fec_adv.value.s32list.list  = &fec_val;
+            if((ret_code = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1)) != STD_ERR_OK){
+                NDI_PORT_LOG_ERROR("FEC set error for sai attribute %d", ret_code);
+                return ret_code;
+            }
+        }
+        NDI_PORT_LOG_ERROR("FEC set error for sai attribute %d", ret_code);
+        return ret_code;
+    }
+
+    if((ret_code = _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr_fec_adv,1)) != STD_ERR_OK){
+        NDI_PORT_LOG_ERROR("FEC set error for sai attribute fec advertisement %d", ret_code);
+        return ret_code;
+    }
+    return ret_code;
 }
 
 static bool ndi_port_support_100g(npu_id_t npu, npu_port_t port)
@@ -1118,6 +1110,109 @@ t_std_error ndi_port_oui_set(npu_id_t npu_id, npu_port_t port_id, uint32_t oui) 
     return _sai_port_attr_set_or_get(npu_id,port_id,SAI_SG_ACT_SET,&sai_attr,1);
 }
 
+t_std_error ndi_port_vlan_filter_get (npu_id_t npu_id, npu_port_t port_id,
+                                      BASE_CMN_FILTER_TYPE_t *filter_type) {
+    sai_attribute_t sai_ingress_filter_attr;
+    sai_attribute_t sai_egress_filter_attr;
+    sai_object_id_t sai_port;
+    t_std_error rc;
+
+    if (filter_type == NULL) {
+        NDI_PORT_LOG_ERROR("NDI Port Vlan Filter Get : NULL pointer is not allowed as input");
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    if (ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK) {
+        NDI_PORT_LOG_ERROR("NDI Port Vlan Filter Get : No Such Interface with Index %d", port_id);
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    sai_ingress_filter_attr.id = SAI_BRIDGE_PORT_ATTR_INGRESS_FILTERING;
+    sai_egress_filter_attr.id = SAI_BRIDGE_PORT_ATTR_EGRESS_FILTERING;
+
+    if ((rc = ndi_brport_attr_set_or_get_1Q (npu_id, sai_port, false,
+                                             &sai_ingress_filter_attr)) != STD_ERR_OK) {
+        NDI_PORT_LOG_TRACE ("NDI Port Vlan Filter Get : Failed to Get Ingress "
+                           "VLAN filter Type - Error Code %d", rc);
+        return rc;
+    }
+
+    if ((rc = ndi_brport_attr_set_or_get_1Q (npu_id, sai_port, false,
+                                             &sai_egress_filter_attr)) != STD_ERR_OK) {
+        NDI_PORT_LOG_TRACE ("NDI Port Vlan Filter Get : Failed to Get Egress "
+                            "VLAN filter Type - Error Code %d", rc);
+        return rc;
+    }
+
+    if(sai_ingress_filter_attr.value.booldata == false) {
+        if(sai_egress_filter_attr.value.booldata == false)
+            *filter_type =  BASE_CMN_FILTER_TYPE_DISABLE;
+        else
+            *filter_type =  BASE_CMN_FILTER_TYPE_EGRESS_ENABLE;
+    }
+    else {
+        if(sai_egress_filter_attr.value.booldata == true)
+            *filter_type =  BASE_CMN_FILTER_TYPE_ENABLE;
+        else
+            *filter_type =  BASE_CMN_FILTER_TYPE_INGRESS_ENABLE;
+    }
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_port_vlan_filter_set (npu_id_t npu_id, npu_port_t port_id,
+                                      BASE_CMN_FILTER_TYPE_t filter) {
+    sai_attribute_t sai_ingress_filter_attr;
+    sai_attribute_t sai_egress_filter_attr;
+    sai_object_id_t sai_port;
+    t_std_error rc;
+
+    if (ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK) {
+        NDI_PORT_LOG_ERROR("NDI Port VLAN Filter Set : No Such Interface with Index %d", port_id);
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    sai_ingress_filter_attr.id = SAI_BRIDGE_PORT_ATTR_INGRESS_FILTERING;
+    sai_egress_filter_attr.id = SAI_BRIDGE_PORT_ATTR_EGRESS_FILTERING;
+
+    switch (filter) {
+        case BASE_CMN_FILTER_TYPE_DISABLE:
+            sai_ingress_filter_attr.value.booldata = false;
+            sai_egress_filter_attr.value.booldata = false;
+            break;
+        case BASE_CMN_FILTER_TYPE_ENABLE:
+            sai_ingress_filter_attr.value.booldata = true;
+            sai_egress_filter_attr.value.booldata = true;
+            break;
+        case BASE_CMN_FILTER_TYPE_INGRESS_ENABLE:
+            sai_ingress_filter_attr.value.booldata = true;
+            sai_egress_filter_attr.value.booldata = false;
+            break;
+        case BASE_CMN_FILTER_TYPE_EGRESS_ENABLE:
+            sai_ingress_filter_attr.value.booldata = false;
+            sai_egress_filter_attr.value.booldata = true;
+            break;
+        default:
+            NDI_PORT_LOG_ERROR("NDI Port Vlan Filter Set : No Such Filter Type %d", filter);
+            return STD_ERR(NPU, PARAM, 0);
+    }
+
+    if ((rc = ndi_brport_attr_set_or_get_1Q (npu_id, sai_port, true,
+                                             &sai_ingress_filter_attr)) != STD_ERR_OK) {
+        NDI_PORT_LOG_TRACE ("NDI Port Vlan Filter Set : Failed to Set Ingress "
+                            "VLAN filter Type - Error Code %d", rc);
+        return rc;
+    }
+
+    if ((rc = ndi_brport_attr_set_or_get_1Q (npu_id, sai_port, true,
+                                             &sai_egress_filter_attr)) != STD_ERR_OK) {
+        NDI_PORT_LOG_TRACE ("NDI Port Vlan Filter Set : Failed to Set Egress "
+                            "VLAN filter Type - Error Code %d", rc);
+        return rc;
+    }
+
+    return STD_ERR_OK;
+}
+
 t_std_error ndi_port_oui_get(npu_id_t npu_id, npu_port_t port_id, uint32_t *oui) {
     if (oui == NULL) {
         NDI_PORT_LOG_ERROR("NULL pointer is not allowed as input");
@@ -1181,7 +1276,7 @@ t_std_error ndi_phy_port_create(npu_id_t npu_id, BASE_IF_SPEED_t speed,
     }
 
     if ((rc = nas_ndi_create_bridge_port_1Q(npu_id, sai_port, false)) != STD_ERR_OK) {
-        NDI_PORT_LOG_TRACE("Bridge port  create failed for npu %d, port  %llu ",
+        NDI_PORT_LOG_TRACE("Bridge port  create failed for npu %d, port  %lu ",
                npu_id, sai_port);
         return rc;
     }
@@ -1230,7 +1325,7 @@ t_std_error ndi_phy_port_delete(npu_id_t npu_id, npu_port_t port_id)
     }
 
     if ((rc = nas_ndi_delete_bridge_port_1Q(npu_id, sai_port)) != STD_ERR_OK) {
-        NDI_PORT_LOG_TRACE("Bridge port  create failed for npu %d, port  %llu ",
+        NDI_PORT_LOG_TRACE("Bridge port  create failed for npu %d, port  %lu ",
                npu_id, sai_port);
         return rc;
     }
@@ -1264,9 +1359,27 @@ void nas_ndi_port_map_dump(npu_id_t npu_id,npu_port_t port_id)
     sai_object_id_t sai_port;
     t_std_error ret_code = STD_ERR_OK;
 
-    if ((ret_code = ndi_sai_port_id_get(npu_id, port_id, &sai_port) != STD_ERR_OK)) {
+    if ((ret_code = ndi_sai_port_id_get(npu_id, port_id, &sai_port)) != STD_ERR_OK) {
         printf("Interface Error    : Invalid port %d", port_id);
     } else {
         printf("Interface SAI OId  : 0x%"PRIx64" \r\n",sai_port);
     }
+}
+
+t_std_error ndi_port_set_packet_drop(npu_id_t npu_id, npu_port_t port_id,
+                                     ndi_port_drop_mode_t mode, bool enable)
+{
+    sai_attribute_t drop_mode_attr;
+    if (mode == NDI_PORT_DROP_UNTAGGED) {
+        drop_mode_attr.id = SAI_PORT_ATTR_DROP_UNTAGGED;
+    } else if (mode == NDI_PORT_DROP_TAGGED) {
+        drop_mode_attr.id = SAI_PORT_ATTR_DROP_TAGGED;
+    } else {
+        NDI_PORT_LOG_ERROR("Unknown packet drop mode %d", mode);
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    drop_mode_attr.value.booldata = enable;
+
+    return _sai_port_attr_set_or_get(npu_id, port_id, SAI_SG_ACT_SET, &drop_mode_attr, 1);
 }

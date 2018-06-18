@@ -440,14 +440,14 @@ static bool nas2sai_queue_counter_type_get(BASE_QOS_QUEUE_STAT_t stat_id,
         {BASE_QOS_QUEUE_STAT_RED_BYTES, SAI_QUEUE_STAT_RED_BYTES},
         {BASE_QOS_QUEUE_STAT_RED_DROPPED_PACKETS, SAI_QUEUE_STAT_RED_DROPPED_PACKETS},
         {BASE_QOS_QUEUE_STAT_RED_DROPPED_BYTES, SAI_QUEUE_STAT_RED_DROPPED_BYTES},
-        {BASE_QOS_QUEUE_STAT_GREEN_DISCARD_DROPPED_PACKETS, SAI_QUEUE_STAT_GREEN_DISCARD_DROPPED_PACKETS},
-        {BASE_QOS_QUEUE_STAT_GREEN_DISCARD_DROPPED_BYTES, SAI_QUEUE_STAT_GREEN_DISCARD_DROPPED_BYTES},
-        {BASE_QOS_QUEUE_STAT_YELLOW_DISCARD_DROPPED_PACKETS, SAI_QUEUE_STAT_YELLOW_DISCARD_DROPPED_PACKETS},
-        {BASE_QOS_QUEUE_STAT_YELLOW_DISCARD_DROPPED_BYTES, SAI_QUEUE_STAT_YELLOW_DISCARD_DROPPED_BYTES},
-        {BASE_QOS_QUEUE_STAT_RED_DISCARD_DROPPED_PACKETS, SAI_QUEUE_STAT_RED_DISCARD_DROPPED_PACKETS},
-        {BASE_QOS_QUEUE_STAT_RED_DISCARD_DROPPED_BYTES, SAI_QUEUE_STAT_RED_DISCARD_DROPPED_BYTES},
-        {BASE_QOS_QUEUE_STAT_DISCARD_DROPPED_PACKETS, SAI_QUEUE_STAT_DISCARD_DROPPED_PACKETS},
-        {BASE_QOS_QUEUE_STAT_DISCARD_DROPPED_BYTES, SAI_QUEUE_STAT_DISCARD_DROPPED_BYTES},
+        {BASE_QOS_QUEUE_STAT_GREEN_DISCARD_DROPPED_PACKETS, SAI_QUEUE_STAT_GREEN_WRED_DROPPED_PACKETS},
+        {BASE_QOS_QUEUE_STAT_GREEN_DISCARD_DROPPED_BYTES, SAI_QUEUE_STAT_GREEN_WRED_DROPPED_BYTES},
+        {BASE_QOS_QUEUE_STAT_YELLOW_DISCARD_DROPPED_PACKETS, SAI_QUEUE_STAT_YELLOW_WRED_DROPPED_PACKETS},
+        {BASE_QOS_QUEUE_STAT_YELLOW_DISCARD_DROPPED_BYTES, SAI_QUEUE_STAT_YELLOW_WRED_DROPPED_BYTES},
+        {BASE_QOS_QUEUE_STAT_RED_DISCARD_DROPPED_PACKETS, SAI_QUEUE_STAT_RED_WRED_DROPPED_PACKETS},
+        {BASE_QOS_QUEUE_STAT_RED_DISCARD_DROPPED_BYTES, SAI_QUEUE_STAT_RED_WRED_DROPPED_BYTES},
+        {BASE_QOS_QUEUE_STAT_DISCARD_DROPPED_PACKETS, SAI_QUEUE_STAT_WRED_DROPPED_PACKETS},
+        {BASE_QOS_QUEUE_STAT_DISCARD_DROPPED_BYTES, SAI_QUEUE_STAT_WRED_DROPPED_BYTES},
         {BASE_QOS_QUEUE_STAT_CURRENT_OCCUPANCY_BYTES, SAI_QUEUE_STAT_CURR_OCCUPANCY_BYTES},
         {BASE_QOS_QUEUE_STAT_WATERMARK_BYTES, SAI_QUEUE_STAT_WATERMARK_BYTES},
         {BASE_QOS_QUEUE_STAT_SHARED_CURRENT_OCCUPANCY_BYTES, SAI_QUEUE_STAT_SHARED_CURR_OCCUPANCY_BYTES},
@@ -518,28 +518,28 @@ static void _fill_counter_stat_by_type(sai_queue_stat_t type, uint64_t val,
     case SAI_QUEUE_STAT_RED_DROPPED_BYTES:
         stat->red_dropped_bytes = val;
         break;
-    case SAI_QUEUE_STAT_GREEN_DISCARD_DROPPED_PACKETS:
+    case SAI_QUEUE_STAT_GREEN_WRED_DROPPED_PACKETS:
         stat->green_discard_dropped_packets = val;
         break;
-    case SAI_QUEUE_STAT_GREEN_DISCARD_DROPPED_BYTES:
+    case SAI_QUEUE_STAT_GREEN_WRED_DROPPED_BYTES:
         stat->green_discard_dropped_bytes = val;
         break;
-    case SAI_QUEUE_STAT_YELLOW_DISCARD_DROPPED_PACKETS:
+    case SAI_QUEUE_STAT_YELLOW_WRED_DROPPED_PACKETS:
         stat->yellow_discard_dropped_packets = val;
         break;
-    case SAI_QUEUE_STAT_YELLOW_DISCARD_DROPPED_BYTES:
+    case SAI_QUEUE_STAT_YELLOW_WRED_DROPPED_BYTES:
         stat->yellow_discard_dropped_bytes = val;
         break;
-    case SAI_QUEUE_STAT_RED_DISCARD_DROPPED_PACKETS:
+    case SAI_QUEUE_STAT_RED_WRED_DROPPED_PACKETS:
         stat->red_discard_dropped_packets = val;
         break;
-    case SAI_QUEUE_STAT_RED_DISCARD_DROPPED_BYTES:
+    case SAI_QUEUE_STAT_RED_WRED_DROPPED_BYTES:
         stat->red_discard_dropped_bytes = val;
         break;
-    case SAI_QUEUE_STAT_DISCARD_DROPPED_PACKETS:
+    case SAI_QUEUE_STAT_WRED_DROPPED_PACKETS:
         stat->discard_dropped_packets = val;
         break;
-    case SAI_QUEUE_STAT_DISCARD_DROPPED_BYTES:
+    case SAI_QUEUE_STAT_WRED_DROPPED_BYTES:
         stat->discard_dropped_bytes = val;
         break;
     case SAI_QUEUE_STAT_CURR_OCCUPANCY_BYTES:
@@ -593,8 +593,8 @@ t_std_error ndi_qos_get_queue_stats(ndi_port_t ndi_port_id,
     }
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
                         get_queue_stats(ndi2sai_queue_id(ndi_queue_id),
-                                &counter_id_list[0],
                                 counter_id_list.size(),
+                                &counter_id_list[0],
                                 &counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -652,8 +652,8 @@ t_std_error ndi_qos_get_queue_statistics(ndi_port_t ndi_port_id,
 
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
                         get_queue_stats(ndi2sai_queue_id(ndi_queue_id),
-                                &sai_counter_id_list[0],
                                 sai_counter_id_list.size(),
+                                &sai_counter_id_list[0],
                                 &sai_counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -712,8 +712,8 @@ t_std_error ndi_qos_clear_queue_stats(ndi_port_t ndi_port_id,
 
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
                         clear_queue_stats(ndi2sai_queue_id(ndi_queue_id),
-                                &counter_id_list[0],
-                                counter_id_list.size()))
+                                counter_id_list.size(),
+                                &counter_id_list[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "queue clear stats fails: npu_id %u\n",

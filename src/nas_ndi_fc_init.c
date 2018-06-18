@@ -22,6 +22,7 @@
 #include "saifcport.h"
 #include "saifcswitch.h"
 #include "nas_ndi_fc_init.h"
+#include "nas_ndi_int.h"
 #include "nas_ndi_event_logs.h"
 #include "std_error_codes.h"
 #include "std_assert.h"
@@ -95,13 +96,13 @@ t_std_error ndi_sai_fc_switch_init(nas_ndi_db_t *ndi_db_ptr) {
         NDI_INIT_LOG_TRACE("FC not supported");
         return STD_ERR_OK;
     }
-    if ((sai_ret = ndi_get_fc_switch_api()->create_fc_switch(&switch_oid, 3, &sai_attr_arr[0])) != SAI_STATUS_SUCCESS) {
+    if ((sai_ret = ndi_get_fc_switch_api()->create_fc_switch(&switch_oid, ndi_switch_id_get(), 3, &sai_attr_arr[0])) != SAI_STATUS_SUCCESS) {
         NDI_INIT_LOG_ERROR("SAI FC switch init failure");
         return (STD_ERR(NPU, CFG, sai_ret));
     }
 
     /*  Set port state event call back */
-    sai_attr.id =  SAI_FC_SWITCH_ATTR_PORT_STATE_CHANGE_NOTIFY;
+    sai_attr.id =  SAI_SWITCH_ATTR_FC_PORT_STATE_CHANGE_NOTIFY;
     //sai_attr.value.u32 = (sai_uint32_t)ndi_sai_fc_port_state_change_cb; // TODO check the type of function
 
     if ((sai_ret = ndi_get_fc_switch_api()->set_fc_switch_attribute(switch_oid,  &sai_attr)) != SAI_STATUS_SUCCESS) {

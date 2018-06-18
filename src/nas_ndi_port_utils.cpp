@@ -50,15 +50,15 @@ sai_bridge_port_fdb_learning_mode_t ndi_port_get_sai_mac_learn_mode
 
 
 BASE_IF_PHY_MAC_LEARN_MODE_t ndi_port_get_mac_learn_mode
-                             (sai_port_fdb_learning_mode_t sai_fdb_learn_mode){
+                             (sai_bridge_port_fdb_learning_mode_t sai_fdb_learn_mode){
 
-    static const auto sai_to_ndi_fdb_learn_mode = new std::unordered_map<sai_port_fdb_learning_mode_t, BASE_IF_PHY_MAC_LEARN_MODE_t,std::hash<int>>
+    static const auto sai_to_ndi_fdb_learn_mode = new std::unordered_map<sai_bridge_port_fdb_learning_mode_t, BASE_IF_PHY_MAC_LEARN_MODE_t,std::hash<int>>
     {
-        {SAI_PORT_FDB_LEARNING_MODE_DROP, BASE_IF_PHY_MAC_LEARN_MODE_DROP},
-        {SAI_PORT_FDB_LEARNING_MODE_DISABLE, BASE_IF_PHY_MAC_LEARN_MODE_DISABLE},
-        {SAI_PORT_FDB_LEARNING_MODE_HW, BASE_IF_PHY_MAC_LEARN_MODE_HW},
-        {SAI_PORT_FDB_LEARNING_MODE_CPU_TRAP, BASE_IF_PHY_MAC_LEARN_MODE_CPU_TRAP},
-        {SAI_PORT_FDB_LEARNING_MODE_CPU_LOG, BASE_IF_PHY_MAC_LEARN_MODE_CPU_LOG},
+        {SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DROP, BASE_IF_PHY_MAC_LEARN_MODE_DROP},
+        {SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DISABLE, BASE_IF_PHY_MAC_LEARN_MODE_DISABLE},
+        {SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW, BASE_IF_PHY_MAC_LEARN_MODE_HW},
+        {SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_TRAP, BASE_IF_PHY_MAC_LEARN_MODE_CPU_TRAP},
+        {SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_LOG, BASE_IF_PHY_MAC_LEARN_MODE_CPU_LOG},
     };
     BASE_IF_PHY_MAC_LEARN_MODE_t mode = BASE_IF_PHY_MAC_LEARN_MODE_HW;
 

@@ -87,13 +87,13 @@ sai_object_id_t ndi_switch_id_get()
     return ndi_switch_id;
 }
 
-static t_std_error nas_ndi_service_method_init(service_method_table_t **service_ptr)
+static t_std_error nas_ndi_service_method_init(sai_service_method_table_t **service_ptr)
 {
 
     if (service_ptr == NULL) {
         return (STD_ERR(NPU, PARAM, 0));
     }
-    *service_ptr  = (service_method_table_t *)malloc(sizeof(service_method_table_t));
+    *service_ptr  = (sai_service_method_table_t *)malloc(sizeof(sai_service_method_table_t));
     if (*service_ptr == NULL) {
         return (STD_ERR(NPU, NOMEM, 0));
     }
@@ -158,7 +158,7 @@ static t_std_error nas_ndi_sai_api_table_init(ndi_sai_api_tbl_t *n_sai_api_tbl)
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
-        sai_ret = sai_api_query(SAI_API_QOS_MAPS, (void *)&(n_sai_api_tbl->n_sai_qos_map_api_tbl));
+        sai_ret = sai_api_query(SAI_API_QOS_MAP, (void *)&(n_sai_api_tbl->n_sai_qos_map_api_tbl));
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
@@ -201,11 +201,11 @@ static t_std_error nas_ndi_sai_api_table_init(ndi_sai_api_tbl_t *n_sai_api_tbl)
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
-        sai_ret = sai_api_query(SAI_API_HOST_INTERFACE, (void *)&(n_sai_api_tbl->n_sai_hostif_api_tbl));
+        sai_ret = sai_api_query(SAI_API_HOSTIF, (void *)&(n_sai_api_tbl->n_sai_hostif_api_tbl));
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
-        sai_ret = sai_api_query(SAI_API_BUFFERS, (void *)&(n_sai_api_tbl->n_sai_buffer_api_tbl));
+        sai_ret = sai_api_query(SAI_API_BUFFER, (void *)&(n_sai_api_tbl->n_sai_buffer_api_tbl));
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
@@ -299,7 +299,7 @@ static void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
 
     if (ndi_db_ptr == NULL) {
-        NDI_INIT_LOG_ERROR("invalid npu_id 0x%" PRIx64 " ", npu_id);
+        NDI_INIT_LOG_ERROR("invalid npu_id 0x%d ", npu_id);
         return;
     }
 
@@ -313,9 +313,8 @@ static void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *
         is_lag_index = false;
         if(data[entry_idx].attr == NULL) {
             NDI_INIT_LOG_ERROR("Invalid parameters passed : entry index: %d \
-                    fdb_entry=%s, attr=%s, attr_count=%d.",entry_idx,
-                    data[entry_idx].fdb_entry, data[entry_idx].attr,
-                    data[entry_idx].attr_count);
+                    fdb_entry=%p, attr_count=%d.",entry_idx,
+                    &(data[entry_idx].fdb_entry), data[entry_idx].attr_count);
             /*Ignore the entry. Continue with next entry*/
             continue;
         }
@@ -335,7 +334,7 @@ static void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *
 
                     if(blk.port_type == ndi_port_type_PORT){
                         if (ndi_npu_port_id_get(blk.port_obj_id,&npu_id, &npu_port)!=STD_ERR_OK) {
-                            NDI_PORT_LOG_TRACE("Failed to map SAI port 0x% to NPU port" PRIx64 " ",
+                            NDI_PORT_LOG_TRACE("Failed to map SAI port 0x%" PRIx64 " to NPU port",
                                 blk.port_obj_id);
                             return;
                         }
@@ -371,7 +370,7 @@ static void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *
         ndi_virtual_obj_t obj;
         obj.oid = data[entry_idx].fdb_entry.bv_id;
         if(!nas_ndi_get_virtual_obj(&obj,ndi_virtual_obj_query_type_FROM_OBJ)){
-            NDI_INIT_LOG_ERROR("Failed to find vlan object id for vlan obj id %llx",obj.oid);
+            NDI_INIT_LOG_ERROR("Failed to find vlan object id for vlan obj id 0x%" PRIx64 "",obj.oid);
             return;
         }
         ndi_mac_entry_temp.vlan_id = obj.vid ;
@@ -410,13 +409,13 @@ static void ndi_port_state_change_cb_int( sai_object_id_t sai_port_id,
     npu_port_t port_id;
 
     if (ndi_npu_port_id_get(sai_port_id,&npu_id,&port_id)!=STD_ERR_OK) {
-        NDI_INIT_LOG_ERROR("Failed to map SAI port to NPU port %d",sai_port_id);
+        NDI_INIT_LOG_ERROR("Failed to map SAI port to NPU port %lu",sai_port_id);
         return;
     }
 
     ndi_db_ptr = ndi_db_ptr_get(npu_id);
     STD_ASSERT(ndi_db_ptr != NULL);
-    NDI_INIT_LOG_TRACE("Calling port state change notification npu_id %d port_id %d state %d \n",
+    NDI_INIT_LOG_TRACE("Calling port state change notification npu_id %d port_id %lu state %d \n",
                         npu_id, sai_port_id, port_state);
 
     ret_code = ndi_sai_oper_state_to_link_state_get(port_state, &link_state.oper_status);
@@ -546,7 +545,7 @@ t_std_error nas_ndi_init(void)
 
     /*  @todo TODO number of npus should be read from the config file */
     no_of_npu = 1;
-    if ((ret_code = ndi_db_global_tbl_alloc(no_of_npu) != STD_ERR_OK)) {
+    if ((ret_code = ndi_db_global_tbl_alloc(no_of_npu)) != STD_ERR_OK) {
         NDI_INIT_LOG_ERROR("nas ndi DB table alloc Failure \n");
         return(ret_code);
     }

@@ -61,7 +61,7 @@ t_std_error ndi_sflow_create_session(ndi_sflow_entry_t *sflow_entry){
         return STD_ERR(SFLOW,PARAM,0);
     }
 
-    if ((sai_ret = ndi_sflow_api_get(ndi_db_ptr)->create_samplepacket_session(&sai_sflow_id,
+    if ((sai_ret = ndi_sflow_api_get(ndi_db_ptr)->create_samplepacket(&sai_sflow_id,
                    ndi_switch_id_get(),attr_list_size,&sflow_rate_attr))!= SAI_STATUS_SUCCESS) {
         NDI_SFLOW_LOG(ERR,0,"Failed to create new sflow session in the NPU %d, error code %d",
                   sflow_entry->npu_id,sai_ret);
@@ -85,14 +85,14 @@ t_std_error ndi_sflow_delete_session(ndi_sflow_entry_t *sflow_entry){
         return STD_ERR(SFLOW,PARAM,0);
     }
 
-    if ((sai_ret = ndi_sflow_api_get(ndi_db_ptr)->remove_samplepacket_session((sai_object_id_t )
+    if ((sai_ret = ndi_sflow_api_get(ndi_db_ptr)->remove_samplepacket((sai_object_id_t )
                                                sflow_entry->ndi_sflow_id))!= SAI_STATUS_SUCCESS) {
-        NDI_SFLOW_LOG(ERR,0,"Error Deleting a sflow session % " PRIx64 " in the NPU",
+        NDI_SFLOW_LOG(ERR,0,"Error Deleting a sflow session %" PRIx64 " in the NPU",
                       sflow_entry->ndi_sflow_id);
         return STD_ERR(SFLOW, FAIL, sai_ret);
     }
 
-    NDI_SFLOW_LOG(INFO,3,"Deleted sflow session % " PRIx64 " in the NPU",sflow_entry->ndi_sflow_id);
+    NDI_SFLOW_LOG(INFO,3,"Deleted sflow session %" PRIx64 " in the NPU",sflow_entry->ndi_sflow_id);
     return STD_ERR_OK;
 }
 
@@ -126,7 +126,7 @@ t_std_error ndi_sflow_update_session(ndi_sflow_entry_t *sflow_entry,BASE_SFLOW_E
         return STD_ERR(SFLOW, FAIL, sai_ret);
     }
 
-    NDI_SFLOW_LOG(INFO,3,"Updated Attribute %d for sflow session % " PRIx64 " ",attr_id,
+    NDI_SFLOW_LOG(INFO,3,"Updated Attribute %d for sflow session %" PRIx64 " ",attr_id,
                   sflow_entry->ndi_sflow_id);
     return STD_ERR_OK;
 }
@@ -202,7 +202,7 @@ t_std_error ndi_sflow_get_session(ndi_sflow_entry_t *sflow_entry,npu_id_t npu_id
 
     if ((sai_ret = ndi_sflow_api_get(ndi_db_ptr)->get_samplepacket_attribute((sai_object_id_t)
                    sflow_entry->ndi_sflow_id,attr_count,&sai_sflow_attr))!= SAI_STATUS_SUCCESS) {
-        NDI_SFLOW_LOG(ERR,0,"Failed to get the sflow attributes from the NPU for session %d",id);
+        NDI_SFLOW_LOG(ERR,0,"Failed to get the sflow attributes from the NPU for session %lu",id);
         return STD_ERR(SFLOW, FAIL, sai_ret);
     }
 

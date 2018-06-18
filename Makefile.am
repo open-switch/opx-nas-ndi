@@ -15,14 +15,16 @@ libopx_nas_ndi_la_SOURCES= src/hal_shell.c  src/nas_ndi_init.c \
            src/nas_ndi_fc_map.cpp src/nas_ndi_mirror.cpp src/nas_ndi_qos_map.cpp  \
            src/nas_ndi_route.c src/nas_ndi_utils.cpp \
            src/nas_ndi_fc_stat.cpp  src/nas_ndi_packet.c src/nas_ndi_qos_policer.cpp \
-           src/nas_ndi_router_interface.c  src/nas_ndi_vlan.c \
+           src/nas_ndi_router_interface.c \
            src/nas_ndi_hash.c src/nas_ndi_plat_stat.c  src/nas_ndi_qos_port.cpp \
            src/nas_ndi_sflow.cpp \
 	   src/nas_ndi_obj_cache.cpp \
 	   src/nas_ndi_qos_port_pool.cpp \
 	   src/nas_ndi_bridge.cpp \
 	   src/nas_ndi_l2mc.cpp \
-	   src/nas_ndi_mcast.cpp
+	   src/nas_ndi_mcast.cpp \
+           src/nas_ndi_qos_wred_ecn.cpp \
+           src/nas_ndi_vlan.cpp 
 
 libopx_nas_ndi_la_CPPFLAGS= -D_FILE_OFFSET_BITS=64 -I$(top_srcdir)/inc/opx -I$(includedir)/opx
 
@@ -30,4 +32,4 @@ libopx_nas_ndi_la_CXXFLAGS=-std=c++11
 
 libopx_nas_ndi_la_LDFLAGS=-shared -version-info 1:1:0
 
-libopx_nas_ndi_la_LIBADD=-lpthread -lopx_common -lopx_logging -lopx_nas_common -lopx_cps_class_map -lsai-0.9.6
+libopx_nas_ndi_la_LIBADD=-lpthread -lopx_common -lopx_logging -lopx_nas_common -lsai-0.9.6

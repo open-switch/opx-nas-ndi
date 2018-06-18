@@ -50,8 +50,8 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
         std::unordered_map<BASE_ACL_MATCH_TYPE_t, sai_acl_entry_attr_t, std::hash<int>>
         _nas2sai_entry_filter_type_map = {
 
-            {BASE_ACL_MATCH_TYPE_SRC_IPV6,           SAI_ACL_ENTRY_ATTR_FIELD_SRC_IPv6},
-            {BASE_ACL_MATCH_TYPE_DST_IPV6,           SAI_ACL_ENTRY_ATTR_FIELD_DST_IPv6},
+            {BASE_ACL_MATCH_TYPE_SRC_IPV6,           SAI_ACL_ENTRY_ATTR_FIELD_SRC_IPV6},
+            {BASE_ACL_MATCH_TYPE_DST_IPV6,           SAI_ACL_ENTRY_ATTR_FIELD_DST_IPV6},
             {BASE_ACL_MATCH_TYPE_SRC_MAC,            SAI_ACL_ENTRY_ATTR_FIELD_SRC_MAC},
             {BASE_ACL_MATCH_TYPE_DST_MAC,            SAI_ACL_ENTRY_ATTR_FIELD_DST_MAC},
             {BASE_ACL_MATCH_TYPE_SRC_IP,             SAI_ACL_ENTRY_ATTR_FIELD_SRC_IP},
@@ -78,7 +78,7 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
             {BASE_ACL_MATCH_TYPE_TCP_FLAGS,          SAI_ACL_ENTRY_ATTR_FIELD_TCP_FLAGS},
             {BASE_ACL_MATCH_TYPE_IP_TYPE,            SAI_ACL_ENTRY_ATTR_FIELD_ACL_IP_TYPE},
             {BASE_ACL_MATCH_TYPE_IP_FRAG,            SAI_ACL_ENTRY_ATTR_FIELD_ACL_IP_FRAG},
-            {BASE_ACL_MATCH_TYPE_IPV6_FLOW_LABEL,    SAI_ACL_ENTRY_ATTR_FIELD_IPv6_FLOW_LABEL},
+            {BASE_ACL_MATCH_TYPE_IPV6_FLOW_LABEL,    SAI_ACL_ENTRY_ATTR_FIELD_IPV6_FLOW_LABEL},
             {BASE_ACL_MATCH_TYPE_TC,                 SAI_ACL_ENTRY_ATTR_FIELD_TC},
             {BASE_ACL_MATCH_TYPE_ICMP_TYPE,          SAI_ACL_ENTRY_ATTR_FIELD_ICMP_TYPE},
             {BASE_ACL_MATCH_TYPE_ICMP_CODE,          SAI_ACL_ENTRY_ATTR_FIELD_ICMP_CODE},
@@ -91,7 +91,7 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
             {BASE_ACL_MATCH_TYPE_IN_INTF,            SAI_ACL_ENTRY_ATTR_FIELD_IN_PORT},
             {BASE_ACL_MATCH_TYPE_OUT_INTF,           SAI_ACL_ENTRY_ATTR_FIELD_OUT_PORT},
             {BASE_ACL_MATCH_TYPE_SRC_INTF,           SAI_ACL_ENTRY_ATTR_FIELD_SRC_PORT},
-            {BASE_ACL_MATCH_TYPE_UDF,                SAI_ACL_ENTRY_ATTR_USER_DEFINED_FIELD_MIN},
+            {BASE_ACL_MATCH_TYPE_UDF,                SAI_ACL_ENTRY_ATTR_USER_DEFINED_FIELD_GROUP_MIN},
             {BASE_ACL_MATCH_TYPE_IPV6_NEXT_HEADER,   SAI_ACL_ENTRY_ATTR_FIELD_IPV6_NEXT_HEADER},
             {BASE_ACL_MATCH_TYPE_RANGE_CHECK,        SAI_ACL_ENTRY_ATTR_FIELD_ACL_RANGE_TYPE},
             {BASE_ACL_MATCH_TYPE_DROP_MARKED,        SAI_ACL_ENTRY_ATTR_FIELD_DROP_MARKED},
@@ -134,8 +134,8 @@ t_std_error ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_t ndi_action_t
             {BASE_ACL_ACTION_TYPE_SET_DST_MAC,          SAI_ACL_ENTRY_ATTR_ACTION_SET_DST_MAC},
             {BASE_ACL_ACTION_TYPE_SET_SRC_IP,           SAI_ACL_ENTRY_ATTR_ACTION_SET_SRC_IP},
             {BASE_ACL_ACTION_TYPE_SET_DST_IP,           SAI_ACL_ENTRY_ATTR_ACTION_SET_DST_IP},
-            {BASE_ACL_ACTION_TYPE_SET_SRC_IPV6,         SAI_ACL_ENTRY_ATTR_ACTION_SET_SRC_IPv6},
-            {BASE_ACL_ACTION_TYPE_SET_DST_IPV6,         SAI_ACL_ENTRY_ATTR_ACTION_SET_DST_IPv6},
+            {BASE_ACL_ACTION_TYPE_SET_SRC_IPV6,         SAI_ACL_ENTRY_ATTR_ACTION_SET_SRC_IPV6},
+            {BASE_ACL_ACTION_TYPE_SET_DST_IPV6,         SAI_ACL_ENTRY_ATTR_ACTION_SET_DST_IPV6},
             {BASE_ACL_ACTION_TYPE_SET_DSCP,             SAI_ACL_ENTRY_ATTR_ACTION_SET_DSCP},
             {BASE_ACL_ACTION_TYPE_SET_L4_SRC_PORT,      SAI_ACL_ENTRY_ATTR_ACTION_SET_L4_SRC_PORT},
             {BASE_ACL_ACTION_TYPE_SET_L4_DST_PORT,      SAI_ACL_ENTRY_ATTR_ACTION_SET_L4_DST_PORT},
@@ -191,8 +191,8 @@ uint_t ndi_acl_utl_ndi2sai_action_type (BASE_ACL_ACTION_TYPE_t ndi_action_type)
             {BASE_ACL_ACTION_TYPE_SET_DST_MAC,          SAI_ACL_ACTION_TYPE_SET_DST_MAC},
             {BASE_ACL_ACTION_TYPE_SET_SRC_IP,           SAI_ACL_ACTION_TYPE_SET_SRC_IP},
             {BASE_ACL_ACTION_TYPE_SET_DST_IP,           SAI_ACL_ACTION_TYPE_SET_DST_IP},
-            {BASE_ACL_ACTION_TYPE_SET_SRC_IPV6,         SAI_ACL_ACTION_TYPE_SET_SRC_IPv6},
-            {BASE_ACL_ACTION_TYPE_SET_DST_IPV6,         SAI_ACL_ACTION_TYPE_SET_DST_IPv6},
+            {BASE_ACL_ACTION_TYPE_SET_SRC_IPV6,         SAI_ACL_ACTION_TYPE_SET_SRC_IPV6},
+            {BASE_ACL_ACTION_TYPE_SET_DST_IPV6,         SAI_ACL_ACTION_TYPE_SET_DST_IPV6},
             {BASE_ACL_ACTION_TYPE_SET_DSCP,             SAI_ACL_ACTION_TYPE_SET_DSCP},
             {BASE_ACL_ACTION_TYPE_SET_L4_SRC_PORT,      SAI_ACL_ACTION_TYPE_SET_L4_SRC_PORT},
             {BASE_ACL_ACTION_TYPE_SET_L4_DST_PORT,      SAI_ACL_ACTION_TYPE_SET_L4_DST_PORT},
@@ -225,8 +225,8 @@ t_std_error ndi_acl_utl_ndi2sai_tbl_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filte
         std::unordered_map<BASE_ACL_MATCH_TYPE_t, sai_acl_table_attr_t, std::hash<int>>
         _nas2sai_tbl_filter_type_map = {
 
-            {BASE_ACL_MATCH_TYPE_SRC_IPV6,           SAI_ACL_TABLE_ATTR_FIELD_SRC_IPv6},
-            {BASE_ACL_MATCH_TYPE_DST_IPV6,           SAI_ACL_TABLE_ATTR_FIELD_DST_IPv6},
+            {BASE_ACL_MATCH_TYPE_SRC_IPV6,           SAI_ACL_TABLE_ATTR_FIELD_SRC_IPV6},
+            {BASE_ACL_MATCH_TYPE_DST_IPV6,           SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6},
             {BASE_ACL_MATCH_TYPE_SRC_MAC,            SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC},
             {BASE_ACL_MATCH_TYPE_DST_MAC,            SAI_ACL_TABLE_ATTR_FIELD_DST_MAC},
             {BASE_ACL_MATCH_TYPE_SRC_IP,             SAI_ACL_TABLE_ATTR_FIELD_SRC_IP},
@@ -253,7 +253,7 @@ t_std_error ndi_acl_utl_ndi2sai_tbl_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filte
             {BASE_ACL_MATCH_TYPE_TCP_FLAGS,          SAI_ACL_TABLE_ATTR_FIELD_TCP_FLAGS},
             {BASE_ACL_MATCH_TYPE_IP_TYPE,            SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE},
             {BASE_ACL_MATCH_TYPE_IP_FRAG,            SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_FRAG},
-            {BASE_ACL_MATCH_TYPE_IPV6_FLOW_LABEL,    SAI_ACL_TABLE_ATTR_FIELD_IPv6_FLOW_LABEL},
+            {BASE_ACL_MATCH_TYPE_IPV6_FLOW_LABEL,    SAI_ACL_TABLE_ATTR_FIELD_IPV6_FLOW_LABEL},
             {BASE_ACL_MATCH_TYPE_TC,                 SAI_ACL_TABLE_ATTR_FIELD_TC},
             {BASE_ACL_MATCH_TYPE_ICMP_TYPE,          SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE},
             {BASE_ACL_MATCH_TYPE_ICMP_CODE,          SAI_ACL_TABLE_ATTR_FIELD_ICMP_CODE},
@@ -337,7 +337,7 @@ static void _fill_sai_filter_portlist_attr (sai_attribute_t *sai_attr_p,
                                      + std::to_string (npu_port));
         }
         sai_portlist[count] = sai_portid;
-        NDI_ACL_LOG_DETAIL ("Filter-Portlist: Fill SAI port %d for NPU %d Port %d",
+        NDI_ACL_LOG_DETAIL ("Filter-Portlist: Fill SAI port %lu for NPU %d Port %d",
                             sai_portid, npu_id, npu_port);
     }
 
@@ -360,7 +360,7 @@ static void _fill_sai_filter_port_attr (sai_attribute_t *sai_attr_p,
         + std::string {" Port "}
         + std::to_string (npu_port));
     }
-    NDI_ACL_LOG_DETAIL ("Filter-Port: Fill SAI port %d for NPU %d Port %d",
+    NDI_ACL_LOG_DETAIL ("Filter-Port: Fill SAI port %lu for NPU %d Port %d",
                         sai_portid, npu_id, npu_port);
 
     sai_attr_p->value.aclfield.data.oid = sai_portid;
@@ -423,10 +423,10 @@ static void _fill_sai_filter_ip_type (sai_attribute_t *sai_attr_p,
             {BASE_ACL_MATCH_IP_TYPE_ANY,          SAI_ACL_IP_TYPE_ANY},
             {BASE_ACL_MATCH_IP_TYPE_IP,           SAI_ACL_IP_TYPE_IP},
             {BASE_ACL_MATCH_IP_TYPE_NON_IP,       SAI_ACL_IP_TYPE_NON_IP},
-            {BASE_ACL_MATCH_IP_TYPE_IPV4ANY,      SAI_ACL_IP_TYPE_IPv4ANY},
-            {BASE_ACL_MATCH_IP_TYPE_NON_IPV4,     SAI_ACL_IP_TYPE_NON_IPv4},
-            {BASE_ACL_MATCH_IP_TYPE_IPV6ANY,      SAI_ACL_IP_TYPE_IPv6ANY},
-            {BASE_ACL_MATCH_IP_TYPE_NON_IPV6,     SAI_ACL_IP_TYPE_NON_IPv6},
+            {BASE_ACL_MATCH_IP_TYPE_IPV4ANY,      SAI_ACL_IP_TYPE_IPV4ANY},
+            {BASE_ACL_MATCH_IP_TYPE_NON_IPV4,     SAI_ACL_IP_TYPE_NON_IPV4},
+            {BASE_ACL_MATCH_IP_TYPE_IPV6ANY,      SAI_ACL_IP_TYPE_IPV6ANY},
+            {BASE_ACL_MATCH_IP_TYPE_NON_IPV6,     SAI_ACL_IP_TYPE_NON_IPV6},
             {BASE_ACL_MATCH_IP_TYPE_ARP,          SAI_ACL_IP_TYPE_ARP},
             {BASE_ACL_MATCH_IP_TYPE_ARP_REQUEST,  SAI_ACL_IP_TYPE_ARP_REQUEST},
             {BASE_ACL_MATCH_IP_TYPE_ARP_REPLY,    SAI_ACL_IP_TYPE_ARP_REPLY}
@@ -645,7 +645,7 @@ static void _fill_sai_action_set_npu_port (sai_attribute_t* sai_attr_p,
                                  std::to_string (npu_id) + std::string {" Port "} +
                                  std::to_string (npu_port)};
     }
-    NDI_ACL_LOG_DETAIL ("Action-Port: Fill SAI port %d for NPU %d Port %d",
+    NDI_ACL_LOG_DETAIL ("Action-Port: Fill SAI port %lu for NPU %d Port %d",
                         sai_portid, npu_id, npu_port);
 
     sai_attr_p->value.aclaction.parameter.oid = sai_portid;
@@ -671,7 +671,7 @@ static void _fill_sai_action_set_npu_portlist (sai_attribute_t* sai_attr_p,
                                      + std::to_string (npu_port));
         }
         sai_portlist[count] = sai_portid;
-        NDI_ACL_LOG_DETAIL ("Action-Portlist: Fill SAI port %d for NPU %d Port %d",
+        NDI_ACL_LOG_DETAIL ("Action-Portlist: Fill SAI port %lu for NPU %d Port %d",
                             sai_portid, npu_id, npu_port);
     }
 

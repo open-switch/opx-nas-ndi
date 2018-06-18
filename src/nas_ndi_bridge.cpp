@@ -104,7 +104,7 @@ t_std_error ndi_init_brport_for_1Q(void)
         bridge_port_attr.id = SAI_BRIDGE_PORT_ATTR_PORT_ID;
         if((sai_ret = ndi_sai_bridge_api(ndi_db_ptr)->get_bridge_port_attribute(bridge_port_id,
               1, &bridge_port_attr)) != SAI_STATUS_SUCCESS) {
-            NDI_PORT_LOG_ERROR("Get  port_id failed for 1Q bridgeport : % " PRIx64 " ", bridge_port_id);
+            NDI_PORT_LOG_ERROR("Get  port_id failed for 1Q bridgeport : %" PRIx64 " ", bridge_port_id);
             return STD_ERR(NPU, CFG, sai_ret);
         }
 
@@ -130,8 +130,14 @@ t_std_error ndi_init_brport_for_1Q(void)
             return STD_ERR(NPU, CFG, sai_ret);
         }
 
-        /* Set bridgeport ingress_filtering to enable i.e drop unknown vlan packets */
+        /* Set bridgeport ingress & egress filtering to enable i.e drop unknown vlan packets */
         bridge_port_attr.id = SAI_BRIDGE_PORT_ATTR_INGRESS_FILTERING;
+        bridge_port_attr.value.booldata = true;
+
+        if ((sai_ret = ndi_set_bridge_port_attribute (npu_id, bridge_port_id, &bridge_port_attr)) != STD_ERR_OK) {
+            return STD_ERR(NPU, CFG, sai_ret);
+        }
+        bridge_port_attr.id = SAI_BRIDGE_PORT_ATTR_EGRESS_FILTERING;
         bridge_port_attr.value.booldata = true;
 
         if ((sai_ret = ndi_set_bridge_port_attribute (npu_id, bridge_port_id, &bridge_port_attr)) != STD_ERR_OK) {
@@ -246,7 +252,7 @@ t_std_error ndi_delete_bridge_port(npu_id_t npu_id, sai_object_id_t brport_oid) 
     blk1.brport_type = ndi_brport_type_PORT;
 
     if (!nas_ndi_remove_bridge_port_obj(&blk1)) {
-        NDI_PORT_LOG_ERROR("Remove cache  bridgeport failed. brport_oid % " PRIx64 " ",
+        NDI_PORT_LOG_ERROR("Remove cache  bridgeport failed. brport_oid %" PRIx64 " ",
         brport_oid);
     }
     NDI_PORT_LOG_TRACE("Delete bridge port success id %" PRIx64 " ", brport_oid);
@@ -315,8 +321,15 @@ t_std_error ndi_create_bridge_port(npu_id_t npu_id, ndi_brport_obj_t *info, sai_
     if (ndi_set_bridge_port_attribute (npu_id, info->brport_obj_id, br_port_attr) != STD_ERR_OK) {
         return STD_ERR(NPU, CFG, sai_ret);
     }
-    /* Set ingress filtering. Drop unknown vlan packets */
+    /* Set ingress & egress filtering to enable i.e drop unknown vlan packets */
     br_port_attr[0].id = SAI_BRIDGE_PORT_ATTR_INGRESS_FILTERING;
+    br_port_attr[0].value.booldata = true;
+
+    if (ndi_set_bridge_port_attribute (npu_id, info->brport_obj_id, br_port_attr) != STD_ERR_OK) {
+        return STD_ERR(NPU, CFG, sai_ret);
+    }
+
+    br_port_attr[0].id = SAI_BRIDGE_PORT_ATTR_EGRESS_FILTERING;
     br_port_attr[0].value.booldata = true;
 
     if (ndi_set_bridge_port_attribute (npu_id, info->brport_obj_id, br_port_attr) != STD_ERR_OK) {
@@ -339,7 +352,7 @@ bool ndi_get_1q_bridge_port(sai_object_id_t *brport_oid, sai_object_id_t saiport
     blk.port_obj_id = saiport_oid;
 
     if (!nas_ndi_get_bridge_port_obj(&blk, ndi_brport_query_type_FROM_PORT)) {
-        NDI_PORT_LOG_ERROR("Failed to get bridge port mapping for port %" PRIx64 " " , saiport_oid);
+        NDI_PORT_LOG_TRACE ("Failed to get bridge port mapping for port %" PRIx64 " " , saiport_oid);
         return false;
     }
     *brport_oid = blk.brport_obj_id;
@@ -358,7 +371,7 @@ bool ndi_get_1q_sai_port(sai_object_id_t brport_oid, sai_object_id_t *saiport_oi
         return false;
      }
      *saiport_oid = blk.port_obj_id;
-     NDI_PORT_LOG_TRACE("Got SAI port: bridge port id %" PRIx64 " " "port id %" PRIx64 " ", brport_oid, saiport_oid);
+     NDI_PORT_LOG_TRACE("Got SAI port: bridge port id %" PRIx64 " " "port id %" PRIx64 " ", brport_oid, *saiport_oid);
      return true;
 }
 
@@ -401,7 +414,9 @@ t_std_error ndi_brport_attr_set_or_get_1Q(npu_id_t npu_id, sai_object_id_t port_
     }
 
     if (!ndi_get_1q_bridge_port(&brport_id, port_id)) {
-        NDI_PORT_LOG_ERROR("Failed to get bridge port for sai port %" PRIx64 " " , port_id);
+        if (set) {
+            NDI_PORT_LOG_ERROR("Failed to get bridge port for sai port %" PRIx64 " " , port_id);
+        }
         return STD_ERR(NPU, CFG, 0);
     }
     if (set) {

@@ -81,7 +81,7 @@ static bool ndi_stg_get_brport(sai_object_id_t port, sai_object_id_t & br_port){
     brport_obj.port_obj_id = port;
 
     if(!nas_ndi_get_bridge_port_obj(&brport_obj,ndi_brport_query_type_FROM_PORT)){
-        NDI_STG_LOG(ERR,0,"Failed to find bridge port for port %llx",brport_obj.port_obj_id);
+        NDI_STG_LOG(ERR,0,"Failed to find bridge port for port %lx",brport_obj.port_obj_id);
         return false;
     }
 
@@ -253,8 +253,8 @@ t_std_error ndi_stg_set_stp_port_state_internal(
 
         if ((sai_ret = ndi_stp_api_get(ndi_db_ptr)->set_stp_port_attribute(
                         stp_port_id, &attr_list)) != SAI_STATUS_SUCCESS) {
-            NDI_STG_LOG(ERR,0,"Failed to set stp state %d to port %d in stg id"
-                    " %d with return code %d",
+            NDI_STG_LOG(ERR,0,"Failed to set stp state %d to port %lu in stg id"
+                    " %lu with return code %d",
                     sai_stp_state,brport,stg_id,sai_ret);
             return STD_ERR(STG, FAIL, sai_ret);
         }
@@ -296,14 +296,14 @@ static bool ndi_stg_get_brport_state(npu_id_t npu_id, ndi_stg_id_t stg_id,
         if ((sai_ret = ndi_stp_api_get(ndi_db_ptr)->get_stp_port_attribute(
                         stp_port_id,1,&attr)) != SAI_STATUS_SUCCESS) {
             NDI_STG_LOG(ERR,0,"Failed to get the STP Port State for STG id %" PRIu64 ""
-                    "and Port id %d with return code %d",stg_id,brport,sai_ret);
+                    "and Port id %lu with return code %d",stg_id,brport,sai_ret);
             return false;
         }
 
         sai_stp_state = (sai_stp_port_state_t)attr.value.s32;
     } else {
-        NDI_STG_LOG(TRACE,0,"Failed to get STG port object id for stg id %d and"
-                " port %d",stg_id,brport);
+        NDI_STG_LOG(TRACE,0,"Failed to get STG port object id for stg id %lu and"
+                " port %lu",stg_id,brport);
         /* If STP port object is not present then state SET has not happened
          * yet hence assuming as BLOCKING state since the SAI STP port state
          * for newly created STP instance is BLOCKING */
@@ -311,7 +311,7 @@ static bool ndi_stg_get_brport_state(npu_id_t npu_id, ndi_stg_id_t stg_id,
     }
 
     NDI_STG_LOG(INFO,3,"Got the STP Port State for STG id %" PRIu64 " "
-                                        "and Port id %d",stg_id,brport);
+                                        "and Port id %lu",stg_id,brport);
 
     static const auto sai_to_ndi_stp_state_map = new std::unordered_map<sai_stp_port_state_t, BASE_STG_INTERFACE_STATE_t, std::hash<int>>
     {
@@ -356,7 +356,7 @@ static bool ndi_stg_set_brport_state(npu_id_t npu_id, ndi_stg_id_t stg_id, sai_o
         return false;
     }
 
-    NDI_STG_LOG(INFO,3,"Set stp state %d to port %d in stg id %" PRIu64 "",
+    NDI_STG_LOG(INFO,3,"Set stp state %d to port %lu in stg id %" PRIu64 "",
                                                 sai_stp_state,brport,stg_id);
 
     return true;

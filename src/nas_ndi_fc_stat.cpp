@@ -39,7 +39,7 @@ static bool ndi_to_sai_fc_if_stats(ndi_stat_id_t ndi_id, sai_fc_port_counter_t *
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_RX_BCAST_PKTS ,SAI_FC_PORT_RX_BROADCAST_PKTS },
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_RX_INVALID_CRC ,SAI_FC_PORT_RX_INVALID_CRC },
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_RX_FRAME_TOO_LONG ,SAI_FC_PORT_RX_FRAME_TOO_LONG },
-        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_RX_FRAME_TRUNCATED ,SAI_FC_PORT_RX_TRUNC_FRAMES },
+        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_RX_FRAME_TRUNCATED ,SAI_FC_PORT_RX_RUNT_FRAMES },
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_RX_LINK_FAIL ,SAI_FC_PORT_RX_LINK_FAIL },
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_RX_LOSS_SYNC ,SAI_FC_PORT_RX_LOSS_SYNC },
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_CLASS2_RX_GOOD_FRAMES ,SAI_FC_PORT_CLASS2_RX_GOOD_FRAMES },
@@ -61,7 +61,7 @@ static bool ndi_to_sai_fc_if_stats(ndi_stat_id_t ndi_id, sai_fc_port_counter_t *
 
     auto it = ndi_to_sai_fc_if_stat_ids->find(ndi_id);
     if(it == ndi_to_sai_fc_if_stat_ids->end() || (sai_id == NULL)){
-        EV_LOGGING(NDI,DEBUG,"NAS-NDI-FC-STAT","Failed to get mapping stat id for ndi FC stat id %d ",ndi_id);
+        EV_LOGGING(NDI,DEBUG,"NAS-NDI-FC-STAT","Failed to get mapping stat id for ndi FC stat id %lu ",ndi_id);
         return false;
     }
     *sai_id = it->second;
@@ -99,7 +99,7 @@ extern "C" t_std_error ndi_port_fc_stats_get(npu_id_t npu_id, npu_port_t port_id
     if ((sai_ret = ndi_get_fc_port_api()->get_fc_port_stats(sai_port,
                    sai_fc_port_stats_ids, len, stats_val))
                    != SAI_STATUS_SUCCESS) {
-        EV_LOGGING(NDI,ERR,"FC-PORT-STAT","Port stats get failed for npu %d, port %d, sai_port %d ret %d \n",
+        EV_LOGGING(NDI,ERR,"FC-PORT-STAT","Port stats get failed for npu %d, port %d, sai_port %lu ret %d \n",
                             npu_id, port_id, sai_port, sai_ret);
         return STD_ERR(NPU, FAIL, sai_ret);
     }
@@ -138,7 +138,7 @@ extern "C" t_std_error ndi_port_fc_stats_clear(npu_id_t npu_id, npu_port_t port_
     if ((sai_ret = ndi_get_fc_port_api()->clear_fc_port_stats(sai_port,
                    sai_fc_port_stats_ids, len))
                    != SAI_STATUS_SUCCESS) {
-        EV_LOGGING(NDI,ERR,"FC-PORT-STAT","Port stats clear failed for npu %d, port %d, sai_port %d, ret %d \n",
+        EV_LOGGING(NDI,ERR,"FC-PORT-STAT","Port stats clear failed for npu %d, port %d, sai_port %lu, ret %d \n",
                             npu_id, port_id, sai_port, sai_ret);
         return STD_ERR(NPU, FAIL, sai_ret);
     }

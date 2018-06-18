@@ -228,13 +228,13 @@ static bool frm_sai_media(sai_attribute_t *param) {
 
 static std::unordered_map<uint64_t,_sai_fc_op_table> _attr_to_op = {
         { BASE_IF_FC_IF_INTERFACES_INTERFACE_SRC_MAC_MODE, {
-            SW_ATTR_U32, to_sai_mac_mode, frm_sai_mac_mode, SAI_FC_PORT_ATTR_MAP_SRC_MAC_MODE }},
+            SW_ATTR_U32, to_sai_mac_mode, frm_sai_mac_mode, SAI_FC_PORT_ATTR_SRC_FC_MAP_MAC_MODE }},
         { BASE_IF_FC_IF_INTERFACES_INTERFACE_SRC_MAP_PREFIX, {
             SW_ATTR_U32, NULL, NULL, SAI_FC_PORT_ATTR_SRC_MAP_PREFIX }},
         { BASE_IF_FC_IF_INTERFACES_INTERFACE_INGRESS_SRC_MAC, {
             SW_ATTR_MAC, NULL, NULL, SAI_FC_PORT_ATTR_INGRESS_SRC_MAC }},
         { BASE_IF_FC_IF_INTERFACES_INTERFACE_DEST_MAC_MODE, {
-            SW_ATTR_U32, to_sai_mac_mode, frm_sai_mac_mode, SAI_FC_PORT_ATTR_DST_MAC_MODE }},
+            SW_ATTR_U32, to_sai_mac_mode, frm_sai_mac_mode, SAI_FC_PORT_ATTR_DST_FC_MAP_MAC_MODE }},
         { BASE_IF_FC_IF_INTERFACES_INTERFACE_DEST_MAP_PREFIX, {
             SW_ATTR_U32, NULL, NULL, SAI_FC_PORT_ATTR_DST_MAP_PREFIX }},
         { BASE_IF_FC_IF_INTERFACES_INTERFACE_INGRESS_DEST_MAC, {
@@ -339,7 +339,7 @@ t_std_error ndi_create_fc_port (npu_id_t npu_id, port_t port, BASE_IF_SPEED_t sp
 
     sai_object_id_t               sai_port = 0;
     t_std_error                   ret_code;
-    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port) == STD_ERR_OK)) {
+    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port)) == STD_ERR_OK) {
          NDI_PORT_LOG_ERROR("Create FC port elready exist npu %d, port %u \n",
                             npu_id, port);
          return STD_ERR_OK;
@@ -360,7 +360,9 @@ t_std_error ndi_create_fc_port (npu_id_t npu_id, port_t port, BASE_IF_SPEED_t sp
     sai_entry_attr_list.push_back (sai_entry_attr);
 
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    if ((sai_ret = ndi_get_fc_port_api()->fc_port_create_fn(&sai_port, sai_entry_attr_list.size(),
+    // TODO Use the FC switch ID
+    // For now, using a NULL object ID is ok
+    if ((sai_ret = ndi_get_fc_port_api()->create_fc_port(&sai_port, (sai_object_id_t)SAI_NULL_OBJECT_ID, sai_entry_attr_list.size(),
                          sai_entry_attr_list.data()))  != SAI_STATUS_SUCCESS) {
          NDI_PORT_LOG_ERROR("Create FC port : SAI create failed for port %u speed %u \n", port, speed);
          return STD_ERR(NPU, PARAM, sai_ret);
@@ -375,13 +377,13 @@ t_std_error ndi_delete_fc_port(npu_id_t npu_id, port_t port)
     t_std_error                   ret_code;
 
     sai_object_id_t               sai_port = 0;
-    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port) != STD_ERR_OK)) {
+    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port)) != STD_ERR_OK) {
          NDI_PORT_LOG_ERROR("FC port to be delete  doestn't  exist npu %d, port %u \n",
                             npu_id, port);
          return ret_code;
     }
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
-    if ((sai_ret = ndi_get_fc_port_api()->fc_port_remove_fn(sai_port)) != SAI_STATUS_SUCCESS) {
+    if ((sai_ret = ndi_get_fc_port_api()->remove_fc_port(sai_port)) != SAI_STATUS_SUCCESS) {
          NDI_PORT_LOG_ERROR("Delete FC port : SAI delete failed for port %u \n", port);
          return STD_ERR(NPU, PARAM, sai_ret);
     }
@@ -397,8 +399,8 @@ t_std_error ndi_set_fc_attr(npu_id_t npu_id, port_t port, nas_fc_param_t *param,
     sai_object_id_t               sai_port = 0;
     char mac_str[18] ={0};
 
-    NDI_PORT_LOG_TRACE("Values  set for npu port %u attribute % " PRIx64 " ", port, attr);
-    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port) != STD_ERR_OK)) {
+    NDI_PORT_LOG_TRACE("Values  set for npu port %u attribute %" PRIx64 " ", port, attr);
+    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port)) != STD_ERR_OK) {
          NDI_PORT_LOG_ERROR("FC port to be set  doestn't  exist npu %d, port %u \n",
                             npu_id, port);
          return ret_code;
@@ -423,7 +425,7 @@ t_std_error ndi_set_fc_attr(npu_id_t npu_id, port_t port, nas_fc_param_t *param,
         break;
     case SW_ATTR_U64:
         sai_attr.value.u64 = param->u64;
-        NDI_PORT_LOG_TRACE("FC port to be set u64 val %u \n", sai_attr.value.u64);
+        NDI_PORT_LOG_TRACE("FC port to be set u64 val %lu \n", sai_attr.value.u64);
         break;
     case SW_ATTR_LST:
         /* There is no param in set which is this */
@@ -448,17 +450,17 @@ t_std_error ndi_set_fc_attr(npu_id_t npu_id, port_t port, nas_fc_param_t *param,
     }
     if (it->second.to_sai_type!=NULL) {
         if (!(it->second.to_sai_type)(&sai_attr)) {
-            NDI_PORT_LOG_ERROR("FC set attr values are invalid - can't be converted to SAI types % " PRIu64 " ",attr);
+            NDI_PORT_LOG_ERROR("FC set attr values are invalid - can't be converted to SAI types %" PRIu64 " ",attr);
             return STD_ERR(NPU,PARAM,0);
         }
     }
 
-    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port) != STD_ERR_OK)) {
+    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port)) != STD_ERR_OK) {
          NDI_PORT_LOG_ERROR("FC port to be set  doestn't  exist npu %d, port %u \n",
                             npu_id, port);
          return ret_code;
     }
-    NDI_PORT_LOG_TRACE("Values  set for sai_port % " PRIx64 " ",sai_port);
+    NDI_PORT_LOG_TRACE("Values  set for sai_port %" PRIx64 " ",sai_port);
 
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     if ((sai_ret = ndi_get_fc_port_api()-> set_fc_port_attribute(sai_port, &sai_attr))
@@ -479,7 +481,7 @@ t_std_error ndi_get_fc_attr(npu_id_t npu_id, port_t port, nas_fc_id_value_t *arr
     t_std_error                   ret_code;
     char mac_str[18] ={0};
 
-    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port) != STD_ERR_OK)) {
+    if ((ret_code = ndi_sai_fcport_id_get(npu_id, port, &sai_port)) != STD_ERR_OK) {
          NDI_PORT_LOG_ERROR("In get FC port attr port doestn't  exist npu %d, port %u \n",
                             npu_id, port);
          return ret_code;
@@ -488,11 +490,11 @@ t_std_error ndi_get_fc_attr(npu_id_t npu_id, port_t port, nas_fc_id_value_t *arr
     sai_attribute_t               sai_attr = {0};
     auto it = _attr_to_op.find(array->attr_id);
     if (it==_attr_to_op.end()) {
-        NDI_PORT_LOG_ERROR("Invalid operation type for NDI FC attr % " PRIx64  " ",array->attr_id);
+        NDI_PORT_LOG_ERROR("Invalid operation type for NDI FC attr %" PRIx64  " ",array->attr_id);
         return STD_ERR(NPU,FAIL,0);
     }
     sai_attr.id = it->second.id;
-    NDI_PORT_LOG_TRACE("Get FC attr called for sai attr %u sai_port 0x% "  PRIx64 " ",sai_attr.id, sai_port);
+    NDI_PORT_LOG_TRACE("Get FC attr called for sai attr %u sai_port 0x%"  PRIx64 " ",sai_attr.id, sai_port);
     switch(it->second.type) {
     case SW_ATTR_LST:
         sai_attr.value.u32list.count = array->value.list.len;;
@@ -527,11 +529,11 @@ t_std_error ndi_get_fc_attr(npu_id_t npu_id, port_t port, nas_fc_id_value_t *arr
         break;
     case SW_ATTR_U64:
         array->value.u64 = sai_attr.value.u64;
-        NDI_PORT_LOG_TRACE("FC port get u64 val %u \n", array->value.u64);
+        NDI_PORT_LOG_TRACE("FC port get u64 val %lu \n", array->value.u64);
         break;
     case SW_ATTR_LST:
         array->value.list.len = sai_attr.value.u32list.count ;
-        NDI_PORT_LOG_TRACE("FC GET port list len  %d \n", array->value.list.len);
+        NDI_PORT_LOG_TRACE("FC GET port list len  %lu \n", array->value.list.len);
         break;
     case SW_ATTR_U16:
         array->value.u16 = sai_attr.value.u16;
