@@ -126,6 +126,11 @@ t_std_error ndi_rif_create (ndi_rif_entry_t *rif_entry, ndi_rif_id_t *rif_id)
         sai_attr[attr_idx].id = SAI_ROUTER_INTERFACE_ATTR_MTU;
         attr_idx++;
     }
+    if (rif_entry->flags & NDI_RIF_ATTR_VIRTUAL) {
+        sai_attr[attr_idx].value.booldata = true;
+        sai_attr[attr_idx].id = SAI_ROUTER_INTERFACE_ATTR_IS_VIRTUAL;
+        attr_idx++;
+    }
 
 
     if ((sai_ret = ndi_rif_api_get(ndi_db_ptr)->create_router_interface
