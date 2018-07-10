@@ -870,4 +870,77 @@ t_std_error ndi_del_lag_from_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id,
     return STD_ERR_OK;
 }
 
+t_std_error ndi_fill_vlan_mcast_attr(uint32_t af, ndi_vlan_mcast_lookup_key_type_t key,
+                                     sai_attribute_t *vlan_attr)
+{
+    if (af == NDI_IPV4_VERSION)
+        vlan_attr->id = SAI_VLAN_ATTR_IPV4_MCAST_LOOKUP_KEY_TYPE;
+    else if (af == NDI_IPV6_VERSION)
+        vlan_attr->id = SAI_VLAN_ATTR_IPV6_MCAST_LOOKUP_KEY_TYPE;
+    else
+        return STD_ERR(NPU, PARAM, 0);
+
+    switch(key) {
+        case NAS_NDI_VLAN_MCAST_LOOKUP_KEY_MACDA:
+            vlan_attr->value.u32 = SAI_VLAN_MCAST_LOOKUP_KEY_TYPE_MAC_DA;
+            break;
+        case NAS_NDI_VLAN_MCAST_LOOKUP_KEY_XG:
+            vlan_attr->value.u32 = SAI_VLAN_MCAST_LOOKUP_KEY_TYPE_XG;
+            break;
+        case NAS_NDI_VLAN_MCAST_LOOKUP_KEY_SG:
+            vlan_attr->value.u32 = SAI_VLAN_MCAST_LOOKUP_KEY_TYPE_SG;
+            break;
+        case NAS_NDI_VLAN_MCAST_LOOKUP_KEY_XG_AND_SG:
+            vlan_attr->value.u32 = SAI_VLAN_MCAST_LOOKUP_KEY_TYPE_XG_AND_SG;
+            break;
+        default:
+            NDI_LOG_TRACE("NDI-VLAN-MCAST", "Unsupported mcast lookup key %d", key);
+            return STD_ERR(NPU, PARAM, 0);
+    }
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_vlan_set_mcast_lookup_key(npu_id_t npu_id, hal_vlan_id_t vlan_id,
+                                          uint32_t af,
+                                          ndi_vlan_mcast_lookup_key_type_t key)
+{
+    sai_object_id_t vlan_obj_id = SAI_NULL_OBJECT_ID;
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if(ndi_db_ptr == NULL){
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    if ((vlan_obj_id = ndi_get_sai_vlan_obj_id(npu_id,vlan_id))
+                == SAI_NULL_OBJECT_ID) {
+        return STD_ERR(NPU, FAIL, SAI_STATUS_FAILURE);
+    }
+
+    sai_status_t sai_ret;
+    sai_attribute_t vlan_attr;
+
+    if(ndi_fill_vlan_mcast_attr(af, key, &vlan_attr) != STD_ERR_OK) {
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    sai_ret = ndi_sai_vlan_api(ndi_db_ptr)->set_vlan_attribute(vlan_obj_id,&vlan_attr);
+
+    if (sai_ret == SAI_STATUS_SUCCESS) {
+        NDI_LOG_TRACE("NDI-VLAN-MCAST", "Succesfully set mcast lookup key to %d"
+                " for VLAN ID %d", key , vlan_id);
+        return STD_ERR_OK;
+    }
+    if ((sai_ret == SAI_STATUS_NOT_IMPLEMENTED) ||
+        (sai_ret ==  SAI_STATUS_ATTR_NOT_IMPLEMENTED_0)){
+        NDI_LOG_TRACE("NDI-VLAN-MCAST", "Set mcast lookup key to %d"
+                " for VLAN ID %d NOT implemented", key , vlan_id);
+        return STD_ERR_OK;
+    } else {
+        NDI_VLAN_LOG_ERROR("Failed to set mcast lookup key to %d"
+                " for VLAN ID %d (ret = %lx)", key, vlan_id, sai_ret);
+        return STD_ERR(NPU, FAIL, sai_ret);
+    }
+
+    return STD_ERR_OK;
+}
+
 } // extern "C"

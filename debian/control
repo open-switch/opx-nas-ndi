@@ -11,7 +11,7 @@ Vcs-Git: https://github.com/open-switch/opx-nas-ndi.git
 
 Package: libopx-nas-ndi1
 Architecture: any
-Depends: ${shlibs:Depends}, libopx-common1 (>= 1.4.0),libopx-nas-common1 (>= 6.1.0),libopx-logging1 (>= 2.1.0)
+Depends: libopx-common1 (>= 1.4.0),libopx-nas-common1 (>= 6.1.0),libopx-logging1 (>= 2.1.0)
 Description: This package contains nas-ndi code
 
 Package: libopx-nas-ndi-dev
