@@ -36,6 +36,10 @@
 #define NDI_PORT_LOG_TRACE(msg, ...) \
                    NDI_LOG_TRACE("NDI-PORT", msg, ##__VA_ARGS__)
 
+#define NDI_IDBR_LOG_TRACE(msg, ...) \
+                   NDI_LOG_TRACE("NDI-1DBR", msg, ##__VA_ARGS__)
+
+
 /*  Add other features log trace here  */
 
 /******************NDI Error log macros************************/
@@ -63,6 +67,10 @@
 
 #define NDI_MCAST_LOG_ERROR(msg, ...) \
                    NDI_LOG_ERROR("NDI-MCAST", msg, ##__VA_ARGS__)
+
+#define NDI_IDBR_LOG_ERROR(msg, ...) \
+                   NDI_LOG_ERROR("NDI-1DBR", msg, ##__VA_ARGS__)
+
 
 /******************NDI INFO log macros************************/
 

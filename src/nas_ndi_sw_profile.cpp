@@ -112,6 +112,7 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
 
     uint32_t conf_uft_mode,l2_size,l3_size,l3_host_size;
     uint32_t cur_max_ecmp_per_grp = 0;
+    uint32_t cur_ipv6_ext_prefix_routes = 0;
     t_std_error ret = STD_ERR_OK;
 
     conf_uft_mode = l2_size = l3_size =  l3_host_size = 0;
@@ -177,6 +178,28 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
                                     std::to_string(cur_max_ecmp_per_grp));
         }
     }
+    /* Get current ipv6 ext prefix value and update */
+    ret = nas_sw_profile_cur_ipv6_ext_prefix_routes_get(&cur_ipv6_ext_prefix_routes);
+    if (ret != STD_ERR_OK)
+    {
+        NDI_INIT_LOG_TRACE("Failed to get current Ipv6 extended prefix routes");
+    }
+    else
+    {
+        /* in case if max_ecmp_per_grp default value is not mentioned in
+            switch.xml, then let lower layer set the default.
+            not over write with 0 */
+        if (cur_ipv6_ext_prefix_routes == 0)
+        {
+            NDI_INIT_LOG_TRACE("current ipv6_ext_prefix_routes 0, skip key-value ");
+        }
+        else
+        {
+            ndi_profile_set_value(switch_id, "SAI_KEY_L3_ROUTE_EXTENDED_PREFIX_ENTRIES",
+                                    std::to_string(cur_ipv6_ext_prefix_routes));
+        }
+    }
+
     ret = nas_switch_npu_profile_get_next_value(key, value);
     if (ret != STD_ERR_OK)
     {

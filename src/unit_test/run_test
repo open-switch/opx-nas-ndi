@@ -21,6 +21,12 @@ if [ "$?" != "0" ]; then
     exit 1
 fi
 
+./nas_ndi_tunnel_map_ut
+if [ "$?" != "0" ]; then
+    echo "Test Failed for NDI-TUNNEL UT"
+    exit 1
+fi
+
 ./nas_ndi_obj_cache_ut
 if [ "$?" != "0" ]; then
     echo "Test Failed for NDI-OBJ-CACHE UT"
@@ -41,6 +47,7 @@ if [ "$?" != "0" ]; then
     exit 1
 fi
 
+./nas_ndi_vlan_mcast_ut
 
 echo "UT execution result: Pass"
 exit 0

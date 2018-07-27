@@ -1,3 +1,19 @@
+opx-nas-ndi (4.5.0+vxlan1) unstable; urgency=medium
+
+  * Feature: VxLAN Support
+  * Update: Add Ipv6 Extended route configuration handle
+  * Bugfix: Fix nas mac callback event
+  * Update: Add split horizon attribute set for subport
+  * Update: Ignore mac flush event from SAI
+  * Update: Add support for virtual rif attribute as part of RIF configuration
+  * Update: Add ipv4 and ipv6 interface statistics attributes
+  * Update: Add support for setting multicast lookup key in VLAN
+  * Update: Add support port vlan subport flush
+  * Update: Clear stat implementation for bridge,bridge port and tunnel
+  * Bugfix: Fix ip address family for mac events
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Fri, 27 Jul 2018 14:44:33 -0800
+
 opx-nas-ndi (4.5.0) unstable; urgency=medium
 
   * Update: Add speed advertisement while setting speed

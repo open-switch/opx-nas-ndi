@@ -172,7 +172,7 @@ t_std_error ndi_cpu_port_get(npu_id_t npu_id, npu_port_t *cpu_port)
     if (cpu_port == NULL) {
         return(STD_ERR(NPU, PARAM, 0));
     }
-    *cpu_port = nas_switch_get_cpu_port_id(ndi_switch_id_get());
+    *cpu_port = nas_switch_get_cpu_port_id(npu_id);
     return(STD_ERR_OK);
 }
 

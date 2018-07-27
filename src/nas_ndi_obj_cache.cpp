@@ -187,7 +187,7 @@ bool ndi_brport_cache::get_brport_block(ndi_brport_obj_t * obj, ndi_brport_query
                 memcpy(obj, &(*(pv_it->second)), sizeof(ndi_brport_obj_t));
                 break;
             }
-
+        /* This is only for .1q ports */
         case ndi_brport_query_type_FROM_PORT:
             {
                 /* use for physical/lag port  */
@@ -233,10 +233,11 @@ bool ndi_brport_cache::add_bridge_port(ndi_brport_obj_t *obj) {
         ndi_bridge_pv_val.vid = obj->vlan_id;
         _pv_to_brport_blk[ndi_bridge_pv_val] = var;
     }
+    /* TUNNEL AND SUBPORT will have lists . Tunnel oid is associated to various bridges */
     _port_to_brport_list[obj->port_obj_id].push_back(obj->brport_obj_id);
     return true;
 }
-/* needs bridge port id and bridge port type */
+/* needs bridge port id and bridge port type. If type is subport needs  vlan_id also */
 bool ndi_brport_cache::remove_bridge_port(ndi_brport_obj_t * obj) {
 
     bool found = false;

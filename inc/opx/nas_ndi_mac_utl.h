@@ -41,6 +41,8 @@ ndi_mac_event_type_t ndi_mac_event_type_get(sai_fdb_event_t sai_event_type);
 
 bool ndi_mac_flush_vlan(hal_vlan_id_t vlan_id);
 
+void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *data);
+
 #ifdef __cplusplus
 }
 #endif

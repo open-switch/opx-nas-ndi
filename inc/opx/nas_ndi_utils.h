@@ -55,6 +55,12 @@ ndi_switch_oper_status_t ndi_oper_status_translate(sai_switch_oper_status_t oper
 
 bool ndi_to_sai_if_stats(ndi_stat_id_t ndi_id, sai_port_stat_t * sai_id);
 
+bool ndi_to_sai_bridge_1d_stats(ndi_stat_id_t ndi_id, sai_bridge_stat_t *sai_id);
+
+bool ndi_to_sai_bridge_port_stats(ndi_stat_id_t ndi_id, sai_bridge_port_stat_t *sai_id);
+
+bool ndi_to_sai_tunnel_stats(ndi_stat_id_t ndi_id, sai_tunnel_stat_t *sai_id);
+
 bool ndi_to_sai_vlan_stats(ndi_stat_id_t ndi_id, sai_vlan_stat_t * sai_id);
 
 t_std_error ndi_switch_state_change_cb_register(npu_id_t npu_id,

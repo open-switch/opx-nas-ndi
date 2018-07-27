@@ -25,12 +25,16 @@
 #include "nas_ndi_int.h"
 #include "nas_ndi_utils.h"
 #include "dell-interface.h"
+#include "bridge-model.h"
 #include "ietf-interfaces.h"
+#include "tunnel.h"
 
 #include "sai.h"
 #include "saitypes.h"
 #include "saiport.h"
 #include "saivlan.h"
+#include "saibridge.h"
+#include "saitunnel.h"
 
 #include <map>
 #include <stdlib.h>
@@ -219,14 +223,14 @@ bool ndi_to_sai_if_stats(ndi_stat_id_t ndi_id, sai_port_stat_t * sai_id){
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_SYMBOL_ERRORS, SAI_PORT_STAT_DOT3_STATS_SYMBOL_ERRORS },
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IN_UNKNOWN_OPCODES, SAI_PORT_STAT_DOT3_CONTROL_IN_UNKNOWN_OPCODES },
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IP_IN_RECEIVES, SAI_PORT_STAT_IP_IN_RECEIVES },
-        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IP_IN_HDR_ERRORS, SAI_PORT_STAT_CUSTOM_RANGE_BASE},
+        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IP_IN_HDR_ERRORS, SAI_PORT_STAT_IP_IN_HDR_ERRORS},
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IP_IN_DISCARDS, SAI_PORT_STAT_IP_IN_DISCARDS},
-        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IP_IN_FORW_DATAGRAMS, SAI_PORT_STAT_CUSTOM_RANGE_BASE},
+        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IP_IN_FORW_DATAGRAMS, SAI_PORT_STAT_IP_FORW_DATAGRAMS},
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_IN_RECEIVES, SAI_PORT_STAT_IPV6_IN_RECEIVES},
-        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_IN_HDR_ERRORS, SAI_PORT_STAT_CUSTOM_RANGE_BASE},
-        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_IN_ADDR_ERRORS, SAI_PORT_STAT_CUSTOM_RANGE_BASE},
+        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_IN_HDR_ERRORS, SAI_PORT_STAT_IPV6_IN_HDR_ERRORS},
+        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_IN_ADDR_ERRORS, SAI_PORT_STAT_IPV6_IN_ADDR_ERRORS},
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_IN_DISCARDS, SAI_PORT_STAT_IPV6_IN_DISCARDS},
-        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_OUT_FORW_DATAGRAMS, SAI_PORT_STAT_CUSTOM_RANGE_BASE},
+        { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_OUT_FORW_DATAGRAMS, SAI_PORT_STAT_IPV6_OUT_FORW_DATAGRAMS},
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_OUT_DISCARDS, SAI_PORT_STAT_IPV6_OUT_DISCARDS},
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_IN_MCAST_PKTS, SAI_PORT_STAT_IPV6_IN_MCAST_PKTS},
         { DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IPV6_OUT_MCAST_PKTS, SAI_PORT_STAT_IPV6_OUT_MCAST_PKTS},
@@ -266,47 +270,61 @@ bool ndi_to_sai_vlan_stats(ndi_stat_id_t ndi_id, sai_vlan_stat_t * sai_id){
     return true;
 }
 
-t_std_error handle_profile_map(sai_switch_profile_id_t profile_id,
-                               const char *profile_file_name) {
-    std::string profile_map_file = DEFAULT_SAI_PROFILE_FILE;
-    if (profile_file_name != NULL) {
-        profile_map_file = profile_file_name;
+bool ndi_to_sai_bridge_port_stats(ndi_stat_id_t ndi_id, sai_bridge_port_stat_t *sai_id){
+    static const auto ndi_to_sai_bridge_port_stat_ids = new std::map<ndi_stat_id_t, sai_bridge_port_stat_t>
+    {
+        {  IF_INTERFACES_STATE_INTERFACE_STATISTICS_IN_OCTETS ,SAI_BRIDGE_PORT_STAT_IN_OCTETS },
+        {  DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IN_PKTS ,SAI_BRIDGE_PORT_STAT_IN_PACKETS },
+        {  IF_INTERFACES_STATE_INTERFACE_STATISTICS_OUT_OCTETS ,SAI_BRIDGE_PORT_STAT_OUT_OCTETS},
+        {  DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_OUT_PKTS ,SAI_BRIDGE_PORT_STAT_OUT_PACKETS },
+    };
+
+    auto it = ndi_to_sai_bridge_port_stat_ids->find(ndi_id);
+    if(it == ndi_to_sai_bridge_port_stat_ids->end() || (sai_id == NULL)){
+        NDI_LOG_ERROR("NAS-NDI-UTILS","Failed to get the sai stat id for ndi id %d", ndi_id);
+        return false;
     }
-    
-    size_t profile_index = profile_id_map.size();
-    profile_id_map[profile_id] = profile_index;
-    
-    if (profile_map.size() <= profile_id) {
-        profile_map.resize(profile_index + 1);
+    *sai_id = it->second;
+    return true;
+}
+
+bool ndi_to_sai_bridge_1d_stats(ndi_stat_id_t ndi_id, sai_bridge_stat_t *sai_id){
+    static const auto ndi_to_sai_bridge_1d_stat_ids = new std::map<ndi_stat_id_t, sai_bridge_stat_t>
+    {
+        {  BRIDGE_DOMAIN_BRIDGE_STATS_IN_OCTETS ,SAI_BRIDGE_STAT_IN_OCTETS },
+        {  BRIDGE_DOMAIN_BRIDGE_STATS_IN_PKTS ,SAI_BRIDGE_STAT_IN_PACKETS },
+        {  BRIDGE_DOMAIN_BRIDGE_STATS_OUT_OCTETS ,SAI_BRIDGE_STAT_OUT_OCTETS},
+        {  BRIDGE_DOMAIN_BRIDGE_STATS_OUT_PKTS ,SAI_BRIDGE_STAT_OUT_PACKETS },
+    };
+
+    auto it = ndi_to_sai_bridge_1d_stat_ids->find(ndi_id);
+    if(it == ndi_to_sai_bridge_1d_stat_ids->end() || (sai_id == NULL)){
+        NDI_LOG_ERROR("NAS-NDI-UTILS","Failed to get the sai stat id for ndi id %d", ndi_id);
+        return false;
     }
-    if (profile_iter.size() <= profile_index) {
-        size_t profile_iter_size = profile_iter.size();
-        profile_iter.resize(profile_index + 1);
-        for (int i = profile_iter_size; i <= profile_iter.size(); ++i) {
-            profile_iter[i] = profile_map[i].begin();
-        }
+    *sai_id = it->second;
+    return true;
+}
+
+bool ndi_to_sai_tunnel_stats(ndi_stat_id_t ndi_id, sai_tunnel_stat_t *sai_id){
+    static const auto ndi_to_sai_tunnel_stat_ids = new std::map<ndi_stat_id_t, sai_tunnel_stat_t>
+    {
+        {  IF_INTERFACES_STATE_INTERFACE_STATISTICS_IN_OCTETS ,SAI_TUNNEL_STAT_IN_OCTETS },
+        {  DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IN_PKTS ,SAI_TUNNEL_STAT_IN_PACKETS },
+        {  IF_INTERFACES_STATE_INTERFACE_STATISTICS_OUT_OCTETS ,SAI_TUNNEL_STAT_OUT_OCTETS},
+        {  DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_OUT_PKTS ,SAI_TUNNEL_STAT_OUT_PACKETS },
+        {  TUNNEL_TUNNEL_STATS_TUNNELS_IN_OCTETS ,SAI_TUNNEL_STAT_IN_OCTETS },
+        {  TUNNEL_TUNNEL_STATS_TUNNELS_IN_PKTS ,SAI_TUNNEL_STAT_IN_PACKETS },
+        {  TUNNEL_TUNNEL_STATS_TUNNELS_OUT_OCTETS ,SAI_TUNNEL_STAT_OUT_OCTETS},
+        {  TUNNEL_TUNNEL_STATS_TUNNELS_OUT_PKTS,SAI_TUNNEL_STAT_OUT_PACKETS },
+
+    };
+
+    auto it = ndi_to_sai_tunnel_stat_ids->find(ndi_id);
+    if(it == ndi_to_sai_tunnel_stat_ids->end() || (sai_id == NULL)){
+        NDI_LOG_ERROR("NAS-NDI-UTILS","Failed to get the sai stat id for ndi id %d", ndi_id);
+        return false;
     }
-    std::ifstream profile(profile_map_file);
-    if (!profile.is_open()) {
-        NDI_INIT_LOG_INFO("failed to open profile map file: %s : %s using SAI default profile",
-                          profile_map_file.c_str(), strerror(errno));
-        return STD_ERR_OK;
-    }
-    std::string line;
-    while(getline(profile, line)) {
-        if (line.size() > 0 && (line[0] == '#' || line[0] == ';'))
-            continue;
-        
-        size_t pos = line.find("=");
-        if (pos == std::string::npos) {
-            NDI_INIT_LOG_INFO("not found '=' in line %s", line.c_str());
-            continue;
-        }
-        std::string key = line.substr(0, pos);
-        std::string value = line.substr(pos + 1);
-        profile_map[profile_id][key] = value;
-        
-        NDI_INIT_LOG_TRACE("handle profile map insert key %s: %s", key.c_str(), value.c_str());
-    }
-    return STD_ERR_OK;
+    *sai_id = it->second;
+    return true;
 }
