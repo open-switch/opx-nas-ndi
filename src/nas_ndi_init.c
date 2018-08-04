@@ -366,6 +366,13 @@ static void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *
             }
         }
 
+        /*
+         *  Ignore the SAI flsuh event as we don't do anything with the event
+         */
+
+        if(data[entry_idx].event_type == SAI_FDB_EVENT_FLUSHED){
+            continue;
+        }
         ndi_mac_event_type_temp = ndi_mac_event_type_get(data[entry_idx].event_type);
         ndi_virtual_obj_t obj;
         obj.oid = data[entry_idx].fdb_entry.bv_id;

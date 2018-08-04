@@ -186,17 +186,21 @@ t_std_error ndi_udf_match_create(npu_id_t npu_id, const ndi_udf_match_t *udf_mat
     attr_list.push_back(sai_attr);
 
     if (udf_match_p->type == NAS_NDI_UDF_MATCH_NON_TUNNEL) {
-        sai_attr = nil_attr;
-        sai_attr.id = SAI_UDF_MATCH_ATTR_L2_TYPE;
-        sai_attr.value.aclfield.data.u16 = udf_match_p->non_tunnel.l2_type;
-        sai_attr.value.aclfield.mask.u16 = udf_match_p->non_tunnel.l2_type_mask;
-        attr_list.push_back(sai_attr);
+        if (udf_match_p->non_tunnel.l2_type != 0) {
+            sai_attr = nil_attr;
+            sai_attr.id = SAI_UDF_MATCH_ATTR_L2_TYPE;
+            sai_attr.value.aclfield.data.u16 = udf_match_p->non_tunnel.l2_type;
+            sai_attr.value.aclfield.mask.u16 = udf_match_p->non_tunnel.l2_type_mask;
+            attr_list.push_back(sai_attr);
+        }
 
-        sai_attr = nil_attr;
-        sai_attr.id = SAI_UDF_MATCH_ATTR_L3_TYPE;
-        sai_attr.value.aclfield.data.u8 = udf_match_p->non_tunnel.l3_type;
-        sai_attr.value.aclfield.mask.u8 = udf_match_p->non_tunnel.l3_type_mask;
-        attr_list.push_back(sai_attr);
+        if (udf_match_p->non_tunnel.l3_type != 0) {
+            sai_attr = nil_attr;
+            sai_attr.id = SAI_UDF_MATCH_ATTR_L3_TYPE;
+            sai_attr.value.aclfield.data.u8 = udf_match_p->non_tunnel.l3_type;
+            sai_attr.value.aclfield.mask.u8 = udf_match_p->non_tunnel.l3_type_mask;
+            attr_list.push_back(sai_attr);
+        }
     } else if (udf_match_p->type == NAS_NDI_UDF_MATCH_GRE_TUNNEL) {
         sai_attr = nil_attr;
         sai_attr.id = SAI_UDF_MATCH_ATTR_L2_TYPE;
