@@ -328,3 +328,48 @@ bool ndi_to_sai_tunnel_stats(ndi_stat_id_t ndi_id, sai_tunnel_stat_t *sai_id){
     *sai_id = it->second;
     return true;
 }
+
+t_std_error handle_profile_map(sai_switch_profile_id_t profile_id,
+                               const char *profile_file_name) {
+    std::string profile_map_file = DEFAULT_SAI_PROFILE_FILE;
+    if (profile_file_name != NULL) {
+        profile_map_file = profile_file_name;
+    }
+
+    size_t profile_index = profile_id_map.size();
+    profile_id_map[profile_id] = profile_index;
+
+    if (profile_map.size() <= profile_id) {
+        profile_map.resize(profile_index + 1);
+    }
+    if (profile_iter.size() <= profile_index) {
+        size_t profile_iter_size = profile_iter.size();
+        profile_iter.resize(profile_index + 1);
+        for (int i = profile_iter_size; i <= profile_iter.size(); ++i) {
+            profile_iter[i] = profile_map[i].begin();
+        }
+    }
+    std::ifstream profile(profile_map_file);
+    if (!profile.is_open()) {
+        NDI_INIT_LOG_INFO("failed to open profile map file: %s : %s using SAI default profile",
+                          profile_map_file.c_str(), strerror(errno));
+        return STD_ERR_OK;
+    }
+    std::string line;
+    while(getline(profile, line)) {
+        if (line.size() > 0 && (line[0] == '#' || line[0] == ';'))
+            continue;
+
+        size_t pos = line.find("=");
+        if (pos == std::string::npos) {
+            NDI_INIT_LOG_INFO("not found '=' in line %s", line.c_str());
+            continue;
+        }
+        std::string key = line.substr(0, pos);
+        std::string value = line.substr(pos + 1);
+        profile_map[profile_id][key] = value;
+
+        NDI_INIT_LOG_TRACE("handle profile map insert key %s: %s", key.c_str(), value.c_str());
+    }
+    return STD_ERR_OK;
+}
