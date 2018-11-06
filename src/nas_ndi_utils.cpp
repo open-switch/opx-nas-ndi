@@ -25,12 +25,16 @@
 #include "nas_ndi_int.h"
 #include "nas_ndi_utils.h"
 #include "dell-interface.h"
+#include "bridge-model.h"
 #include "ietf-interfaces.h"
+#include "tunnel.h"
 
 #include "sai.h"
 #include "saitypes.h"
 #include "saiport.h"
 #include "saivlan.h"
+#include "saibridge.h"
+#include "saitunnel.h"
 
 #include <map>
 #include <stdlib.h>
@@ -266,16 +270,75 @@ bool ndi_to_sai_vlan_stats(ndi_stat_id_t ndi_id, sai_vlan_stat_t * sai_id){
     return true;
 }
 
+bool ndi_to_sai_bridge_port_stats(ndi_stat_id_t ndi_id, sai_bridge_port_stat_t *sai_id){
+    static const auto ndi_to_sai_bridge_port_stat_ids = new std::map<ndi_stat_id_t, sai_bridge_port_stat_t>
+    {
+        {  IF_INTERFACES_STATE_INTERFACE_STATISTICS_IN_OCTETS ,SAI_BRIDGE_PORT_STAT_IN_OCTETS },
+        {  DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IN_PKTS ,SAI_BRIDGE_PORT_STAT_IN_PACKETS },
+        {  IF_INTERFACES_STATE_INTERFACE_STATISTICS_OUT_OCTETS ,SAI_BRIDGE_PORT_STAT_OUT_OCTETS},
+        {  DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_OUT_PKTS ,SAI_BRIDGE_PORT_STAT_OUT_PACKETS },
+    };
+
+    auto it = ndi_to_sai_bridge_port_stat_ids->find(ndi_id);
+    if(it == ndi_to_sai_bridge_port_stat_ids->end() || (sai_id == NULL)){
+        NDI_LOG_ERROR("NAS-NDI-UTILS","Failed to get the sai stat id for ndi id %d", ndi_id);
+        return false;
+    }
+    *sai_id = it->second;
+    return true;
+}
+
+bool ndi_to_sai_bridge_1d_stats(ndi_stat_id_t ndi_id, sai_bridge_stat_t *sai_id){
+    static const auto ndi_to_sai_bridge_1d_stat_ids = new std::map<ndi_stat_id_t, sai_bridge_stat_t>
+    {
+        {  BRIDGE_DOMAIN_BRIDGE_STATS_IN_OCTETS ,SAI_BRIDGE_STAT_IN_OCTETS },
+        {  BRIDGE_DOMAIN_BRIDGE_STATS_IN_PKTS ,SAI_BRIDGE_STAT_IN_PACKETS },
+        {  BRIDGE_DOMAIN_BRIDGE_STATS_OUT_OCTETS ,SAI_BRIDGE_STAT_OUT_OCTETS},
+        {  BRIDGE_DOMAIN_BRIDGE_STATS_OUT_PKTS ,SAI_BRIDGE_STAT_OUT_PACKETS },
+    };
+
+    auto it = ndi_to_sai_bridge_1d_stat_ids->find(ndi_id);
+    if(it == ndi_to_sai_bridge_1d_stat_ids->end() || (sai_id == NULL)){
+        NDI_LOG_ERROR("NAS-NDI-UTILS","Failed to get the sai stat id for ndi id %d", ndi_id);
+        return false;
+    }
+    *sai_id = it->second;
+    return true;
+}
+
+bool ndi_to_sai_tunnel_stats(ndi_stat_id_t ndi_id, sai_tunnel_stat_t *sai_id){
+    static const auto ndi_to_sai_tunnel_stat_ids = new std::map<ndi_stat_id_t, sai_tunnel_stat_t>
+    {
+        {  IF_INTERFACES_STATE_INTERFACE_STATISTICS_IN_OCTETS ,SAI_TUNNEL_STAT_IN_OCTETS },
+        {  DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_IN_PKTS ,SAI_TUNNEL_STAT_IN_PACKETS },
+        {  IF_INTERFACES_STATE_INTERFACE_STATISTICS_OUT_OCTETS ,SAI_TUNNEL_STAT_OUT_OCTETS},
+        {  DELL_IF_IF_INTERFACES_STATE_INTERFACE_STATISTICS_OUT_PKTS ,SAI_TUNNEL_STAT_OUT_PACKETS },
+        {  TUNNEL_TUNNEL_STATS_TUNNELS_IN_OCTETS ,SAI_TUNNEL_STAT_IN_OCTETS },
+        {  TUNNEL_TUNNEL_STATS_TUNNELS_IN_PKTS ,SAI_TUNNEL_STAT_IN_PACKETS },
+        {  TUNNEL_TUNNEL_STATS_TUNNELS_OUT_OCTETS ,SAI_TUNNEL_STAT_OUT_OCTETS},
+        {  TUNNEL_TUNNEL_STATS_TUNNELS_OUT_PKTS,SAI_TUNNEL_STAT_OUT_PACKETS },
+
+    };
+
+    auto it = ndi_to_sai_tunnel_stat_ids->find(ndi_id);
+    if(it == ndi_to_sai_tunnel_stat_ids->end() || (sai_id == NULL)){
+        NDI_LOG_ERROR("NAS-NDI-UTILS","Failed to get the sai stat id for ndi id %d", ndi_id);
+        return false;
+    }
+    *sai_id = it->second;
+    return true;
+}
+
 t_std_error handle_profile_map(sai_switch_profile_id_t profile_id,
                                const char *profile_file_name) {
     std::string profile_map_file = DEFAULT_SAI_PROFILE_FILE;
     if (profile_file_name != NULL) {
         profile_map_file = profile_file_name;
     }
-    
+
     size_t profile_index = profile_id_map.size();
     profile_id_map[profile_id] = profile_index;
-    
+
     if (profile_map.size() <= profile_id) {
         profile_map.resize(profile_index + 1);
     }
@@ -296,7 +359,7 @@ t_std_error handle_profile_map(sai_switch_profile_id_t profile_id,
     while(getline(profile, line)) {
         if (line.size() > 0 && (line[0] == '#' || line[0] == ';'))
             continue;
-        
+
         size_t pos = line.find("=");
         if (pos == std::string::npos) {
             NDI_INIT_LOG_INFO("not found '=' in line %s", line.c_str());
@@ -305,8 +368,9 @@ t_std_error handle_profile_map(sai_switch_profile_id_t profile_id,
         std::string key = line.substr(0, pos);
         std::string value = line.substr(pos + 1);
         profile_map[profile_id][key] = value;
-        
+
         NDI_INIT_LOG_TRACE("handle profile map insert key %s: %s", key.c_str(), value.c_str());
     }
     return STD_ERR_OK;
 }
+

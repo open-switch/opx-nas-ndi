@@ -25,6 +25,7 @@
 #include "nas_ndi_event_logs.h"
 #include "nas_ndi_utils.h"
 #include "nas_base_utils.h"
+#include "nas_ndi_switch.h"
 #include "nas_ndi_acl.h"
 #include "nas_ndi_acl_utl.h"
 #include "nas_ndi_udf_utl.h"
@@ -776,6 +777,188 @@ t_std_error ndi_acl_range_delete(npu_id_t npu_id, ndi_obj_id_t ndi_range_id)
 
     NDI_ACL_LOG_INFO("Successfully deleted ACL range NDI ID %" PRIx64,
                      ndi_range_id);
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_acl_get_slice_attribute (npu_id_t npu_id, ndi_obj_id_t slice_id,
+                                         ndi_acl_slice_attr_t *slice_attr)
+{
+#define NDI_MAX_ACL_SLICE_ATTR   6
+    size_t                    attr_count = 0;
+    size_t                    attr_idx = 0;
+    size_t                    list_sz = slice_attr->acl_table_count;
+    sai_attribute_t           sai_attr[NDI_MAX_ACL_SLICE_ATTR];
+    sai_status_t              sai_ret = SAI_STATUS_FAILURE;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        return STD_ERR(ACL, FAIL, 0);
+    }
+    memset (&sai_attr, 0, sizeof (sai_attr));
+
+    std::vector<sai_object_id_t> slice_acl_tbl_obj_list(list_sz);
+
+    sai_object_id_t sai_slice_id = ndi_acl_ndi2sai_slice_id (slice_id);
+
+    //retrieve below slice attributes
+    sai_attr[attr_idx++].id = SAI_ACL_SLICE_ATTR_EXTENSIONS_SLICE_ID;
+    sai_attr[attr_idx++].id = SAI_ACL_SLICE_ATTR_EXTENSIONS_PIPE_ID;
+    sai_attr[attr_idx++].id = SAI_ACL_SLICE_ATTR_EXTENSIONS_ACL_STAGE;
+    sai_attr[attr_idx++].id = SAI_ACL_SLICE_ATTR_EXTENSIONS_USED_ACL_ENTRY;
+    sai_attr[attr_idx++].id = SAI_ACL_SLICE_ATTR_EXTENSIONS_AVAILABLE_ACL_ENTRY;
+
+    sai_attr[attr_idx].id = SAI_ACL_SLICE_ATTR_EXTENSIONS_ACL_TABLE_LIST;
+    sai_attr[attr_idx].value.objlist.count = list_sz;
+    sai_attr[attr_idx].value.objlist.list = &(slice_acl_tbl_obj_list[0]);
+
+    attr_idx++;
+
+    // Call SAI API
+    sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->get_acl_slice_attribute(sai_slice_id,
+                                                                     attr_idx, &sai_attr[0]);
+    if ((sai_ret != SAI_STATUS_SUCCESS) && (sai_ret != SAI_STATUS_BUFFER_OVERFLOW)) {
+        NDI_ACL_LOG_ERROR ("ACL slice attribute get failed for ID:0x%lx in SAI ret:%d",
+                           slice_id, sai_ret);
+        return _sai_to_ndi_err (sai_ret);
+    }
+
+    /* return the list count to caller in case of buffer overflow error or
+     * if the list pointer is not valid.
+     */
+    if ((sai_ret == SAI_STATUS_BUFFER_OVERFLOW) ||
+        (slice_attr->acl_table_list == NULL)) {
+        slice_attr->acl_table_count = sai_attr[attr_idx-1].value.objlist.count;
+        NDI_ACL_LOG_INFO ("ACL slice attribute get ACL table list failed for ID:0x%lx, list_count:%d in SAI ret:%d",
+                           slice_id, slice_attr->acl_table_count, sai_ret);
+        return STD_ERR_OK;
+    }
+    attr_count = attr_idx;
+
+    for(attr_idx = 0; attr_idx < attr_count; attr_idx++) {
+        switch(sai_attr[attr_idx].id) {
+            case SAI_ACL_SLICE_ATTR_EXTENSIONS_SLICE_ID:
+                slice_attr->slice_index = sai_attr[attr_idx].value.u32;
+                break;
+            case SAI_ACL_SLICE_ATTR_EXTENSIONS_PIPE_ID:
+                slice_attr->pipeline_index = sai_attr[attr_idx].value.u32;
+                break;
+            case SAI_ACL_SLICE_ATTR_EXTENSIONS_ACL_STAGE:
+                switch (sai_attr[attr_idx].value.u32) {
+                    case SAI_ACL_STAGE_INGRESS:
+                        slice_attr->stage = BASE_ACL_STAGE_INGRESS;
+                        break;
+                    case SAI_ACL_STAGE_EGRESS:
+                        slice_attr->stage = BASE_ACL_STAGE_EGRESS;
+                        break;
+                    default:
+                        NDI_ACL_LOG_ERROR ("Invalid Stage %d", sai_attr[attr_idx].value.u32);
+                        break;
+                }
+                break;
+            case SAI_ACL_SLICE_ATTR_EXTENSIONS_USED_ACL_ENTRY:
+                slice_attr->used_count = sai_attr[attr_idx].value.u32;
+                break;
+            case SAI_ACL_SLICE_ATTR_EXTENSIONS_AVAILABLE_ACL_ENTRY:
+                slice_attr->avail_count = sai_attr[attr_idx].value.u32;
+                break;
+            case SAI_ACL_SLICE_ATTR_EXTENSIONS_ACL_TABLE_LIST:
+                if (slice_attr->acl_table_count < sai_attr[attr_idx].value.objlist.count) {
+                    slice_attr->acl_table_count = sai_attr[attr_idx].value.objlist.count;
+                } else {
+                    slice_attr->acl_table_count = sai_attr[attr_idx].value.objlist.count;
+                    for (size_t idx = 0; idx < slice_attr->acl_table_count; idx ++) {
+                        slice_attr->acl_table_list[idx] = sai_attr[attr_idx].value.objlist.list[idx];
+                    }
+                }
+                break;
+            default:
+                NDI_ACL_LOG_INFO ("ACL slice attribute get returned invalid attribute");
+                break;
+        }
+    }
+
+    NDI_ACL_LOG_INFO ("ACL slice attribute get success");
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_acl_get_acl_table_attribute (npu_id_t npu_id, ndi_obj_id_t table_id,
+                                             ndi_acl_table_attr_t *table_attr)
+{
+#define NDI_MAX_ACL_TABLE_ATTR   2
+    size_t                    attr_count = 0;
+    size_t                    attr_idx = 0;
+    size_t                    list_sz = table_attr->acl_table_used_entry_list_count;
+    sai_attribute_t           sai_attr[NDI_MAX_ACL_TABLE_ATTR];
+    sai_status_t              sai_ret = SAI_STATUS_FAILURE;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        return STD_ERR(ACL, FAIL, 0);
+    }
+
+    memset (&sai_attr, 0, sizeof (sai_attr));
+
+    sai_object_id_t sai_table_id = ndi_acl_utl_ndi2sai_table_id(table_id);
+
+    std::vector<uint32_t> used_entry_obj_list(list_sz);
+    std::vector<uint32_t> avail_entry_obj_list(list_sz);
+
+    sai_attr[attr_idx].id = SAI_ACL_TABLE_ATTR_EXTENSIONS_USED_ACL_ENTRY_LIST;
+    sai_attr[attr_idx].value.u32list.count = list_sz;
+    sai_attr[attr_idx].value.u32list.list = &(used_entry_obj_list[0]);
+    attr_idx++;
+
+    sai_attr[attr_idx].id = SAI_ACL_TABLE_ATTR_EXTENSIONS_AVAILABLE_ACL_ENTRY_LIST;
+    sai_attr[attr_idx].value.u32list.count = list_sz;
+    sai_attr[attr_idx].value.u32list.list = &(avail_entry_obj_list[0]);
+    attr_idx++;
+
+    attr_count = attr_idx;
+
+    // Call SAI API
+    sai_ret = ndi_acl_utl_api_get(ndi_db_ptr)->get_acl_table_attribute(sai_table_id,
+                                                                       attr_idx, &sai_attr[0]);
+
+    if ((sai_ret != SAI_STATUS_SUCCESS) &&
+        (sai_ret != SAI_STATUS_BUFFER_OVERFLOW)) {
+        NDI_ACL_LOG_ERROR ("ACL table attribute get used/avail entry count failed for ID:0x%lx in SAI %d",
+                           sai_table_id, sai_ret);
+        return _sai_to_ndi_err (sai_ret);
+    }
+
+    for(attr_idx = 0; attr_idx < attr_count; attr_idx++) {
+
+        switch(sai_attr[attr_idx].id) {
+            case SAI_ACL_TABLE_ATTR_EXTENSIONS_USED_ACL_ENTRY_LIST:
+                if ((table_attr->acl_table_used_entry_list_count < sai_attr[attr_idx].value.u32list.count) ||
+                    (table_attr->acl_table_used_entry_list == NULL)) {
+                    table_attr->acl_table_used_entry_list_count = sai_attr[attr_idx].value.u32list.count;
+                } else {
+                    table_attr->acl_table_used_entry_list_count = sai_attr[attr_idx].value.u32list.count;
+                    for (size_t idx = 0; idx < table_attr->acl_table_used_entry_list_count; idx ++) {
+                        table_attr->acl_table_used_entry_list[idx] = sai_attr[attr_idx].value.u32list.list[idx];
+                    }
+                }
+                break;
+            case SAI_ACL_TABLE_ATTR_EXTENSIONS_AVAILABLE_ACL_ENTRY_LIST:
+                if ((table_attr->acl_table_avail_entry_list_count < sai_attr[attr_idx].value.u32list.count) ||
+                    (table_attr->acl_table_avail_entry_list == NULL)) {
+                    table_attr->acl_table_avail_entry_list_count = sai_attr[attr_idx].value.u32list.count;
+                } else {
+                    table_attr->acl_table_avail_entry_list_count = sai_attr[attr_idx].value.u32list.count;
+                    for (size_t idx = 0; idx < table_attr->acl_table_avail_entry_list_count; idx ++) {
+                        table_attr->acl_table_avail_entry_list[idx] = sai_attr[attr_idx].value.u32list.list[idx];
+                    }
+                }
+                break;
+
+            default:
+                NDI_ACL_LOG_INFO ("ACL table attribute get returned invalid attribute");
+                break;
+        }
+    }
+
+    NDI_ACL_LOG_INFO ("ACL table attribute get success");
     return STD_ERR_OK;
 }
 

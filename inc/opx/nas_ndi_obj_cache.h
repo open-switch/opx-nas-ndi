@@ -21,17 +21,11 @@
 #include "nas_ndi_common.h"
 
 
-/* Port type for maintaining port/bridge port mapping */
-typedef enum{
-    ndi_port_type_PORT=1,
-    ndi_port_type_LAG,
-} ndi_port_type_t ;
-
-
 /* Bridge port type */
 typedef enum{
     ndi_brport_type_PORT=1,
-    ndi_brport_type_SUBPORT,
+    ndi_brport_type_SUBPORT_TAG,
+    ndi_brport_type_SUBPORT_UNTAG,
     ndi_brport_type_TUNNEL,
     ndi_brport_type_1D_ROUTER,
     ndi_brport_type_1Q_ROUTER,

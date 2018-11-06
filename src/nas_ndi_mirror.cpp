@@ -115,8 +115,17 @@ static void ndi_mirror_fill_rspan_attr(ndi_mirror_entry_t * entry, sai_attribute
     attr_list[attr_ix++].value.u16 =NDI_VLAN_TPID;
 
     if(entry->vlan_id){
+        if(entry->mode == BASE_MIRROR_MODE_ERSPAN) {
+            attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_VLAN_HEADER_VALID;
+            attr_list[attr_ix++].value.booldata = true;
+        }
         attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_VLAN_ID;
         attr_list[attr_ix++].value.u16 = entry->vlan_id;
+    } else {
+        if(entry->mode == BASE_MIRROR_MODE_ERSPAN) {
+            attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_VLAN_HEADER_VALID;
+            attr_list[attr_ix++].value.booldata = false;
+        }
     }
 
     attr_list[attr_ix].id = SAI_MIRROR_SESSION_ATTR_VLAN_PRI;

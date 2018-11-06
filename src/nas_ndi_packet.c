@@ -117,10 +117,6 @@ static t_std_error ndi_packet_get_attr (const sai_attribute_t *p_attr, ndi_packe
             // @Todo - to handle lag case
             break;
 
-        case SAI_HOSTIF_PACKET_ATTR_BRIDGE_ID:
-            // Handle the .1q or .1d bridge id on which packet ingressed
-            break;
-
         case SAI_HOSTIF_PACKET_ATTR_HOSTIF_TRAP_ID:
             if(p_attr->value.oid ==
                                SAI_HOSTIF_TRAP_TYPE_SAMPLEPACKET)
@@ -129,6 +125,10 @@ static t_std_error ndi_packet_get_attr (const sai_attribute_t *p_attr, ndi_packe
                 p_ndi_attr->trap_id = NDI_PACKET_TRAP_ID_L3_MTU_ERROR;
             else
                 p_ndi_attr->trap_id = p_attr->value.oid;
+            break;
+
+        case SAI_HOSTIF_PACKET_ATTR_BRIDGE_ID:
+            // Handle the .1q or .1d bridge id on which packet ingressed
             break;
 
         case SAI_HOSTIF_PACKET_ATTR_HOSTIF_TX_TYPE:

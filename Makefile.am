@@ -16,15 +16,19 @@ libopx_nas_ndi_la_SOURCES= src/hal_shell.c  src/nas_ndi_init.c \
            src/nas_ndi_route.c src/nas_ndi_utils.cpp \
            src/nas_ndi_fc_stat.cpp  src/nas_ndi_packet.c src/nas_ndi_qos_policer.cpp \
            src/nas_ndi_router_interface.c \
-           src/nas_ndi_hash.c src/nas_ndi_plat_stat.c  src/nas_ndi_qos_port.cpp \
+           src/nas_ndi_hash.c src/nas_ndi_qos_port.cpp \
            src/nas_ndi_sflow.cpp \
-	   src/nas_ndi_obj_cache.cpp \
-	   src/nas_ndi_qos_port_pool.cpp \
-	   src/nas_ndi_bridge.cpp \
-	   src/nas_ndi_l2mc.cpp \
-	   src/nas_ndi_mcast.cpp \
+           src/nas_ndi_obj_cache.cpp \
+           src/nas_ndi_qos_port_pool.cpp \
+           src/nas_ndi_bridge.cpp \
+           src/nas_ndi_l2mc.cpp \
+           src/nas_ndi_mcast.cpp \
            src/nas_ndi_qos_wred_ecn.cpp \
-           src/nas_ndi_vlan.cpp 
+           src/nas_ndi_vlan.cpp \
+           src/nas_ndi_tunnel.cpp \
+           src/nas_ndi_tunnel_map.cpp \
+           src/nas_ndi_plat_stat.c \
+           src/nas_ndi_tunnel_obj.cpp
 
 libopx_nas_ndi_la_CPPFLAGS= -D_FILE_OFFSET_BITS=64 -I$(top_srcdir)/inc/opx -I$(includedir)/opx
 

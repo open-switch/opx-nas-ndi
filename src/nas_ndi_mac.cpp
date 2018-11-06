@@ -29,10 +29,13 @@
 #include "saistatus.h"
 #include "saitypes.h"
 #include "std_mac_utils.h"
+#include "nas_ndi_mac_utl.h"
+
 #include <stdio.h>
 #include <map>
 #include <functional>
 #include <string.h>
+#include <inttypes.h>
 
 #define MAC_STR_LEN 20
 
@@ -68,50 +71,87 @@ bool ndi_mac_get_vlan_id(sai_object_id_t oid, hal_vlan_id_t & vlan_id){
     ndi_virtual_obj_t obj;
     obj.oid = oid;
     if(!nas_ndi_get_virtual_obj(&obj,ndi_virtual_obj_query_type_FROM_OBJ)){
-        NDI_MAC_LOG(ERR,"Failed to find vlan object id for vlan obj id %lu",oid);
+        NDI_MAC_LOG(ERR,"Failed to find vlan object id for vlan obj id %llx",oid);
         return false;
     }
     vlan_id = obj.vid;
     return true;
 }
 
-static bool ndi_mac_get_brport(ndi_mac_entry_t * entry, sai_object_id_t & br_port){
-     ndi_brport_obj_t brport_obj;
+static bool _get_sai_port_id(ndi_mac_entry_t *entry, ndi_brport_obj_t & brport_obj){
     if (entry->ndi_lag_id != 0) {
         brport_obj.port_obj_id = entry->ndi_lag_id;
+        return true;
+    }
 
-    } else {
-        if ((ndi_sai_port_id_get(entry->port_info.npu_id,
-                        entry->port_info.npu_port, &brport_obj.port_obj_id)) != STD_ERR_OK) {
-            NDI_MAC_LOG(ERR, "Not able to find SAI port id for npu:%d port:%d",
+    if ((ndi_sai_port_id_get(entry->port_info.npu_id,
+            entry->port_info.npu_port, &brport_obj.port_obj_id)) == STD_ERR_OK) {
+            return true;
+    }
+
+    NDI_MAC_LOG(ERR, "Not able to find SAI port id for npu:%d port:%d",
                 entry->port_info.npu_id, entry->port_info.npu_port);
-            return false;
-        }
+    return false;
+}
+
+
+static bool ndi_mac_get_brport(ndi_mac_entry_t * entry, sai_object_id_t & br_port){
+    ndi_brport_obj_t brport_obj;
+    if(!_get_sai_port_id(entry,brport_obj)){
+        return false;
     }
 
     if(!nas_ndi_get_bridge_port_obj(&brport_obj,ndi_brport_query_type_FROM_PORT)){
-        NDI_MAC_LOG(ERR,"Failed to find bridge port for port %lu",brport_obj.port_obj_id);
+        NDI_MAC_LOG(ERR,"Failed to find bridge port for port %llx",brport_obj.port_obj_id);
         return false;
     }
 
     br_port = brport_obj.brport_obj_id;
+    if (br_port == SAI_NULL_OBJECT_ID) {
+         NDI_MAC_LOG(ERR,"Failed to find bridge port for sai lag or port 0x%llx",brport_obj.port_obj_id);
+         return false;
+    }
     return true;
 }
 
 
-static bool ndi_mac_get_port(sai_object_id_t brport, sai_object_id_t & port, ndi_port_type_t & port_type){
-     ndi_brport_obj_t brport_obj;
-    brport_obj.brport_obj_id = brport;
+static bool _ndi_mac_get_bridge_port_from_pv(ndi_mac_entry_t * _entry, sai_object_id_t & sai_oid){
 
-    if(!nas_ndi_get_bridge_port_obj(&brport_obj,ndi_brport_query_type_FROM_BRPORT)){
-        NDI_MAC_LOG(ERR,"Failed to find bridge port for port %lu",brport_obj.port_obj_id);
+    ndi_brport_obj_t _br_port;
+
+    if(!_get_sai_port_id(_entry,_br_port)){
         return false;
     }
 
-    port = brport_obj.port_obj_id;
-    port_type = brport_obj.port_type;
+    _br_port.vlan_id = _entry->vlan_id;
+
+     if(!nas_ndi_get_bridge_port_obj(&_br_port,ndi_brport_query_type_FROM_PORT_VLAN)){
+         NDI_MAC_LOG(ERR,"Failed to find bridge port for port %llx",_br_port.port_obj_id);
+         return false;
+     }
+
+    sai_oid = _br_port.brport_obj_id;
     return true;
 }
+
+
+static bool _get_brport_from_entry(ndi_mac_entry_t * entry, sai_object_id_t & brport){
+    if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_LOCAL){
+        if(_ndi_mac_get_bridge_port_from_pv(entry,brport)){
+            return true;
+        }
+    }else if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_REMOTE){
+        brport = entry->endpoint_ip_port;
+        return true;
+    }else{
+         if(ndi_mac_get_brport(entry,brport)){
+           return true;
+         }
+    }
+
+    return false;
+}
+
 
 t_std_error ndi_update_mac_entry(ndi_mac_entry_t *entry, ndi_mac_attr_flags attr_changed)
 {
@@ -133,10 +173,15 @@ t_std_error ndi_update_mac_entry(ndi_mac_entry_t *entry, ndi_mac_attr_flags attr
 
     memcpy(&(sai_mac_entry.mac_address), entry->mac_addr, HAL_MAC_ADDR_LEN);
     sai_object_id_t vlan_oid;
-    if(!ndi_mac_get_vlan_oid(entry->vlan_id,vlan_oid)){
-        return STD_ERR(MAC,FAIL,0);
+    if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1Q){
+        if(!ndi_mac_get_vlan_oid(entry->vlan_id,vlan_oid)){
+            return STD_ERR(MAC,FAIL,0);
+        }
+        sai_mac_entry.bv_id = vlan_oid;
+    }else {
+        sai_mac_entry.bv_id = entry->bridge_id;
     }
-    sai_mac_entry.bv_id = vlan_oid;
+
     sai_mac_entry.switch_id = ndi_switch_id_get();
 
     switch (attr_changed) {
@@ -144,8 +189,9 @@ t_std_error ndi_update_mac_entry(ndi_mac_entry_t *entry, ndi_mac_attr_flags attr
         {
 
             sai_object_id_t brport;
-            if(!ndi_mac_get_brport(entry,brport)){
-                return STD_ERR(MAC,FAIL,0);
+            if(!_get_brport_from_entry(entry,brport)){
+                NDI_MAC_LOG(ERR,"Failed to get bridge port for entry type %d",entry->mac_entry_type);
+                return STD_ERR(MAC,PARAM,0);
             }
             sai_attr.id = SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID;
             sai_attr.value.oid = brport;
@@ -171,13 +217,49 @@ t_std_error ndi_update_mac_entry(ndi_mac_entry_t *entry, ndi_mac_attr_flags attr
 }
 
 
+static bool _get_port_vlan_from_bridge_port(sai_object_id_t & brport ,ndi_mac_entry_t * entry){
+    ndi_brport_obj_t _br_port;
+    _br_port.brport_obj_id  = brport;
+
+    if(!nas_ndi_get_bridge_port_obj(&_br_port,ndi_brport_query_type_FROM_BRPORT)){
+        NDI_MAC_LOG(ERR,"Failed to find bridge port for port %llx",_br_port.port_obj_id);
+        return false;
+    }
+
+    if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_LOCAL){
+        if (_br_port.brport_type == ndi_brport_type_SUBPORT_UNTAG) {
+            EV_LOGGING(NDI,DEBUG,"NDI-MAC","returning 0 vlan id for brport %llx with real vlan id %d",
+                                _br_port.port_obj_id, _br_port.vlan_id);
+            entry->vlan_id = 0;
+        } else {
+            entry->vlan_id = _br_port.vlan_id;
+        }
+    }
+
+    if(_br_port.port_type == ndi_port_type_PORT){
+        if (ndi_npu_port_id_get(_br_port.port_obj_id,&entry->port_info.npu_id,
+                                &entry->port_info.npu_port) != STD_ERR_OK) {
+            EV_LOGGING(NDI,DEBUG, "NDI-MAC", "Port get failed: sai port 0x%llx",_br_port.port_obj_id);
+            return false;
+        }
+    }else if (_br_port.port_type == ndi_port_type_LAG){
+        entry->ndi_lag_id = _br_port.port_obj_id;
+    }else{
+        NDI_MAC_LOG(ERR,"Invalid Port type %d when getting the bridge port",_br_port.port_type);
+        return false;
+    }
+
+    return true;
+}
+
+
 t_std_error ndi_create_mac_entry(ndi_mac_entry_t *entry)
 {
-
     uint32_t attr_idx = 0;
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     sai_fdb_entry_t sai_mac_entry;
     sai_attribute_t sai_attr[NDI_MAC_ENTRY_ATTR_MAX -1];
+    sai_object_id_t sai_brport;
 
     if (entry == NULL) {
         NDI_MAC_LOG(ERR,"Entry passed to create MAC entry is null");
@@ -191,24 +273,48 @@ t_std_error ndi_create_mac_entry(ndi_mac_entry_t *entry)
         return STD_ERR(MAC,FAIL,0);
     }
 
-
     memcpy(&(sai_mac_entry.mac_address), entry->mac_addr, HAL_MAC_ADDR_LEN);
     sai_mac_entry.switch_id = ndi_switch_id_get();
-    sai_object_id_t vlan_oid =0;
-    if(!ndi_mac_get_vlan_oid(entry->vlan_id,vlan_oid)){
-        return STD_ERR(MAC,FAIL,0);
+
+    if(!_get_brport_from_entry(entry,sai_brport)){
+        NDI_MAC_LOG(ERR,"Failed to get bridge port for entry type %d",entry->mac_entry_type);
+        return STD_ERR(MAC,PARAM,0);
     }
-    sai_mac_entry.bv_id = vlan_oid;
-    sai_object_id_t brport;
-    if(!ndi_mac_get_brport(entry,brport)){
-        return STD_ERR(MAC,FAIL,0);
+
+    if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_LOCAL){
+        sai_mac_entry.bv_id = entry->bridge_id;
+    }else if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_REMOTE){
+        sai_mac_entry.bv_id = entry->bridge_id;
+        sai_attr[attr_idx].id= SAI_FDB_ENTRY_ATTR_ENDPOINT_IP;
+        if(entry->endpoint_ip.af_index == HAL_INET4_FAMILY){
+            sai_attr[attr_idx].value.ipaddr.addr.ip4 = entry->endpoint_ip.u.ipv4.s_addr;
+            sai_attr[attr_idx++].value.ipaddr.addr_family = SAI_IP_ADDR_FAMILY_IPV4;
+        }else if(entry->endpoint_ip.af_index == HAL_INET6_FAMILY){
+            memcpy(sai_attr[attr_idx].value.ipaddr.addr.ip6 ,entry->endpoint_ip.u.ipv6.s6_addr,
+                    sizeof(sai_attr[attr_idx].value.ipaddr.addr.ip6));
+            sai_attr[attr_idx++].value.ipaddr.addr_family = SAI_IP_ADDR_FAMILY_IPV6;
+        }else{
+            NDI_MAC_LOG(ERR,"Invalid address family for remote IP %d",entry->endpoint_ip.af_index);
+            return STD_ERR(MAC,FAIL,0);
+        }
+    }else{
+        /*
+         * if mac_entry_type is not passed then assume it is 1Q for backward compatibility
+         */
+        sai_object_id_t vlan_oid = 0;
+        if(!ndi_mac_get_vlan_oid(entry->vlan_id,vlan_oid)){
+            NDI_MAC_LOG(ERR,"Failed to get vlan object id for vlan id %d",entry->vlan_id);
+            return STD_ERR(MAC,FAIL,0);
+        }
+        sai_mac_entry.bv_id = vlan_oid;
     }
+
 
     sai_attr[attr_idx].id = SAI_FDB_ENTRY_ATTR_TYPE;
     sai_attr[attr_idx++].value.s32 = (entry->is_static) ? SAI_FDB_ENTRY_TYPE_STATIC : SAI_FDB_ENTRY_TYPE_DYNAMIC;
 
     sai_attr[attr_idx].id = SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID;
-    sai_attr[attr_idx++].value.oid = brport;
+    sai_attr[attr_idx++].value.oid = sai_brport;
 
     sai_attr[attr_idx].id = SAI_FDB_ENTRY_ATTR_PACKET_ACTION;
     sai_attr[attr_idx++].value.s32 = ndi_mac_sai_packet_action_get(entry->action);
@@ -222,10 +328,10 @@ t_std_error ndi_create_mac_entry(ndi_mac_entry_t *entry)
     return STD_ERR_OK;
 }
 
-
- bool ndi_mac_handle_port_delete(ndi_mac_entry_t *entry, sai_attribute_t * sai_attrs,size_t & ix){
+bool ndi_mac_handle_port_delete(ndi_mac_entry_t *entry, sai_attribute_t * sai_attrs,size_t & ix){
      sai_object_id_t brport;
-     if(!ndi_mac_get_brport(entry,brport)){
+
+     if(!_get_brport_from_entry(entry,brport)){
          return false;
      }
 
@@ -234,7 +340,7 @@ t_std_error ndi_create_mac_entry(ndi_mac_entry_t *entry)
      return true;
 }
 
- bool ndi_mac_handle_vlan_delete(ndi_mac_entry_t *entry, sai_attribute_t * sai_attrs,size_t & ix){
+bool ndi_mac_handle_vlan_delete(ndi_mac_entry_t *entry, sai_attribute_t * sai_attrs,size_t & ix){
     sai_object_id_t vlan_oid;
     if(!ndi_mac_get_vlan_oid(entry->vlan_id,vlan_oid)){
         return false;
@@ -244,7 +350,23 @@ t_std_error ndi_create_mac_entry(ndi_mac_entry_t *entry)
     return true;
 }
 
- bool ndi_mac_handle_port_vlan_delete(ndi_mac_entry_t *entry, sai_attribute_t * sai_attrs,size_t & ix){
+bool ndi_mac_handle_bridge_delete(ndi_mac_entry_t *entry, sai_attribute_t * sai_attrs,size_t & ix){
+    sai_attrs[ix].id = SAI_FDB_FLUSH_ATTR_BV_ID;
+    sai_attrs[ix++].value.oid = entry->bridge_id;
+    return true;
+}
+
+bool ndi_mac_handle_port_vlan_subport_delete(ndi_mac_entry_t *entry, sai_attribute_t * sai_attrs, size_t &ix){
+    sai_object_id_t brport;
+    if(_ndi_mac_get_bridge_port_from_pv(entry,brport)){
+        sai_attrs[ix].id = SAI_FDB_FLUSH_ATTR_BRIDGE_PORT_ID;
+        sai_attrs[ix++].value.oid = brport;
+        return true;
+    }
+    return false;
+}
+
+bool ndi_mac_handle_port_vlan_delete(ndi_mac_entry_t *entry, sai_attribute_t * sai_attrs,size_t & ix){
     return ndi_mac_handle_port_delete(entry,sai_attrs,ix) && ndi_mac_handle_vlan_delete(entry,sai_attrs,ix);
 }
 
@@ -255,8 +377,20 @@ static auto _del_func_handlers = new  std::map<int,bool (*)
     {NDI_MAC_DEL_BY_PORT,ndi_mac_handle_port_delete },
     {NDI_MAC_DEL_BY_VLAN,ndi_mac_handle_vlan_delete },
     {NDI_MAC_DEL_BY_PORT_VLAN, ndi_mac_handle_port_vlan_delete},
+    {NDI_MAC_DEL_BY_BRIDGE, ndi_mac_handle_bridge_delete},
+    {NDI_MAC_DEL_BY_BRIDGE_ENDPOINT_IP, ndi_mac_handle_port_delete},
+    {NDI_MAC_DEL_BY_PORT_VLAN_SUBPORT, ndi_mac_handle_port_vlan_subport_delete}
 };
 
+static auto _flush_type_str = new  std::map<int,const char *>
+{
+    {NDI_MAC_DEL_BY_PORT, "Port " },
+    {NDI_MAC_DEL_BY_VLAN, "Vlan "},
+    {NDI_MAC_DEL_BY_PORT_VLAN, "Port-Vlan"},
+    {NDI_MAC_DEL_BY_BRIDGE, " 1D Bridge" },
+    {NDI_MAC_DEL_BY_BRIDGE_ENDPOINT_IP, "Remote Endport IP" },
+    {NDI_MAC_DEL_BY_PORT_VLAN_SUBPORT, "1D bridge subport" }
+};
 
 
 t_std_error ndi_delete_mac_entry(ndi_mac_entry_t *entry, ndi_mac_delete_type_t delete_type, bool type_set)
@@ -278,11 +412,17 @@ t_std_error ndi_delete_mac_entry(ndi_mac_entry_t *entry, ndi_mac_delete_type_t d
     if(delete_type == NDI_MAC_DEL_SINGLE_ENTRY){
         sai_fdb_entry_t sai_mac_entry;
         memcpy(&(sai_mac_entry.mac_address), entry->mac_addr, HAL_MAC_ADDR_LEN);
-        sai_object_id_t vlan_oid;
-        if(!ndi_mac_get_vlan_oid(entry->vlan_id,vlan_oid)){
-            return STD_ERR(MAC,FAIL,0);
+
+        if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_LOCAL ||
+            entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_REMOTE){
+            sai_mac_entry.bv_id = entry->bridge_id;
+        }else{
+            sai_object_id_t vlan_oid;
+            if(!ndi_mac_get_vlan_oid(entry->vlan_id,vlan_oid)){
+                return STD_ERR(MAC,FAIL,0);
+            }
+            sai_mac_entry.bv_id = vlan_oid;
         }
-        sai_mac_entry.bv_id = vlan_oid;
         sai_mac_entry.switch_id = ndi_switch_id_get();
         if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->remove_fdb_entry(&sai_mac_entry))
                                                                 != SAI_STATUS_SUCCESS) {
@@ -307,13 +447,19 @@ t_std_error ndi_delete_mac_entry(ndi_mac_entry_t *entry, ndi_mac_delete_type_t d
 
 
     if(delete_type != NDI_MAC_DEL_ALL_ENTRIES){
+
         auto it = _del_func_handlers->find(delete_type);
         if(it == _del_func_handlers->end()){
             NDI_MAC_LOG(ERR,"Invalid delete type passed %d",delete_type);
             return STD_ERR(MAC,PARAM,0);
         }
+        auto flush_str_it  = _flush_type_str->find(delete_type);
+        if(flush_str_it != _flush_type_str->end()){
+            NDI_MAC_LOG(DEBUG,"%s based Flush request ",flush_str_it->second);
+        }
 
         if(!it->second(entry,fdb_flush_attr,attr_idx)){
+            NDI_MAC_LOG(ERR,"Failed to flush MAC entries for flush type %d " , delete_type);
             return STD_ERR(MAC,FAIL,0);
         }
     }
@@ -345,6 +491,18 @@ t_std_error ndi_mac_event_notify_register(ndi_mac_event_notification_fn reg_fn)
     return ret_code;
 }
 
+static bool _fill_mac_entry_from_brport(ndi_mac_entry_t * mac_entry, sai_object_id_t oid){
+    if(mac_entry->mac_entry_type ==NDI_MAC_ENTRY_TYPE_1D_REMOTE ){
+        mac_entry->endpoint_ip_port = oid;
+        return true;
+    }
+
+    if(_get_port_vlan_from_bridge_port(oid,mac_entry)){
+        return true;
+    }
+    return false;
+}
+
 t_std_error ndi_get_mac_entry_attr(ndi_mac_entry_t *mac_entry)
 {
     if (mac_entry == NULL) {
@@ -370,11 +528,15 @@ t_std_error ndi_get_mac_entry_attr(ndi_mac_entry_t *mac_entry)
     sai_attrs[sai_attr_ix++].id = SAI_FDB_ENTRY_ATTR_TYPE;
     sai_attrs[sai_attr_ix++].id = SAI_FDB_ENTRY_ATTR_PACKET_ACTION;
 
-    sai_object_id_t vlan_oid = 0;
-    if(!ndi_mac_get_vlan_oid(mac_entry->vlan_id,vlan_oid)){
-        return STD_ERR(MAC,PARAM,0);
+    if(mac_entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1Q){
+        sai_object_id_t vlan_oid = 0;
+        if(!ndi_mac_get_vlan_oid(mac_entry->vlan_id,vlan_oid)){
+            return STD_ERR(MAC,PARAM,0);
+        }
+        sai_mac_entry.bv_id = vlan_oid;
+    }else{
+        sai_mac_entry.bv_id = mac_entry->bridge_id;
     }
-    sai_mac_entry.bv_id = vlan_oid;
 
     if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->get_fdb_entry_attribute
                     (&sai_mac_entry,sai_attr_ix,sai_attrs))!= SAI_STATUS_SUCCESS) {
@@ -383,22 +545,10 @@ t_std_error ndi_get_mac_entry_attr(ndi_mac_entry_t *mac_entry)
     }
 
     sai_attr_ix = 0;
-    sai_object_id_t port_oid;
-    ndi_port_type_t port_type;
-    if(!ndi_mac_get_port(sai_attrs[sai_attr_ix++].value.oid,port_oid,port_type)){
-        return STD_ERR(MAC,FAIL,0);
-    }
 
-    if(port_type == ndi_port_type_LAG){
-        mac_entry->ndi_lag_id = port_oid;
-    }else if(port_type == ndi_port_type_PORT){
-        if (ndi_npu_port_id_get(port_oid,&mac_entry->port_info.npu_id,
-                                &mac_entry->port_info.npu_port) != STD_ERR_OK) {
-            EV_LOGGING(NDI,DEBUG, "NDI-MAC", "Port get failed: sai port 0x%lu", port_oid);
-            return STD_ERR(INTERFACE, FAIL, 0);
-        }
-    }else{
-        NDI_MAC_LOG(ERR,"Invalid port type retured %d",port_type);
+
+    if(!_fill_mac_entry_from_brport(mac_entry,sai_attrs[sai_attr_ix++].value.oid)){
+        return STD_ERR(MAC,FAIL,0);
     }
 
     mac_entry->is_static = (sai_attrs[sai_attr_ix++].value.s32 == SAI_FDB_ENTRY_TYPE_STATIC) ? true : false;
@@ -435,7 +585,7 @@ t_std_error ndi_flush_bridge_port_entry(sai_object_id_t brport_oid) {
     fdb_flush_attr.value.oid = brport_oid;
     if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->flush_fdb_entries(ndi_switch_id_get(),
         fdb_flush_attr_count, (const sai_attribute_t *)&fdb_flush_attr)) != SAI_STATUS_SUCCESS) {
-        NDI_MAC_LOG(ERR, "Failed to remove mac entries for bridge port 0x%lu", brport_oid);
+        NDI_MAC_LOG(ERR,"NDI-MAC", "Failed to remove mac entries for bridge port 0x%llx", brport_oid);
         return sai_to_ndi_err_translate(sai_ret);
     }
     return STD_ERR_OK;
@@ -477,4 +627,114 @@ bool ndi_mac_flush_vlan(hal_vlan_id_t vlan_id){
 
     return true;
 
+}
+
+
+void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *data)
+{
+    ndi_mac_entry_t ndi_mac_entry_temp;
+    ndi_mac_event_type_t ndi_mac_event_type_temp;
+    unsigned int attr_idx;
+    unsigned int entry_idx;
+    BASE_MAC_PACKET_ACTION_t action;
+    bool is_lag_index = false;
+
+    npu_id_t npu_id = ndi_npu_id_get();
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+
+    if (ndi_db_ptr == NULL) {
+        NDI_MAC_LOG(ERR,"invalid npu_id 0x%" PRIx64 " ", npu_id);
+        return;
+    }
+
+    if (data == NULL) {
+        NDI_MAC_LOG(ERR,"Invalid parameters passed : notification data is NULL");
+        return;
+    }
+
+
+    for (entry_idx = 0 ; entry_idx < count; entry_idx++) {
+        memset(&ndi_mac_entry_temp,0,sizeof(ndi_mac_entry_temp));
+        is_lag_index = false;
+        if(data[entry_idx].attr == NULL) {
+            NDI_MAC_LOG(ERR,"Invalid parameters passed : entry index: %d \
+                    fdb_entry=%s, attr=%s, attr_count=%d.",entry_idx,
+                    data[entry_idx].fdb_entry, data[entry_idx].attr,
+                    data[entry_idx].attr_count);
+            /*Ignore the entry. Continue with next entry*/
+            continue;
+        }
+        /* Setting the default values */
+        ndi_mac_entry_temp.is_static = false;
+        ndi_mac_entry_temp.action =  BASE_MAC_PACKET_ACTION_FORWARD;
+        sai_object_id_t brport_id = 0;
+        bool _is_remote = false;
+
+        for (attr_idx = 0; attr_idx < data[entry_idx].attr_count; attr_idx++) {
+            switch (data[entry_idx].attr[attr_idx].id) {
+
+                case SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID:
+                    brport_id= data[entry_idx].attr[attr_idx].value.oid;
+                    break;
+
+                case SAI_FDB_ENTRY_ATTR_TYPE :
+                    if ((data[entry_idx].attr[attr_idx].value.s32) ==  SAI_FDB_ENTRY_TYPE_STATIC)
+                        ndi_mac_entry_temp.is_static = true;
+                    else
+                        ndi_mac_entry_temp.is_static = false;
+                    break;
+
+                case SAI_FDB_ENTRY_ATTR_PACKET_ACTION :
+                    action = ndi_mac_packet_action_get((sai_packet_action_t)data[entry_idx].attr[attr_idx].value.s32);
+                    ndi_mac_entry_temp.action = action;
+                    break;
+
+                case SAI_FDB_ENTRY_ATTR_ENDPOINT_IP:
+                    if(data[entry_idx].attr[attr_idx].value.ipaddr.addr_family == SAI_IP_ADDR_FAMILY_IPV4){
+                        ndi_mac_entry_temp.endpoint_ip.u.v4_addr = data[entry_idx].attr[attr_idx].
+                                                                                  value.ipaddr.addr.ip4;
+                        ndi_mac_entry_temp.endpoint_ip.af_index = HAL_INET4_FAMILY;
+                    }else{
+                        memcpy(ndi_mac_entry_temp.endpoint_ip.u.v6_addr,data[entry_idx].attr[attr_idx].
+                                  value.ipaddr.addr.ip6,sizeof(ndi_mac_entry_temp.endpoint_ip.u.v6_addr));
+                        ndi_mac_entry_temp.endpoint_ip.af_index = HAL_INET6_FAMILY;
+                    }
+                    _is_remote = true;
+                    break;
+
+                default:
+                    NDI_MAC_LOG(ERR,"Invalid attr id : %d.", data[entry_idx].attr[attr_idx].id);
+                    break;
+            }
+        }
+
+        ndi_mac_event_type_temp = ndi_mac_event_type_get(data[entry_idx].event_type);
+        ndi_virtual_obj_t obj;
+        obj.oid = data[entry_idx].fdb_entry.bv_id;
+
+        if(nas_ndi_get_virtual_obj(&obj,ndi_virtual_obj_query_type_FROM_OBJ)){
+            ndi_mac_entry_temp.vlan_id = obj.vid;
+            ndi_mac_entry_temp.mac_entry_type = NDI_MAC_ENTRY_TYPE_1Q;
+        }else {
+            ndi_mac_entry_temp.bridge_id = obj.oid;
+            if(_is_remote){
+                ndi_mac_entry_temp.mac_entry_type = NDI_MAC_ENTRY_TYPE_1D_REMOTE;
+            }else{
+                ndi_mac_entry_temp.mac_entry_type = NDI_MAC_ENTRY_TYPE_1D_LOCAL;
+            }
+        }
+
+        if(!_fill_mac_entry_from_brport(&ndi_mac_entry_temp,brport_id)){
+            NDI_MAC_LOG(ERR,"Failed to fill mac entry information from bridge port id");
+            return;
+        }
+        memcpy(ndi_mac_entry_temp.mac_addr, data[entry_idx].fdb_entry.mac_address, HAL_MAC_ADDR_LEN);
+        is_lag_index = ndi_mac_entry_temp.ndi_lag_id ? true : false;
+        if (ndi_db_ptr->switch_notification->mac_event_notify_cb != NULL) {
+            ndi_db_ptr->switch_notification->mac_event_notify_cb(npu_id, ndi_mac_event_type_temp,
+                    &ndi_mac_entry_temp, is_lag_index);
+        } else {
+            return;
+        }
+    }
 }
