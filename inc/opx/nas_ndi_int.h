@@ -46,6 +46,8 @@
 extern "C"{
 #endif
 
+
+
 /**
  * @class SAI API Table
  * @brief Contains pointer to the SAI API tables for L2 and L3 feature-set.
@@ -77,6 +79,7 @@ typedef struct _ndi_sai_api_tbl_t
     sai_buffer_api_t            *n_sai_buffer_api_tbl;
     sai_hash_api_t              *n_sai_hash_api_tbl;
     sai_udf_api_t               *n_sai_udf_api_tbl;
+    sai_tunnel_api_t            *n_sai_tunnel_api_tbl;
     sai_l2mc_group_api_t        *n_sai_l2mc_grp_api_tbl;
     sai_l2mc_api_t              *n_sai_mcast_api_tbl;
     sai_bridge_api_t            *n_sai_bridge_api_tbl;

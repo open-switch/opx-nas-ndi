@@ -336,8 +336,43 @@ t_std_error ndi_set_lag_learn_mode(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
 
 }
 
+t_std_error ndi_lag_set_packet_drop(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
+                                     ndi_port_drop_mode_t mode, bool enable)
+{
+    sai_attribute_t drop_mode_attr;
+    if (mode == NDI_PORT_DROP_UNTAGGED) {
+        drop_mode_attr.id = SAI_LAG_ATTR_DROP_UNTAGGED;
+    } else if (mode == NDI_PORT_DROP_TAGGED) {
+        drop_mode_attr.id = SAI_LAG_ATTR_DROP_TAGGED;
+    } else {
+        NDI_LAG_LOG_ERROR("Unknown tag untag packet drop mode %d", mode);
+        return STD_ERR(INTERFACE, PARAM, 0);
+    }
 
+    drop_mode_attr.value.booldata = enable;
+
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        return STD_ERR(INTERFACE, CFG,0);
+    }
+
+    if((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->set_lag_attribute(ndi_lag_id,&drop_mode_attr))
+            != SAI_STATUS_SUCCESS) {
+        NDI_LAG_LOG_ERROR("Sai failure to set tag-untag drop mode %d to %d  on lagid %lu",
+                                        mode, enable, ndi_lag_id);
+        return STD_ERR(INTERFACE, CFG, sai_ret);
+    }
+
+    NDI_LAG_LOG_INFO("Set Tag /untag drop: mode %d , enable %d,  NDI lag id %lu",
+                                        mode, enable, ndi_lag_id);
+    return STD_ERR_OK;
 }
+}
+
+
+
 
 
 

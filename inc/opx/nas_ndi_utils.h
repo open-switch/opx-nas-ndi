@@ -55,6 +55,12 @@ ndi_switch_oper_status_t ndi_oper_status_translate(sai_switch_oper_status_t oper
 
 bool ndi_to_sai_if_stats(ndi_stat_id_t ndi_id, sai_port_stat_t * sai_id);
 
+bool ndi_to_sai_bridge_1d_stats(ndi_stat_id_t ndi_id, sai_bridge_stat_t *sai_id);
+
+bool ndi_to_sai_bridge_port_stats(ndi_stat_id_t ndi_id, sai_bridge_port_stat_t *sai_id);
+
+bool ndi_to_sai_tunnel_stats(ndi_stat_id_t ndi_id, sai_tunnel_stat_t *sai_id);
+
 bool ndi_to_sai_vlan_stats(ndi_stat_id_t ndi_id, sai_vlan_stat_t * sai_id);
 
 t_std_error ndi_switch_state_change_cb_register(npu_id_t npu_id,
@@ -95,10 +101,6 @@ static inline t_std_error ndi_utl_mk_std_err (enum e_std_error_subsystems sub,
 
 t_std_error handle_profile_map(sai_switch_profile_id_t profile_id,
                                const char *profile_file_name);
-
-int ndi_profile_get_next_value(sai_switch_profile_id_t profile_id, const char **variable, const char **value);
-
-const char *ndi_profile_get_value(sai_switch_profile_id_t profile_id, const char *variable);
 
 static inline t_std_error ndi_utl_mk_qos_std_err(sai_status_t st)
 {

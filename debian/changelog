@@ -1,3 +1,26 @@
+opx-nas-ndi (4.8.0) unstable; urgency=medium
+
+  * Feature: Static L2 VxLAN Support
+  * Bugfix: Fix NAS MAC callback event
+  * Bugfix: Fix IP address family for MAC events
+  * Bugfix: Check bridgeport ID before flushing
+  * Update: Add IPv6 Extended route configuration handle
+  * Update: Add handle_profile_map() back to the code
+  * Update: Add split horizon attribute set for subport
+  * Update: Ignore MAC flush event from SAI
+  * Update: Add support for virtual rif attribute as part of RIF configuration
+  * Update: Add IPv4 and IPv6 interface statistics attributes
+  * Update: Add support for setting multicast lookup key in VLAN
+  * Update: Add support port VLAN subport flush
+  * Update: Clear stat implementation for bridge, bridge port, and tunnel
+  * Update: ACL BRIDGE_TYPE filtering
+  * Update: Support ACL table utilization
+  * Update: API to support tag/untag packet drop on LAG
+  * Update: Support to retrieve ACL profile information and program to SAI
+            as key-value pair
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Tue, 06 Nov 2018 14:44:33 -0800
+
 opx-nas-ndi (4.6.0+opx1) unstable; urgency=medium
 
   * Update: Support extended IPv6 prefix installation
@@ -78,7 +101,7 @@ opx-nas-ndi (3.13.0) unstable; urgency=medium
   * Update: If neighbor state is 0, dont program the entry in the host table rather keep it for route with link local nexthop.
   * Update: ACL bind point and SAI 1.0 changes for ACL
   * Update: Update dynamic buffer threshold
-  * Update: The value for sample packet returned by nas is changed to SAI_HOSTIF_USER_DEFINED_TRAP_ID_SAMPLEPACKET. 
+  * Update: The value for sample packet returned by nas is changed to SAI_HOSTIF_USER_DEFINED_TRAP_ID_SAMPLEPACKET.
   * Update: Added code to return the trapid for match rule packet
   * Update: Pushing interface type from NAS to SAI for SFP media types.
   * Update: Miscellaneous performance improvements and optimizations
@@ -93,7 +116,7 @@ opx-nas-ndi (3.13.0) unstable; urgency=medium
   * Feature: Added support for ACL UDF
   * Bugfix: Miscellaneous bug fixes
   * Cleanup: Miscellaneous cleanup
- 
+
  -- Dell EMC <ops-dev@lists.openswitch.net>  Tue, 20 Jun 2017 14:44:33 -0800
 
 opx-nas-ndi (1.0.2) unstable; urgency=medium

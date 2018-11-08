@@ -3,7 +3,7 @@
 #Script will kill the base_nas svc and then execute ./run_test
 
 touch /etc/no-reboot
-nas_pid=`ps aux | grep '/opt/dell/os10/bin/base_nas$' | grep -v 'grep' | awk '{print $2}'`
+nas_pid=`ps aux | grep '/usr/bin/opx_nas_daemon$' | grep -v 'grep' | awk '{print $2}'`
 if [ -n "$nas_pid" ]; then
     echo "Kill base_nas daemon with PID $nas_pid"
     kill -9 $nas_pid
@@ -18,6 +18,12 @@ fi
 ./nas_ndi_init_unittest
 if [ "$?" != "0" ]; then
     echo "Test Failed for NDI-INIT UT"
+    exit 1
+fi
+
+./nas_ndi_tunnel_map_ut
+if [ "$?" != "0" ]; then
+    echo "Test Failed for NDI-TUNNEL UT"
     exit 1
 fi
 

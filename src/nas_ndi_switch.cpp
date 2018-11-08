@@ -21,6 +21,7 @@
 extern "C" {
 #include "sai.h"
 #include "saiswitch.h"
+#include "saiextensions.h"
 }
 
 #include "nas_ndi_switch.h"
@@ -52,7 +53,7 @@ t_std_error ndi_switch_attr_get(npu_id_t npu,  sai_attribute_t *attr, size_t cou
             (uint32_t)count,attr)) != SAI_STATUS_SUCCESS) {
         NDI_LOG_TRACE("NDI-SWITCH", "Error from SAI:%d in get attrs (at least id:%d) for NPU:%d",
                       sai_ret,attr->id, (int)npu);
-         return STD_ERR(INTERFACE, CFG, sai_ret);
+         return STD_ERR(NPU, CFG, sai_ret);
     }
 
     return STD_ERR_OK;
@@ -495,4 +496,59 @@ extern "C" t_std_error ndi_switch_get_max_number_of_scheduler_group_level(npu_id
 
     return STD_ERR_OK;
 
+}
+
+extern "C" t_std_error ndi_switch_get_slice_list(npu_id_t npu_id, nas_ndi_switch_param_t *param)
+{
+    size_t          copy_count;
+    size_t          list_sz = param->obj_list.len;
+    sai_attribute_t sai_attr = {.id = SAI_SWITCH_ATTR_EXTENSIONS_ACL_SLICE_LIST};
+    sai_status_t    sai_ret;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        return STD_ERR(NPU, FAIL, 0);
+    }
+    std::vector<sai_object_id_t> shadow_slice_obj_list(list_sz);
+
+    /* start with a size and resize it as required */
+    sai_attr.value.objlist.count = param->obj_list.len;
+    sai_attr.value.objlist.list = &(shadow_slice_obj_list[0]);
+
+    NDI_LOG_INFO ("NDI-SWITCH", "ACL Slice list get, incoming list_len:%d, list_ptr:%lu",
+            param->obj_list.len, param->obj_list.vals);
+
+    sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(ndi_switch_id_get(),
+                                    1,&sai_attr);
+
+    if (sai_ret == SAI_STATUS_BUFFER_OVERFLOW) {
+        NDI_LOG_INFO ("NDI-SWITCH", "ACL Slice list get failed, input list len:%d "
+                      "returned list len:%d SAI ret:%d",
+                      param->obj_list.len, sai_attr.value.objlist.count, sai_ret);
+
+        if (param->obj_list.vals == NULL) {
+            param->obj_list.len = sai_attr.value.objlist.count;
+            return STD_ERR_OK;
+        }
+    } else if (sai_ret != SAI_STATUS_SUCCESS) {
+        NDI_LOG_ERROR("NDI-SWITCH", "ACL Slice list get failed in SAI:%d in get attrs (atleast id:%d) for NPU:%d",
+                      sai_ret, sai_attr.id, (int)npu_id);
+
+         return STD_ERR(NPU, CFG, sai_ret);
+    }
+    copy_count = sai_attr.value.objlist.count;
+
+    /* if input list length is smaller than the actual list,
+     * then copy only for the input length.
+     */
+    if (copy_count > param->obj_list.len) {
+        copy_count = param->obj_list.len;
+    }
+    param->obj_list.len = sai_attr.value.objlist.count;
+
+    for (size_t idx = 0; idx < copy_count; idx ++) {
+        param->obj_list.vals[idx] = ndi_acl_sai2ndi_slice_id(sai_attr.value.objlist.list[idx]);
+    }
+
+    return STD_ERR_OK;
 }

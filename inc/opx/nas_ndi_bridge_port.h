@@ -41,7 +41,16 @@ t_std_error nas_ndi_create_bridge_port_1Q(npu_id_t npu_id, sai_object_id_t sai_p
 t_std_error ndi_brport_attr_set_or_get_1Q(npu_id_t npu_id, sai_object_id_t port_id, bool set, sai_attribute_t *sai_attr);
 
 bool ndi_get_1q_bridge_port(sai_object_id_t *brport_oid, sai_object_id_t saiport_oid);
+
+/* For subports type 1d i.e  port and lag */
+bool ndi_get_1d_bridge_port(sai_object_id_t *brport_oid, sai_object_id_t saiport_oid,  hal_vlan_id_t vlan_id );
 bool ndi_get_1q_sai_port(sai_object_id_t brport_oid, sai_object_id_t *saiport_oid);
+
+t_std_error ndi_1d_bridge_tunnel_port_add(npu_id_t npu_id, sai_object_id_t br_oid, sai_object_id_t tunnel_oid, sai_object_id_t *bridge_port_id);
+
+t_std_error ndi_1d_bridge_tunnel_delete(npu_id_t npu_id, sai_object_id_t tun_brport_oid);
+
+t_std_error ndi_bridge_port_tunnel_stats_get(npu_id_t npu_id, sai_object_id_t tun_bridge_port_oid, ndi_stat_id_t *ndi_stat_ids, uint64_t* stats_val, size_t len);
 
 #ifdef __cplusplus
 }

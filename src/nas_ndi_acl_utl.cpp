@@ -95,6 +95,7 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
             {BASE_ACL_MATCH_TYPE_IPV6_NEXT_HEADER,   SAI_ACL_ENTRY_ATTR_FIELD_IPV6_NEXT_HEADER},
             {BASE_ACL_MATCH_TYPE_RANGE_CHECK,        SAI_ACL_ENTRY_ATTR_FIELD_ACL_RANGE_TYPE},
             {BASE_ACL_MATCH_TYPE_DROP_MARKED,        SAI_ACL_ENTRY_ATTR_FIELD_DROP_MARKED},
+            {BASE_ACL_MATCH_TYPE_BRIDGE_TYPE,        SAI_ACL_ENTRY_ATTR_FIELD_BRIDGE_TYPE},
         };
 
     auto type_map_itr = _nas2sai_entry_filter_type_map.find (ndi_filter_type);
@@ -270,6 +271,7 @@ t_std_error ndi_acl_utl_ndi2sai_tbl_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filte
             {BASE_ACL_MATCH_TYPE_IPV6_NEXT_HEADER,   SAI_ACL_TABLE_ATTR_FIELD_IPV6_NEXT_HEADER},
             {BASE_ACL_MATCH_TYPE_RANGE_CHECK,        SAI_ACL_TABLE_ATTR_FIELD_ACL_RANGE_TYPE},
             {BASE_ACL_MATCH_TYPE_DROP_MARKED,        SAI_ACL_TABLE_ATTR_FIELD_DROP_MARKED},
+            {BASE_ACL_MATCH_TYPE_BRIDGE_TYPE,        SAI_ACL_TABLE_ATTR_FIELD_BRIDGE_TYPE},
        };
 
     auto filter_type_itr = _nas2sai_tbl_filter_type_map.find (ndi_filter_type);
@@ -500,6 +502,31 @@ static void _fill_sai_filter_bool (sai_attribute_t* sai_attr_p,
     sai_attr_p->value.aclfield.data.booldata = ndi_filter_p->data.values.u32;
 }
 
+static void _fill_sai_filter_bridge_type (sai_attribute_t *sai_attr_p,
+                                          const ndi_acl_entry_filter_t* f,
+                                          nas::mem_alloc_helper_t& mem_helper)
+{
+    // Locking instances where global variables are used
+    std_mutex_simple_lock_guard g(&table_lock);
+
+    static const
+        std::unordered_map <BASE_ACL_BRIDGE_TYPE_t, sai_bridge_type_t,
+                            std::hash<int>>
+        nas2sai_brtype_map =
+        {
+            {BASE_ACL_BRIDGE_TYPE_BRIDGE_1Q, SAI_BRIDGE_TYPE_1Q},
+            {BASE_ACL_BRIDGE_TYPE_BRIDGE_1D, SAI_BRIDGE_TYPE_1D},
+        };
+
+    auto it = nas2sai_brtype_map.find(static_cast<BASE_ACL_BRIDGE_TYPE_t>(f->data.values.u32));
+
+    if (it == nas2sai_brtype_map.end()) {
+        throw std::out_of_range (std::string {"Invalid Bridge type"}
+                                 + std::to_string (f->data.values.u32));
+    }
+    sai_attr_p->value.aclfield.data.s32 = it->second;
+}
+
 t_std_error ndi_acl_utl_fill_sai_filter (sai_attribute_t *sai_attr_p,
                                          const ndi_acl_entry_filter_t *ndi_filter_p,
                                          nas::mem_alloc_helper_t& mem_helper)
@@ -529,6 +556,7 @@ t_std_error ndi_acl_utl_fill_sai_filter (sai_attribute_t *sai_attr_p,
             {NDI_ACL_FILTER_OBJ_ID_LIST,        _fill_sai_filter_oid_list},
             {NDI_ACL_FILTER_BOOL,               _fill_sai_filter_bool},
             {NDI_ACL_FILTER_U8LIST,             _fill_sai_filter_u8list},
+            {NDI_ACL_FILTER_BRIDGE_TYPE,        _fill_sai_filter_bridge_type},
         };
 
     BASE_ACL_MATCH_TYPE_t filter_type        = ndi_filter_p->filter_type;

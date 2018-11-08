@@ -22,6 +22,7 @@
 #define __NAS_NDI_ACL_UTL_H__
 
 #include "saiacl.h"
+#include "saiextensions.h"
 #include <list>
 #include <stdlib.h>
 

@@ -172,7 +172,7 @@ t_std_error ndi_cpu_port_get(npu_id_t npu_id, npu_port_t *cpu_port)
     if (cpu_port == NULL) {
         return(STD_ERR(NPU, PARAM, 0));
     }
-    *cpu_port = nas_switch_get_cpu_port_id(ndi_switch_id_get());
+    *cpu_port = nas_switch_get_cpu_port_id(npu_id);
     return(STD_ERR_OK);
 }
 
@@ -388,7 +388,7 @@ t_std_error ndi_sai_cpu_port_add(npu_id_t npu_id)
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_count = 1;
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].flags |= NDI_PORT_MAP_ACTIVE_MASK | NDI_PORT_MAP_CPU_PORT_MASK;
     g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_list.resize(1);
-    g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_list[0] = ndi_cpu_port;
+    g_ndi_port_map_tbl[npu_id][ndi_cpu_port].hwport_list[0] = 0; /*  hwport is 0 for cpu port */
     sai_entry.npu_id = npu_id;
     sai_entry.npu_port = ndi_cpu_port;
     if (ndi_saiport_map_add_entry(sai_cpu_port, &sai_entry) != true) {

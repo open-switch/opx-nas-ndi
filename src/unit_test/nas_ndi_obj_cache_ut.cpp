@@ -78,12 +78,12 @@ TEST(std_nas_ndi_obj_cache_test, ndi_virtual_obj_cache_test) {
     subport_obj.brport_obj_id = 200;
     subport_obj.port_obj_id = 3000;
     subport_obj.vlan_id =  301;
-    subport_obj.brport_type = ndi_brport_type_SUBPORT;
+    subport_obj.brport_type = ndi_brport_type_SUBPORT_TAG;
 
     subport_obj1.brport_obj_id = 201;
     subport_obj1.port_obj_id = 4098; /* same as port_obj1 */
     subport_obj1.vlan_id =  301;
-    subport_obj1.brport_type = ndi_brport_type_SUBPORT;
+    subport_obj1.brport_type = ndi_brport_type_SUBPORT_UNTAG;
 
 
 
@@ -106,6 +106,12 @@ TEST(std_nas_ndi_obj_cache_test, ndi_virtual_obj_cache_test) {
 
    obj_get.vlan_id = 301;
    obj_get.port_obj_id =3000;
+   ASSERT_TRUE(nas_ndi_get_bridge_port_obj(&obj_get, ndi_brport_query_type_FROM_PORT_VLAN));
+   cout << "query_FROM_PORT_VLAN for vlan 301 " << obj_get.brport_obj_id << " " << obj_get.port_obj_id << endl;
+
+
+   obj_get.vlan_id = 301;
+   obj_get.port_obj_id =4098;
    ASSERT_TRUE(nas_ndi_get_bridge_port_obj(&obj_get, ndi_brport_query_type_FROM_PORT_VLAN));
    cout << "query_FROM_PORT_VLAN for vlan 301 " << obj_get.brport_obj_id << " " << obj_get.port_obj_id << endl;
 
@@ -133,3 +139,5 @@ int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+

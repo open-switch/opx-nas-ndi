@@ -71,7 +71,6 @@ static void ndi_route_params_copy(sai_route_entry_t *p_sai_route,
     hal_ip_addr_t    ip_mask;
     uint32_t         af_index;
 
-    p_sai_route->switch_id = ndi_switch_id_get();
     p_sai_route->vr_id = p_route_entry->vrf_id;
 
     p_ip_prefix = &p_sai_route->destination;
@@ -267,6 +266,7 @@ t_std_error ndi_route_neighbor_add (ndi_neighbor_t *p_nbr_entry)
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(p_nbr_entry->npu_id);
     STD_ASSERT(ndi_db_ptr != NULL);
 
+    sai_nbr_entry.vr_id = p_nbr_entry->vrf_id;
     sai_nbr_entry.rif_id = p_nbr_entry->rif_id;
     ndi_sai_ip_address_copy(&sai_nbr_entry.ip_address, &p_nbr_entry->ip_addr);
 
@@ -302,6 +302,7 @@ t_std_error ndi_route_neighbor_delete (ndi_neighbor_t *p_nbr_entry)
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(p_nbr_entry->npu_id);
     STD_ASSERT(ndi_db_ptr != NULL);
 
+    sai_nbr_entry.vr_id = p_nbr_entry->vrf_id;
     sai_nbr_entry.rif_id = p_nbr_entry->rif_id;
     ndi_sai_ip_address_copy(&sai_nbr_entry.ip_address, &p_nbr_entry->ip_addr);
 

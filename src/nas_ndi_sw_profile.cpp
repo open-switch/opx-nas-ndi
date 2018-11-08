@@ -43,6 +43,7 @@ static inline void nas_ndi_get_file_name_from_profile(char *profile, char *file_
 #define NAS_NDI_FILE_PATH "/etc/opx/sai/"
         int size = 0;
         size = strlen(NAS_NDI_FILE_PATH) + strlen(profile) + strlen("-init.xmli");
+
         snprintf(file_name, size, "%s%s%s",NAS_NDI_FILE_PATH, profile,"-init.xml");
     }
 }
@@ -109,10 +110,12 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
     char file_name[256] = {0};
     char key[NAS_CMN_NPU_PROFILE_ATTR_SIZE] = { 0 };
     char value[NAS_CMN_NPU_PROFILE_ATTR_SIZE] = { 0 };
+    char acl_prof_db_name[NAS_CMN_PROFILE_NAME_SIZE] = { 0 };
 
     uint32_t conf_uft_mode,l2_size,l3_size,l3_host_size;
     uint32_t cur_max_ecmp_per_grp = 0;
     uint32_t cur_ipv6_ext_prefix_routes = 0;
+    uint32_t acl_prof_num_pool_req = 0;
     t_std_error ret = STD_ERR_OK;
 
     conf_uft_mode = l2_size = l3_size =  l3_host_size = 0;
@@ -198,6 +201,31 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
             ndi_profile_set_value(switch_id, "SAI_KEY_L3_ROUTE_EXTENDED_PREFIX_ENTRIES",
                                     std::to_string(cur_ipv6_ext_prefix_routes));
         }
+    }
+
+    /* after reading ACL profile default config from file and also from DB,
+     * read ACL profile info will be in current as well as next_boot info.
+     */
+    ret = nas_sw_acl_profile_db_get_next(NULL, acl_prof_db_name, &acl_prof_num_pool_req);
+
+    if (ret != STD_ERR_OK)
+    {
+        NDI_INIT_LOG_TRACE("ACL profile DB is not configured ");
+    }
+    else
+    {
+        do
+        {
+            NDI_INIT_LOG_TRACE("ACL profile DB info name:%s, num_pool_req:%d ",
+                    acl_prof_db_name, acl_prof_num_pool_req);
+
+            /* set the ACL profile DB in key-value pair for it to be ready by SAI */
+            ndi_profile_set_value(switch_id, acl_prof_db_name, std::to_string(acl_prof_num_pool_req));
+
+            ret = nas_sw_acl_profile_db_get_next(acl_prof_db_name,
+                    acl_prof_db_name, &acl_prof_num_pool_req);
+
+        } while (ret == STD_ERR_OK);
     }
 
     ret = nas_switch_npu_profile_get_next_value(key, value);

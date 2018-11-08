@@ -217,6 +217,10 @@ static t_std_error nas_ndi_sai_api_table_init(ndi_sai_api_tbl_t *n_sai_api_tbl)
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
+        sai_ret = sai_api_query(SAI_API_TUNNEL, (void *)&(n_sai_api_tbl->n_sai_tunnel_api_tbl));
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            break;
+        }
         sai_ret = sai_api_query(SAI_API_L2MC, (void *)&(n_sai_api_tbl->n_sai_mcast_api_tbl));
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
@@ -283,113 +287,6 @@ static void ndi_switch_state_change_cb_int (sai_switch_oper_status_t oper_status
     STD_ASSERT(ndi_db_ptr != NULL);
 
     ndi_db_ptr->npu_oper_status =  ndi_oper_status_translate(oper_status);
-}
-static void ndi_fdb_event_cb (uint32_t count,sai_fdb_event_notification_data_t *data)
-{
-    ndi_mac_entry_t ndi_mac_entry_temp;
-    ndi_mac_event_type_t ndi_mac_event_type_temp;
-    npu_port_t npu_port;
-    unsigned int attr_idx;
-    unsigned int entry_idx;
-    BASE_MAC_PACKET_ACTION_t action;
-    ndi_brport_obj_t blk;
-    bool is_lag_index = false;
-
-    npu_id_t npu_id = ndi_npu_id_get();
-    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
-
-    if (ndi_db_ptr == NULL) {
-        NDI_INIT_LOG_ERROR("invalid npu_id 0x%d ", npu_id);
-        return;
-    }
-
-    if (data == NULL) {
-        NDI_INIT_LOG_ERROR("Invalid parameters passed : notification data is NULL");
-        return;
-    }
-
-
-    for (entry_idx = 0 ; entry_idx < count; entry_idx++) {
-        is_lag_index = false;
-        if(data[entry_idx].attr == NULL) {
-            NDI_INIT_LOG_ERROR("Invalid parameters passed : entry index: %d \
-                    fdb_entry=%p, attr_count=%d.",entry_idx,
-                    &(data[entry_idx].fdb_entry), data[entry_idx].attr_count);
-            /*Ignore the entry. Continue with next entry*/
-            continue;
-        }
-        /* Setting the default values */
-        ndi_mac_entry_temp.is_static = false;
-        ndi_mac_entry_temp.action =  BASE_MAC_PACKET_ACTION_FORWARD;
-        for (attr_idx = 0; attr_idx < data[entry_idx].attr_count; attr_idx++) {
-            switch (data[entry_idx].attr[attr_idx].id) {
-
-                case SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID:
-                    blk.brport_obj_id = data[entry_idx].attr[attr_idx].value.oid;
-                    if (!nas_ndi_get_bridge_port_obj(&blk, ndi_brport_query_type_FROM_BRPORT)) {
-                        NDI_PORT_LOG_ERROR("Failed to get bridge port maping for 0x%" PRIx64 " ",
-                              data[entry_idx].attr[attr_idx].value.oid);
-                        return;
-                    }
-
-                    if(blk.port_type == ndi_port_type_PORT){
-                        if (ndi_npu_port_id_get(blk.port_obj_id,&npu_id, &npu_port)!=STD_ERR_OK) {
-                            NDI_PORT_LOG_TRACE("Failed to map SAI port 0x%" PRIx64 " to NPU port",
-                                blk.port_obj_id);
-                            return;
-                        }
-                        ndi_mac_entry_temp.port_info.npu_id = npu_id;
-                        ndi_mac_entry_temp.port_info.npu_port = npu_port;
-
-                    } else if(blk.port_type == ndi_port_type_LAG) {
-                        is_lag_index = true;
-                        ndi_mac_entry_temp.ndi_lag_id = blk.port_obj_id;
-                    }
-
-                    break;
-
-                case SAI_FDB_ENTRY_ATTR_TYPE :
-                    if ((data[entry_idx].attr[attr_idx].value.s32) ==  SAI_FDB_ENTRY_TYPE_STATIC)
-                        ndi_mac_entry_temp.is_static = true;
-                    else
-                        ndi_mac_entry_temp.is_static = false;
-                    break;
-
-                case SAI_FDB_ENTRY_ATTR_PACKET_ACTION :
-                    action = ndi_mac_packet_action_get(data[entry_idx].attr[attr_idx].value.s32);
-                    ndi_mac_entry_temp.action = action;
-                    break;
-
-                default:
-                    NDI_INIT_LOG_ERROR("Invalid attr id : %d.", data[entry_idx].attr[attr_idx].id);
-                    break;
-            }
-        }
-
-        /*
-         *  Ignore the SAI flsuh event as we don't do anything with the event
-         */
-
-        if(data[entry_idx].event_type == SAI_FDB_EVENT_FLUSHED){
-            continue;
-        }
-        ndi_mac_event_type_temp = ndi_mac_event_type_get(data[entry_idx].event_type);
-        ndi_virtual_obj_t obj;
-        obj.oid = data[entry_idx].fdb_entry.bv_id;
-        if(!nas_ndi_get_virtual_obj(&obj,ndi_virtual_obj_query_type_FROM_OBJ)){
-            NDI_INIT_LOG_ERROR("Failed to find vlan object id for vlan obj id 0x%" PRIx64 "",obj.oid);
-            return;
-        }
-        ndi_mac_entry_temp.vlan_id = obj.vid ;
-        memcpy(ndi_mac_entry_temp.mac_addr, data[entry_idx].fdb_entry.mac_address, HAL_MAC_ADDR_LEN);
-
-        if (ndi_db_ptr->switch_notification->mac_event_notify_cb != NULL) {
-            ndi_db_ptr->switch_notification->mac_event_notify_cb(npu_id, ndi_mac_event_type_temp,
-                    &ndi_mac_entry_temp, is_lag_index);
-        } else {
-            return;
-        }
-    }
 }
 
 static void ndi_port_state_change_cb(uint32_t count,
@@ -464,7 +361,6 @@ static void ndi_switch_shutdown_request_cb(sai_object_id_t switch_id)
 {
     NDI_INIT_LOG_TRACE("Calling switch shutdown request from SAI\n");
 }
-
 
 
 t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
