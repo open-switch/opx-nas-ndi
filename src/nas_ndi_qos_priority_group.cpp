@@ -196,7 +196,8 @@ uint_t ndi_qos_get_priority_group_id_list(ndi_port_t ndi_port_id,
 }
 
 static bool nas2sai_priority_group_counter_type_get(BASE_QOS_PRIORITY_GROUP_STAT_t stat_id,
-                                                    sai_ingress_priority_group_stat_t * sai_stat_id)
+                                                    sai_ingress_priority_group_stat_t * sai_stat_id,
+                                                    bool is_snapshot_counters)
 {
     static const auto & nas2sai_priority_group_counter_type =
         * new std::unordered_map<BASE_QOS_PRIORITY_GROUP_STAT_t, sai_ingress_priority_group_stat_t, std::hash<int>>
@@ -211,8 +212,23 @@ static bool nas2sai_priority_group_counter_type_get(BASE_QOS_PRIORITY_GROUP_STAT
         {BASE_QOS_PRIORITY_GROUP_STAT_XOFF_ROOM_WATERMARK_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_XOFF_ROOM_WATERMARK_BYTES},
     };
 
+    static const auto & nas2sai_priority_group_snapshot_counter_type =
+        * new std::unordered_map<BASE_QOS_PRIORITY_GROUP_STAT_t, sai_ingress_priority_group_stat_t, std::hash<int>>
+    {
+        {BASE_QOS_PRIORITY_GROUP_STAT_CURRENT_OCCUPANCY_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_CURR_OCCUPANCY_BYTES},
+        {BASE_QOS_PRIORITY_GROUP_STAT_WATERMARK_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_WATERMARK_BYTES},
+        {BASE_QOS_PRIORITY_GROUP_STAT_SHARED_CURRENT_OCCUPANCY_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_SHARED_CURR_OCCUPANCY_BYTES},
+        {BASE_QOS_PRIORITY_GROUP_STAT_SHARED_WATERMARK_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_SHARED_WATERMARK_BYTES},
+        {BASE_QOS_PRIORITY_GROUP_STAT_XOFF_ROOM_CURRENT_OCCUPANCY_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_XOFF_ROOM_CURR_OCCUPANCY_BYTES},
+        {BASE_QOS_PRIORITY_GROUP_STAT_XOFF_ROOM_WATERMARK_BYTES, SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_XOFF_ROOM_WATERMARK_BYTES},
+    };
+
+
     try {
-        *sai_stat_id = nas2sai_priority_group_counter_type.at(stat_id);
+         if (is_snapshot_counters == false)
+             *sai_stat_id = nas2sai_priority_group_counter_type.at(stat_id);
+         else
+             *sai_stat_id = nas2sai_priority_group_snapshot_counter_type.at(stat_id);
     }
     catch (...) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -234,21 +250,27 @@ static void _fill_counter_stat_by_type(sai_ingress_priority_group_stat_t type, u
         stat->bytes = val;
         break;
     case SAI_INGRESS_PRIORITY_GROUP_STAT_CURR_OCCUPANCY_BYTES:
+    case SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_CURR_OCCUPANCY_BYTES:
         stat->current_occupancy_bytes = val;
         break;
     case SAI_INGRESS_PRIORITY_GROUP_STAT_WATERMARK_BYTES:
+    case SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_WATERMARK_BYTES:
         stat->watermark_bytes = val;
         break;
     case SAI_INGRESS_PRIORITY_GROUP_STAT_SHARED_CURR_OCCUPANCY_BYTES:
+    case SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_SHARED_CURR_OCCUPANCY_BYTES:
         stat->shared_current_occupancy_bytes = val;
         break;
     case SAI_INGRESS_PRIORITY_GROUP_STAT_SHARED_WATERMARK_BYTES:
+    case SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_SHARED_WATERMARK_BYTES:
         stat->shared_watermark_bytes = val;
         break;
     case SAI_INGRESS_PRIORITY_GROUP_STAT_XOFF_ROOM_CURR_OCCUPANCY_BYTES:
+    case SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_XOFF_ROOM_CURR_OCCUPANCY_BYTES:
         stat->xoff_room_current_occupancy_bytes = val;
         break;
     case SAI_INGRESS_PRIORITY_GROUP_STAT_XOFF_ROOM_WATERMARK_BYTES:
+    case SAI_INGRESS_PRIORITY_GROUP_STAT_EXTENSIONS_SNAPSHOT_XOFF_ROOM_WATERMARK_BYTES:
         stat->xoff_room_watermark_bytes = val;
         break;
 
@@ -257,7 +279,6 @@ static void _fill_counter_stat_by_type(sai_ingress_priority_group_stat_t type, u
     }
 }
 
-
 /**
  * This function gets the priority_group statistics
  * @param ndi_port_id
@@ -265,7 +286,9 @@ static void _fill_counter_stat_by_type(sai_ingress_priority_group_stat_t type, u
  * @param list of priority_group counter types to query
  * @param number of priority_group counter types specified
  * @param[out] counter stats
-  * return standard error
+ * return standard error
+ * @deprecated since 7.7.0+opx1
+ * @see ndi_qos_get_extended_priority_group_statistics()*
  */
 t_std_error ndi_qos_get_priority_group_stats(ndi_port_t ndi_port_id,
                                 ndi_obj_id_t ndi_priority_group_id,
@@ -286,7 +309,7 @@ t_std_error ndi_qos_get_priority_group_stats(ndi_port_t ndi_port_id,
 
     for (uint_t i= 0; i<number_of_counters; i++) {
         sai_ingress_priority_group_stat_t sai_stat_id;
-        if (nas2sai_priority_group_counter_type_get(counter_ids[i], &sai_stat_id) == true)
+        if (nas2sai_priority_group_counter_type_get(counter_ids[i], &sai_stat_id, false) == true)
             counter_id_list.push_back(sai_stat_id);
     }
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
@@ -310,17 +333,105 @@ t_std_error ndi_qos_get_priority_group_stats(ndi_port_t ndi_port_id,
 }
 
 /**
+ * This function gets the priority_group statistics
+ * @param ndi_port_id
+ * @param ndi_priority_group_id
+ * @param list of priority_group counter types to query
+ * @param number of priority_group counter types specified
+ * @param[out] counter stats
+ * @param is counter read and clear
+ * @param is snapshot counters
+ * return standard error
+ */
+t_std_error ndi_qos_get_extended_priority_group_statistics(ndi_port_t ndi_port_id,
+                                ndi_obj_id_t ndi_priority_group_id,
+                                BASE_QOS_PRIORITY_GROUP_STAT_t *counter_ids,
+                                uint_t number_of_counters,
+                                uint64_t *counters,
+                                bool is_read_and_clear,
+                                bool is_snapshot_counters)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    sai_ingress_priority_group_stat_t sai_stat_id;
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
+    if (ndi_db_ptr == NULL) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "npu_id %d not exist\n", ndi_port_id.npu_id);
+        return STD_ERR(QOS, CFG, 0);
+    }
+
+    std::vector<sai_ingress_priority_group_stat_t> sai_counter_id_list;
+
+    for (uint_t i= 0; i<number_of_counters; i++) {
+        if (nas2sai_priority_group_counter_type_get(counter_ids[i], &sai_stat_id,
+                                                    is_snapshot_counters) == true)
+            sai_counter_id_list.push_back(sai_stat_id);
+    }
+
+    std::vector<uint64_t> sai_counters(sai_counter_id_list.size());
+
+    if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
+                        get_ingress_priority_group_stats(ndi2sai_priority_group_id(ndi_priority_group_id),
+                                sai_counter_id_list.size(),
+                                &sai_counter_id_list[0],
+                                &sai_counters[0]))
+                         != SAI_STATUS_SUCCESS) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                "priority_group get stats fails: npu_id %u\n",
+                ndi_port_id.npu_id);
+        return ndi_utl_mk_qos_std_err(sai_ret);
+    }
+
+    uint_t i, j;
+    for (i= 0, j= 0; i < number_of_counters; i++) {
+        if (nas2sai_priority_group_counter_type_get(counter_ids[i], &sai_stat_id,
+                                           is_snapshot_counters)) {
+            counters[i] = sai_counters[j];
+            j++;
+        }
+        else {
+            // zero-filled for counters not able to poll
+            counters[i] = 0;
+        }
+    }
+
+    return STD_ERR_OK;
+}
+
+/**
  * This function clears the priority_group statistics
  * @param ndi_port_id
  * @param ndi_priority_group_id
  * @param list of priority_group counter types to clear
  * @param number of priority_group counter types specified
  * return standard error
+ * @deprecated since 7.7.0+opx1
+ * @see ndi_qos_clear_extended_priority_group_statistics()*
  */
 t_std_error ndi_qos_clear_priority_group_stats(ndi_port_t ndi_port_id,
                                 ndi_obj_id_t ndi_priority_group_id,
                                 BASE_QOS_PRIORITY_GROUP_STAT_t *counter_ids,
                                 uint_t number_of_counters)
+{
+    return ndi_qos_clear_extended_priority_group_statistics (ndi_port_id,
+                             ndi_priority_group_id, counter_ids,
+                             number_of_counters, false);
+}
+
+/**
+ * This function clears the priority_group statistics
+ * @param ndi_port_id
+ * @param ndi_priority_group_id
+ * @param list of priority_group counter types to clear
+ * @param number of priority_group counter types specified
+ * @param is snapshot counters
+ * return standard error
+ */
+t_std_error ndi_qos_clear_extended_priority_group_statistics(ndi_port_t ndi_port_id,
+                                ndi_obj_id_t ndi_priority_group_id,
+                                BASE_QOS_PRIORITY_GROUP_STAT_t *counter_ids,
+                                uint_t number_of_counters,
+                                bool is_snapshot_counters)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
@@ -330,22 +441,23 @@ t_std_error ndi_qos_clear_priority_group_stats(ndi_port_t ndi_port_id,
         return STD_ERR(QOS, CFG, 0);
     }
 
-    std::vector<sai_ingress_priority_group_stat_t> counter_id_list;
+    std::vector<sai_ingress_priority_group_stat_t> sai_counter_id_list;
 
     for (uint_t i= 0; i<number_of_counters; i++) {
         sai_ingress_priority_group_stat_t sai_stat_id;
-        if (nas2sai_priority_group_counter_type_get(counter_ids[i], &sai_stat_id) == true)
-            counter_id_list.push_back(sai_stat_id);
+        if (nas2sai_priority_group_counter_type_get(counter_ids[i], &sai_stat_id,
+                                                    is_snapshot_counters) == true)
+            sai_counter_id_list.push_back(sai_stat_id);
     }
 
-    if (counter_id_list.size() == 0) {
+    if (sai_counter_id_list.size() == 0) {
         EV_LOGGING(NDI, DEBUG, "NDI-QOS", "no valid counter id \n");
         return STD_ERR_OK;
     }
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
                         clear_ingress_priority_group_stats(ndi2sai_priority_group_id(ndi_priority_group_id),
-                                counter_id_list.size(), &counter_id_list[0]))
+                                sai_counter_id_list.size(), &sai_counter_id_list[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                 "priority_group clear stats fails: npu_id %u\n",
@@ -354,7 +466,6 @@ t_std_error ndi_qos_clear_priority_group_stats(ndi_port_t ndi_port_id,
     }
 
     return STD_ERR_OK;
-
 }
 
 /**

@@ -319,7 +319,7 @@ static void _fill_counter_stat_by_type(sai_buffer_pool_stat_t type, uint64_t val
 }
 
 static bool nas2sai_buffer_pool_counter_type_get(BASE_QOS_BUFFER_POOL_STAT_t stat_id,
-                                            sai_buffer_pool_stat_t *sai_stat_id)
+                                            sai_buffer_pool_stat_t *sai_stat_id, bool is_snapshot)
 {
     static const auto & nas2sai_buffer_pool_counter_type =
         * new std::unordered_map<BASE_QOS_BUFFER_POOL_STAT_t, sai_buffer_pool_stat_t,
@@ -335,8 +335,26 @@ static bool nas2sai_buffer_pool_counter_type_get(BASE_QOS_BUFFER_POOL_STAT_t sta
                 SAI_BUFFER_POOL_STAT_XOFF_ROOM_WATERMARK_BYTES},
     };
 
+    static const auto & nas2sai_buffer_pool_snapshot_counter_type =
+        * new std::unordered_map<BASE_QOS_BUFFER_POOL_STAT_t, sai_buffer_pool_stat_t,
+                                    std::hash<int>>
+    {
+        {BASE_QOS_BUFFER_POOL_STAT_CURRENT_OCCUPANCY_BYTES,
+                SAI_BUFFER_POOL_STAT_EXTENSIONS_SNAPSHOT_CURR_OCCUPANCY_BYTES},
+        {BASE_QOS_BUFFER_POOL_STAT_WATERMARK_BYTES,
+                SAI_BUFFER_POOL_STAT_EXTENSIONS_SNAPSHOT_WATERMARK_BYTES},
+        {BASE_QOS_BUFFER_POOL_STAT_XOFF_HEADROOM_OCCUPANCY_BYTES,
+                SAI_BUFFER_POOL_STAT_EXTENSIONS_SNAPSHOT_XOFF_ROOM_CURR_OCCUPANCY_BYTES},
+        {BASE_QOS_BUFFER_POOL_STAT_XOFF_HEADROOM_WATERMARK_BYTES,
+                SAI_BUFFER_POOL_STAT_EXTENSIONS_SNAPSHOT_XOFF_ROOM_WATERMARK_BYTES},
+    };
+
+
     try {
-        *sai_stat_id = nas2sai_buffer_pool_counter_type.at(stat_id);
+        if (is_snapshot == false)
+            *sai_stat_id = nas2sai_buffer_pool_counter_type.at(stat_id);
+        else
+            *sai_stat_id = nas2sai_buffer_pool_snapshot_counter_type.at(stat_id);
     }
     catch (...) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -376,7 +394,7 @@ t_std_error ndi_qos_get_buffer_pool_stats(npu_id_t npu_id,
     sai_buffer_pool_stat_t sai_stat_id;
 
     for (uint_t i= 0; i<number_of_counters; i++) {
-        if (nas2sai_buffer_pool_counter_type_get(counter_ids[i], &sai_stat_id))
+        if (nas2sai_buffer_pool_counter_type_get(counter_ids[i], &sai_stat_id, false))
             counter_id_list.push_back(sai_stat_id);
     }
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
@@ -414,7 +432,30 @@ t_std_error ndi_qos_get_buffer_pool_statistics(npu_id_t npu_id,
                                 uint_t number_of_counters,
                                 uint64_t *counters)
 {
+    return ndi_qos_get_extended_buffer_pool_statistics(npu_id,
+                   ndi_buffer_pool_id, counter_ids, number_of_counters,
+                   counters, false, false);
+}
 
+/**
+ * This function gets the buffer_pool statistics
+ * @param npu_id
+ * @param ndi_buffer_pool_id
+ * @param list of buffer_pool counter types to query
+ * @param number of buffer_pool counter types specified
+ * @param[out] counters: stats will be stored in the same order of the counter_ids
+ * @param read and clean
+ * @param snapshot counter
+ * return standard error
+ */
+t_std_error ndi_qos_get_extended_buffer_pool_statistics(npu_id_t npu_id,
+                                ndi_obj_id_t ndi_buffer_pool_id,
+                                BASE_QOS_BUFFER_POOL_STAT_t *counter_ids,
+                                uint_t number_of_counters,
+                                uint64_t *counters,
+                                bool is_read_and_clear,
+                                bool is_snapshot_counters)
+{
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
     if (ndi_db_ptr == NULL) {
@@ -428,14 +469,16 @@ t_std_error ndi_qos_get_buffer_pool_statistics(npu_id_t npu_id,
     uint_t i, j;
 
     for (i= 0; i<number_of_counters; i++) {
-        if (nas2sai_buffer_pool_counter_type_get(counter_ids[i], &sai_stat_id))
+        if (nas2sai_buffer_pool_counter_type_get(counter_ids[i], &sai_stat_id,
+                                           is_snapshot_counters))
             sai_counter_id_list.push_back(sai_stat_id);
         else {
             EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                    "NAS Buffer Pool Stat id %d is not mapped to any SAI stat id",
+                    "NAS Queue Stat id %d is not mapped to any SAI stat id",
                     counter_ids[i]);
         }
     }
+
     std::vector<uint64_t> sai_counters(sai_counter_id_list.size());
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
@@ -451,7 +494,7 @@ t_std_error ndi_qos_get_buffer_pool_statistics(npu_id_t npu_id,
     }
 
     for (i= 0, j= 0; i<number_of_counters; i++) {
-        if (nas2sai_buffer_pool_counter_type_get(counter_ids[i], &sai_stat_id)) {
+        if (nas2sai_buffer_pool_counter_type_get(counter_ids[i], &sai_stat_id,is_snapshot_counters)) {
             counters[i] = sai_counters[j];
             j++;
         }
@@ -463,6 +506,7 @@ t_std_error ndi_qos_get_buffer_pool_statistics(npu_id_t npu_id,
 
     return STD_ERR_OK;
 }
+
 
 /**
  * This function gets the list of shadow buffer_pool object on different MMUs
@@ -523,11 +567,31 @@ uint_t ndi_qos_get_shadow_buffer_pool_list(npu_id_t npu_id,
  * @param list of buffer_pool counter types to clear
  * @param number of buffer_pool counter types specified
  * return standard error
- */
+ * @deprecated since 7.7.0+opx1
+ * @see ndi_qos_clear_extended_buffer_pool_statistics()
+*/
 t_std_error ndi_qos_clear_buffer_pool_stats(npu_id_t npu_id,
                                 ndi_obj_id_t ndi_buffer_pool_id,
                                 BASE_QOS_BUFFER_POOL_STAT_t *counter_ids,
                                 uint_t number_of_counters)
+{
+    return ndi_qos_clear_extended_buffer_pool_statistics (npu_id,
+                        ndi_buffer_pool_id, counter_ids,
+                        number_of_counters, false);
+}
+
+/**
+ * This function clears the buffer_pool statistics
+ * @param npu_id
+ * @param ndi_buffer_pool_id
+ * @param list of buffer_pool counter types to clear
+ * @param number of buffer_pool counter types specified
+ * return standard error
+ */
+t_std_error ndi_qos_clear_extended_buffer_pool_statistics(npu_id_t npu_id,
+                                ndi_obj_id_t ndi_buffer_pool_id,
+                                BASE_QOS_BUFFER_POOL_STAT_t *counter_ids,
+                                uint_t number_of_counters, bool is_snapshot_counters)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
@@ -541,7 +605,8 @@ t_std_error ndi_qos_clear_buffer_pool_stats(npu_id_t npu_id,
 
     for (uint_t i= 0; i<number_of_counters; i++) {
         sai_buffer_pool_stat_t sai_stat_id;
-        if (nas2sai_buffer_pool_counter_type_get(counter_ids[i], &sai_stat_id))
+        if (nas2sai_buffer_pool_counter_type_get(counter_ids[i], &sai_stat_id,
+                                                 is_snapshot_counters))
             counter_id_list.push_back(sai_stat_id);
         else {
             EV_LOGGING(NDI, NOTICE, "NDI-QOS",
