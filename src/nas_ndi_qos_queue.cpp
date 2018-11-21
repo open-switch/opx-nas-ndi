@@ -419,7 +419,8 @@ uint_t ndi_qos_get_queue_id_list(ndi_port_t ndi_port_id,
 }
 
 static bool nas2sai_queue_counter_type_get(BASE_QOS_QUEUE_STAT_t stat_id,
-                                            sai_queue_stat_t *sai_stat_id)
+                                           sai_queue_stat_t *sai_stat_id,
+                                           bool is_snapshot)
 {
     static const auto &  nas2sai_queue_counter_type =
         *new std::unordered_map<BASE_QOS_QUEUE_STAT_t, sai_queue_stat_t, std::hash<int>>
@@ -454,8 +455,20 @@ static bool nas2sai_queue_counter_type_get(BASE_QOS_QUEUE_STAT_t stat_id,
         {BASE_QOS_QUEUE_STAT_SHARED_WATERMARK_BYTES, SAI_QUEUE_STAT_SHARED_WATERMARK_BYTES},
     };
 
+    static const auto &  nas2sai_queue_snapshot_counter_type =
+        *new std::unordered_map<BASE_QOS_QUEUE_STAT_t, sai_queue_stat_t, std::hash<int>>
+    {
+        {BASE_QOS_QUEUE_STAT_CURRENT_OCCUPANCY_BYTES, SAI_QUEUE_STAT_EXTENSIONS_SNAPSHOT_CURR_OCCUPANCY_BYTES},
+        {BASE_QOS_QUEUE_STAT_WATERMARK_BYTES, SAI_QUEUE_STAT_EXTENSIONS_SNAPSHOT_WATERMARK_BYTES},
+        {BASE_QOS_QUEUE_STAT_SHARED_CURRENT_OCCUPANCY_BYTES, SAI_QUEUE_STAT_EXTENSIONS_SNAPSHOT_SHARED_CURR_OCCUPANCY_BYTES},
+        {BASE_QOS_QUEUE_STAT_SHARED_WATERMARK_BYTES, SAI_QUEUE_STAT_EXTENSIONS_SNAPSHOT_SHARED_WATERMARK_BYTES},
+    };
+
     try {
-        *sai_stat_id = nas2sai_queue_counter_type.at(stat_id);
+        if (is_snapshot == false)
+            *sai_stat_id = nas2sai_queue_counter_type.at(stat_id);
+        else
+            *sai_stat_id = nas2sai_queue_snapshot_counter_type.at(stat_id);
     }
     catch (...) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -567,7 +580,10 @@ static void _fill_counter_stat_by_type(sai_queue_stat_t type, uint64_t val,
  * @param list of queue counter types to query
  * @param number of queue counter types specified
  * @param[out] counter stats
-  * return standard error
+ * return standard error
+ * @deprecated since 7.7.0+opx1
+ * @see ndi_qos_get_extended_queue_statistics()
+ *
  */
 t_std_error ndi_qos_get_queue_stats(ndi_port_t ndi_port_id,
                                 ndi_obj_id_t ndi_queue_id,
@@ -588,7 +604,7 @@ t_std_error ndi_qos_get_queue_stats(ndi_port_t ndi_port_id,
 
     for (uint_t i= 0; i<number_of_counters; i++) {
         sai_queue_stat_t sai_stat_id;
-        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id))
+        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id, false))
             counter_id_list.push_back(sai_stat_id);
     }
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
@@ -618,13 +634,39 @@ t_std_error ndi_qos_get_queue_stats(ndi_port_t ndi_port_id,
  * @param list of queue counter types to query
  * @param number of queue counter types specified
  * @param[out] counters: stats will be stored in the same order of the counter_ids
-  * return standard error
+ * return standard error
+ * @deprecated since 7.7.0+opx1
+ * @see ndi_qos_get_extended_queue_statistics()
  */
 t_std_error ndi_qos_get_queue_statistics(ndi_port_t ndi_port_id,
                                 ndi_obj_id_t ndi_queue_id,
                                 BASE_QOS_QUEUE_STAT_t *counter_ids,
                                 uint_t number_of_counters,
                                 uint64_t *counters)
+{
+    return ndi_qos_get_extended_queue_statistics (ndi_port_id,
+                            ndi_queue_id, counter_ids,
+                            number_of_counters, counters, false, false);
+}
+
+/**
+ * This function gets the queue statistics
+ * @param ndi_port_id
+ * @param ndi_queue_id
+ * @param list of queue counter types to query
+ * @param number of queue counter types specified
+ * @param[out] counters: stats will be stored in the same order of the counter_ids
+ * @param read on clear
+ * @param is snapshot counter
+ * return standard error
+ */
+t_std_error ndi_qos_get_extended_queue_statistics(ndi_port_t ndi_port_id,
+                                ndi_obj_id_t ndi_queue_id,
+                                BASE_QOS_QUEUE_STAT_t *counter_ids,
+                                uint_t number_of_counters,
+                                uint64_t *counters,
+                                bool is_read_and_clear,
+                                bool is_snapshot_counters)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
@@ -639,7 +681,8 @@ t_std_error ndi_qos_get_queue_statistics(ndi_port_t ndi_port_id,
     uint_t i, j;
 
     for (i= 0; i<number_of_counters; i++) {
-        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id))
+        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id,
+                                           is_snapshot_counters))
             sai_counter_id_list.push_back(sai_stat_id);
         else {
             EV_LOGGING(NDI, NOTICE, "NDI-QOS",
@@ -661,9 +704,9 @@ t_std_error ndi_qos_get_queue_statistics(ndi_port_t ndi_port_id,
                 ndi_port_id.npu_id);
         return ndi_utl_mk_qos_std_err(sai_ret);
     }
-
-    for (i= 0, j= 0; i<number_of_counters; i++) {
-        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id)) {
+    for (i= 0, j= 0; i < number_of_counters; i++) {
+        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id,
+                                           is_snapshot_counters)) {
             counters[i] = sai_counters[j];
             j++;
         }
@@ -676,6 +719,7 @@ t_std_error ndi_qos_get_queue_statistics(ndi_port_t ndi_port_id,
     return STD_ERR_OK;
 }
 
+
 /**
  * This function clears the queue statistics
  * @param ndi_port_id
@@ -683,7 +727,9 @@ t_std_error ndi_qos_get_queue_statistics(ndi_port_t ndi_port_id,
  * @param list of queue counter types to clear
  * @param number of queue counter types specified
  * return standard error
- */
+ * @deprecated since 7.7.0+opx1
+ * @see ndi_qos_clear_queue_statistics()
+*/
 t_std_error ndi_qos_clear_queue_stats(ndi_port_t ndi_port_id,
                                 ndi_obj_id_t ndi_queue_id,
                                 BASE_QOS_QUEUE_STAT_t *counter_ids,
@@ -701,7 +747,7 @@ t_std_error ndi_qos_clear_queue_stats(ndi_port_t ndi_port_id,
 
     for (uint_t i= 0; i<number_of_counters; i++) {
         sai_queue_stat_t sai_stat_id;
-        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id))
+        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id, false))
             counter_id_list.push_back(sai_stat_id);
     }
 
@@ -724,6 +770,58 @@ t_std_error ndi_qos_clear_queue_stats(ndi_port_t ndi_port_id,
     return STD_ERR_OK;
 
 }
+
+/**
+ * This function clears the queue statistics
+ * @param ndi_port_id
+ * @param ndi_queue_id
+ * @param list of queue counter types to clear
+ * @param number of queue counter types specified
+ * @param snapshot counters
+ * return standard error
+ */
+t_std_error ndi_qos_clear_extended_queue_statistics(ndi_port_t ndi_port_id,
+                                ndi_obj_id_t ndi_queue_id,
+                                BASE_QOS_QUEUE_STAT_t *counter_ids,
+                                uint_t number_of_counters,
+                                bool is_snapshot_counters)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(ndi_port_id.npu_id);
+    if (ndi_db_ptr == NULL) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS",
+                      "npu_id %d not exist\n", ndi_port_id.npu_id);
+        return STD_ERR(QOS, CFG, 0);
+    }
+
+    std::vector<sai_queue_stat_t> counter_id_list;
+
+    for (uint_t i= 0; i<number_of_counters; i++) {
+        sai_queue_stat_t sai_stat_id;
+        if (nas2sai_queue_counter_type_get(counter_ids[i], &sai_stat_id,
+                                           is_snapshot_counters))
+            counter_id_list.push_back(sai_stat_id);
+    }
+
+    if (counter_id_list.size() == 0) {
+        EV_LOGGING(NDI, DEBUG, "NDI-QOS", "no valid counter id \n");
+        return STD_ERR_OK;
+    }
+
+    if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
+                        clear_queue_stats(ndi2sai_queue_id(ndi_queue_id),
+                                counter_id_list.size(),
+                                &counter_id_list[0]))
+                         != SAI_STATUS_SUCCESS) {
+        EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+                "queue clear stats fails: npu_id %u\n",
+                ndi_port_id.npu_id);
+        return ndi_utl_mk_qos_std_err(sai_ret);
+    }
+
+    return STD_ERR_OK;
+}
+
 
 /**
  * This function gets the list of shadow queue object on different MMUs

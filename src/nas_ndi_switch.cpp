@@ -21,6 +21,7 @@
 extern "C" {
 #include "sai.h"
 #include "saiswitch.h"
+#include "saiswitchextensions.h"
 #include "saiextensions.h"
 }
 
@@ -121,7 +122,21 @@ static bool from_sai_type_switch_mode(sai_attribute_t *param ) {
     return from_sai_type(_mode_stoy,param);
 }
 
+static _enum_map _bst_tracking_mode_stoy = {
+        {SAI_SWITCH_BST_TRACKING_MODE_PEAK, BASE_SWITCH_BST_TRACKING_MODE_PEAK},
+        {SAI_SWITCH_BST_TRACKING_MODE_CURRENT, BASE_SWITCH_BST_TRACKING_MODE_CURRENT }
+};
+
+static bool to_sai_type_bst_tracking_mode(sai_attribute_t *param ) {
+    return to_sai_type(_bst_tracking_mode_stoy,param);
+}
+
+static bool from_sai_type_bst_tracking_mode(sai_attribute_t *param ) {
+    return from_sai_type(_bst_tracking_mode_stoy,param);
+}
+
 enum nas_ndi_switch_attr_op_type {
+    SW_ATTR_BOOL,
     SW_ATTR_U16,
     SW_ATTR_U32,
     SW_ATTR_S32,
@@ -240,6 +255,12 @@ static std::unordered_map<uint32_t,_sai_op_table> _attr_to_op = {
     {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_ECN_ECT_THRESHOLD_ENABLE, {
             SW_ATTR_U32, NULL,NULL,SAI_SWITCH_ATTR_ECN_ECT_THRESHOLD_ENABLE}},
 
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_BST_ENABLE, {
+            SW_ATTR_BOOL, NULL,NULL, SAI_SWITCH_ATTR_EXTENSIONS_BST_TRACKING_ENABLE}},
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_BST_TRACKING_MODE, {
+            SW_ATTR_U32, to_sai_type_bst_tracking_mode, from_sai_type_bst_tracking_mode,
+            SAI_SWITCH_ATTR_EXTENSIONS_BST_TRACKING_MODE}},
 };
 
 extern "C" t_std_error ndi_switch_set_attribute(npu_id_t npu, BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_t attr,
@@ -254,24 +275,27 @@ extern "C" t_std_error ndi_switch_set_attribute(npu_id_t npu, BASE_SWITCH_SWITCH
     std::vector<sai_int32_t> tmp_lst;
 
     switch(it->second.type) {
-    case SW_ATTR_S32:
-        sai_attr.value.s32 = param->s32;
-        break;
-    case SW_ATTR_U32:
-        sai_attr.value.u32 = param->u32;
-        break;
-    case SW_ATTR_LST:
-        sai_attr.value.s32list.count = param->list.len;
-        tmp_lst.resize(param->list.len);
-        memcpy(&tmp_lst[0],param->list.vals,param->list.len*sizeof(tmp_lst[0]));
-        sai_attr.value.s32list.list = &tmp_lst[0];
-        break;
-    case SW_ATTR_U16:
-        sai_attr.value.u16 = param->u16;
-        break;
-    case SW_ATTR_MAC:
-        memcpy(sai_attr.value.mac, param->mac, sizeof(sai_attr.value.mac));
-        break;
+        case SW_ATTR_S32:
+            sai_attr.value.s32 = param->s32;
+            break;
+        case SW_ATTR_U32:
+            sai_attr.value.u32 = param->u32;
+            break;
+        case SW_ATTR_LST:
+            sai_attr.value.s32list.count = param->list.len;
+            tmp_lst.resize(param->list.len);
+            memcpy(&tmp_lst[0],param->list.vals,param->list.len*sizeof(tmp_lst[0]));
+            sai_attr.value.s32list.list = &tmp_lst[0];
+            break;
+        case SW_ATTR_U16:
+            sai_attr.value.u16 = param->u16;
+            break;
+        case SW_ATTR_MAC:
+            memcpy(sai_attr.value.mac, param->mac, sizeof(sai_attr.value.mac));
+            break;
+        case SW_ATTR_BOOL:
+            sai_attr.value.booldata = param->u32;
+            break;
     }
     if (it->second.to_sai_type!=NULL) {
         if (!(it->second.to_sai_type)(&sai_attr)) {
@@ -324,21 +348,24 @@ extern "C" t_std_error ndi_switch_get_attribute(npu_id_t npu, BASE_SWITCH_SWITCH
     }
 
     switch(it->second.type) {
-    case SW_ATTR_S32:
-        param->s32 = sai_attr.value.s32;
-        break;
-    case SW_ATTR_U32:
-        param->u32 = sai_attr.value.u32;
-        break;
-    case SW_ATTR_LST:
-        param->list.len = sai_attr.value.s32list.count ;
-        break;
-    case SW_ATTR_U16:
-        param->u16 = sai_attr.value.u16;
-        break;
-    case SW_ATTR_MAC:
-        memcpy(param->mac, sai_attr.value.mac,sizeof(param->mac));
-        break;
+        case SW_ATTR_BOOL:
+            param->s32 = sai_attr.value.booldata;
+            break;
+        case SW_ATTR_S32:
+            param->s32 = sai_attr.value.s32;
+            break;
+        case SW_ATTR_U32:
+            param->u32 = sai_attr.value.u32;
+            break;
+        case SW_ATTR_LST:
+            param->list.len = sai_attr.value.s32list.count ;
+            break;
+        case SW_ATTR_U16:
+            param->u16 = sai_attr.value.u16;
+            break;
+        case SW_ATTR_MAC:
+            memcpy(param->mac, sai_attr.value.mac,sizeof(param->mac));
+            break;
     }
 
     return STD_ERR_OK;

@@ -103,7 +103,6 @@ int ndi_profile_get_next_value(sai_switch_profile_id_t profile_id,
     return 0;
 }
 
-
 void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
 {
     char conf_profile[64] = {0};
@@ -115,6 +114,7 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
     uint32_t conf_uft_mode,l2_size,l3_size,l3_host_size;
     uint32_t cur_max_ecmp_per_grp = 0;
     uint32_t cur_ipv6_ext_prefix_routes = 0;
+    bool cur_deep_buffer_mode = false;
     uint32_t acl_prof_num_pool_req = 0;
     t_std_error ret = STD_ERR_OK;
 
@@ -201,6 +201,17 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
             ndi_profile_set_value(switch_id, "SAI_KEY_L3_ROUTE_EXTENDED_PREFIX_ENTRIES",
                                     std::to_string(cur_ipv6_ext_prefix_routes));
         }
+    }
+
+    /* Get current deep buffer mode and update */
+    ret = nas_sw_profile_cur_deep_buffer_mode_get(&cur_deep_buffer_mode);
+
+    if (ret == STD_ERR_OK) 
+    {
+        ndi_profile_set_value(switch_id, "SAI_SWITCH_PDM_MODE",
+                              std::to_string(cur_deep_buffer_mode));
+        NDI_INIT_LOG_TRACE("ndi profile set: %d for SAI_SWITCH_PDM_MODE\n", 
+                           cur_deep_buffer_mode);
     }
 
     /* after reading ACL profile default config from file and also from DB,

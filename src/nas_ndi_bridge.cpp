@@ -651,15 +651,17 @@ t_std_error ndi_create_bridge_port(bridge_port_create_info_t *info, sai_object_i
     br_port_attr[0].value.booldata = true;
 
     if (ndi_set_bridge_port_attribute (info->npu_id, info->data.brport_obj_id, br_port_attr) != STD_ERR_OK) {
+        NDI_PORT_LOG_ERROR("bridgeport create: failed ADMIN state set for port_id %" PRIx64 " ", info->data.port_obj_id);
+        if((sai_ret = ndi_sai_bridge_api(ndi_db_ptr)->remove_bridge_port(info->data.brport_obj_id))
+            != SAI_STATUS_SUCCESS) {
+            NDI_PORT_LOG_ERROR("rollback brport_create :Delete  bridge ports failed for bridge port oid %" PRIx64 " ",
+            info->data.brport_obj_id);
+         }
         return STD_ERR(NPU, CFG, sai_ret);
     }
 
     if (brport_type != ndi_brport_type_PORT) {
-        /*
-         * use vlan id 0 when creating untagged bridge sub port. MAC module doesn't
-         * know about that attached vlan id when creating untagged port hence mac will be
-         * using the vlan id 0 to query untagged bridge sub port
-         */
+
         nas_ndi_add_bridge_port_obj(&info->data);
         *(br_port_id) = info->data.brport_obj_id;
         return STD_ERR_OK;
@@ -780,11 +782,14 @@ ndi_1d_bridge_tunnel_port_add(npu_id_t npu_id, sai_object_id_t br_oid, sai_objec
     info.npu_id = npu_id;
     info.bridge_oid = br_oid;
     info.tag = false;
+    sai_attribute_t bridge_port_attr;
 
     info.data.port_obj_id = tunnel_oid;
     info.data.port_type = ndi_port_type_PORT;
     info.data.brport_type = ndi_brport_type_TUNNEL;
-    return ndi_create_bridge_port( &info, bridge_port_id, NULL, 0);
+    bridge_port_attr.value.u32 = SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DISABLE;
+    bridge_port_attr.id = SAI_BRIDGE_PORT_ATTR_FDB_LEARNING_MODE;
+    return ndi_create_bridge_port( &info, bridge_port_id, &bridge_port_attr, 1);
 }
 
 t_std_error
