@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2018 Dell Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR
+ * CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT
+ * LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS
+ * FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
+ *
+ * See the Apache Version 2.0 License for specific language governing
+ * permissions and limitations under the License.
+ */
+
 #include "std_error_codes.h"
 #include "cps_api_operation.h"
 #include "nas_ndi_event_logs.h"
@@ -206,11 +222,11 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
     /* Get current deep buffer mode and update */
     ret = nas_sw_profile_cur_deep_buffer_mode_get(&cur_deep_buffer_mode);
 
-    if (ret == STD_ERR_OK) 
+    if (ret == STD_ERR_OK)
     {
         ndi_profile_set_value(switch_id, "SAI_SWITCH_PDM_MODE",
                               std::to_string(cur_deep_buffer_mode));
-        NDI_INIT_LOG_TRACE("ndi profile set: %d for SAI_SWITCH_PDM_MODE\n", 
+        NDI_INIT_LOG_TRACE("ndi profile set: %d for SAI_SWITCH_PDM_MODE\n",
                            cur_deep_buffer_mode);
     }
 
