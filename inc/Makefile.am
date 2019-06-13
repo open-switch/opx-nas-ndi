@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Dell Inc.
+# Copyright (c) 2019 Dell Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -34,4 +34,6 @@ nobase_include_HEADERS = \
     opx/nas_ndi_stg_util.h \
     opx/nas_ndi_bridge_port.h \
     opx/nas_ndi_tunnel_map.h  \
-    opx/nas_ndi_tunnel_obj.h
+    opx/nas_ndi_tunnel_obj.h \
+    opx/nas_ndi_ipmc_utl.h \
+    opx/nas_ndi_router_interface_utl.h

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -31,6 +31,7 @@
 #include "nas_ndi_utils.h"
 #include "nas_ndi_fc_init.h"
 #include "sai.h"
+#include "saiextensions.h"
 #include "saistatus.h"
 #include "saitypes.h"
 #include "nas_ndi_vlan.h"
@@ -233,6 +234,26 @@ static t_std_error nas_ndi_sai_api_table_init(ndi_sai_api_tbl_t *n_sai_api_tbl)
         if (sai_ret != SAI_STATUS_SUCCESS) {
             break;
         }
+        sai_ret = sai_api_query(SAI_API_IPMC, (void *)&(n_sai_api_tbl->n_sai_ipmc_api_tbl));
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            break;
+        }
+        sai_ret = sai_api_query(SAI_API_EXTENSIONS_IPMC_REPL_GROUP, (void *)&(n_sai_api_tbl->n_sai_ipmc_repl_grp_api_tbl));
+        /* This is the API which s added as EXTENSIONS for multicast, so other NPU/Vendors may fail, so taking it as
+           exception and not failing here */
+        if ((sai_ret != SAI_STATUS_SUCCESS) && (sai_ret != SAI_STATUS_INVALID_PARAMETER)) {
+            NDI_INIT_LOG_ERROR("ndi api table init failed with error 0x%x for SAI_API_EXTENSIONS_IPMC_REPL_GROUP\n", sai_ret);
+            break;
+        }
+        sai_ret = sai_api_query(SAI_API_IPMC_GROUP, (void *)&(n_sai_api_tbl->n_sai_ipmc_grp_api_tbl));
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            break;
+        }
+        sai_ret = sai_api_query(SAI_API_RPF_GROUP, (void *)&(n_sai_api_tbl->n_sai_rpf_grp_api_tbl));
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            break;
+        }
+
     } while(0);
 
     if (sai_ret != SAI_STATUS_SUCCESS) {
@@ -419,8 +440,6 @@ t_std_error ndi_initialize_switch(nas_ndi_db_t *ndi_db_ptr)
         sai_switch_attr_list[count].value.booldata = true;
         count++;
     }
-
-    handle_profile_map(ndi_db_ptr->npu_profile_id, getenv("OPX_SAI_PROFILE_FILE"));
 
    /*  Create the NPU */
    sai_ret = sai_switch_api_tbl->create_switch(&ndi_switch_id,

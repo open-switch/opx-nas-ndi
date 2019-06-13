@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -23,6 +23,7 @@ extern "C" {
 #include "saiswitch.h"
 #include "saiswitchextensions.h"
 #include "saiextensions.h"
+#include "dell-base-switch-element.h"
 }
 
 #include "nas_ndi_switch.h"
@@ -33,7 +34,6 @@ extern "C" {
 #include "nas_ndi_int.h"
 #include "nas_ndi_utils.h"
 #include "nas_ndi_event_logs.h"
-
 
 
 #include <unordered_map>
@@ -99,6 +99,13 @@ static _enum_map _algo_stoy  = {
     {SAI_HASH_ALGORITHM_XOR, BASE_SWITCH_HASH_ALGORITHM_XOR },
     {SAI_HASH_ALGORITHM_CRC, BASE_SWITCH_HASH_ALGORITHM_CRC },
     {SAI_HASH_ALGORITHM_RANDOM, BASE_SWITCH_HASH_ALGORITHM_RANDOM },
+    {SAI_HASH_ALGORITHM_CRC_CCITT, BASE_SWITCH_HASH_ALGORITHM_CRC16CC },
+    {SAI_HASH_ALGORITHM_CRC_32LO, BASE_SWITCH_HASH_ALGORITHM_CRC32LSB },
+    {SAI_HASH_ALGORITHM_CRC_32HI, BASE_SWITCH_HASH_ALGORITHM_CRC32MSB },
+    {SAI_HASH_ALGORITHM_CRC_XOR8, BASE_SWITCH_HASH_ALGORITHM_XOR8 },
+    {SAI_HASH_ALGORITHM_CRC_XOR4, BASE_SWITCH_HASH_ALGORITHM_XOR4 },
+    {SAI_HASH_ALGORITHM_CRC_XOR2, BASE_SWITCH_HASH_ALGORITHM_XOR2 },
+    {SAI_HASH_ALGORITHM_CRC_XOR1, BASE_SWITCH_HASH_ALGORITHM_XOR1 },
 };
 
 static bool to_sai_type_hash_algo(sai_attribute_t *param ) {
@@ -120,6 +127,16 @@ static bool to_sai_type_switch_mode(sai_attribute_t *param ) {
 
 static bool from_sai_type_switch_mode(sai_attribute_t *param ) {
     return from_sai_type(_mode_stoy,param);
+}
+
+static bool to_sai_type_rate_adjust(sai_attribute_t *param ) {
+    param->value.u8 = (uint8_t)param->value.u32;
+    return true;
+}
+
+static bool from_sai_type_rate_adjust(sai_attribute_t *param ) {
+    param->value.u32 = param->value.u8;
+    return true;
 }
 
 static _enum_map _bst_tracking_mode_stoy = {
@@ -255,12 +272,36 @@ static std::unordered_map<uint32_t,_sai_op_table> _attr_to_op = {
     {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_ECN_ECT_THRESHOLD_ENABLE, {
             SW_ATTR_U32, NULL,NULL,SAI_SWITCH_ATTR_ECN_ECT_THRESHOLD_ENABLE}},
 
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_ECMP_GROUP_SIZE, {
+            SW_ATTR_U32, NULL,NULL,SAI_SWITCH_ATTR_NUMBER_OF_ECMP_GROUPS}},
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_QOS_RATE_ADJUST, {
+            SW_ATTR_U32, to_sai_type_rate_adjust,from_sai_type_rate_adjust,SAI_SWITCH_ATTR_EXTENSIONS_QOS_RATE_ADJUST}},
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_VXLAN_RIOT_ENABLE, {
+            SW_ATTR_U32, NULL, NULL, 0} },
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_MAX_VXLAN_OVERLAY_RIFS, {
+            SW_ATTR_U32, NULL, NULL, 0} },
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_MAX_VXLAN_OVERLAY_NEXTHOPS, {
+            SW_ATTR_U32, NULL, NULL, 0} },
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_RIF_TABLE_SIZE, {
+            SW_ATTR_U32, NULL, NULL, 0} },
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_L3_NEXTHOP_TABLE_SIZE, {
+            SW_ATTR_U32, NULL, NULL, 0} },
+
     {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_BST_ENABLE, {
             SW_ATTR_BOOL, NULL,NULL, SAI_SWITCH_ATTR_EXTENSIONS_BST_TRACKING_ENABLE}},
 
     {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_BST_TRACKING_MODE, {
             SW_ATTR_U32, to_sai_type_bst_tracking_mode, from_sai_type_bst_tracking_mode,
             SAI_SWITCH_ATTR_EXTENSIONS_BST_TRACKING_MODE}},
+
+    {BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_DEEP_BUFFER_MODE_ENABLE, {
+            SW_ATTR_U32, NULL, NULL, 0 }},
 };
 
 extern "C" t_std_error ndi_switch_set_attribute(npu_id_t npu, BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_t attr,
@@ -579,3 +620,88 @@ extern "C" t_std_error ndi_switch_get_slice_list(npu_id_t npu_id, nas_ndi_switch
 
     return STD_ERR_OK;
 }
+
+extern "C" bool nas2sai_switch_stats_type_get(BASE_SWITCH_SWITCHING_ENTITIES_SWITCH_STATS_t stat_id,
+                                          sai_switch_attr_t *sai_stat_id)
+{
+    static const auto & nas2sai_switch_stats_type =
+        * new std::unordered_map<BASE_SWITCH_SWITCHING_ENTITIES_SWITCH_STATS_t, sai_switch_attr_t,
+                                std::hash<int>>
+    {
+        {BASE_SWITCH_SWITCHING_ENTITIES_SWITCH_STATS_AVAILABLE_IPV4_ROUTE_ENTRIES, SAI_SWITCH_ATTR_AVAILABLE_IPV4_ROUTE_ENTRY},
+        {BASE_SWITCH_SWITCHING_ENTITIES_SWITCH_STATS_AVAILABLE_IPV6_ROUTE_ENTRIES, SAI_SWITCH_ATTR_AVAILABLE_IPV6_ROUTE_ENTRY},
+        {BASE_SWITCH_SWITCHING_ENTITIES_SWITCH_STATS_AVAILABLE_IPV4_NEIGHBOUR_ENTRIES, SAI_SWITCH_ATTR_AVAILABLE_IPV4_NEIGHBOR_ENTRY},
+        {BASE_SWITCH_SWITCHING_ENTITIES_SWITCH_STATS_AVAILABLE_IPV6_NEIGHBOUR_ENTRIES, SAI_SWITCH_ATTR_AVAILABLE_IPV6_NEIGHBOR_ENTRY},
+        {BASE_SWITCH_SWITCHING_ENTITIES_SWITCH_STATS_AVAILABLE_FDB_ENTRIES, SAI_SWITCH_ATTR_AVAILABLE_FDB_ENTRY}
+   };
+
+    try {
+        *sai_stat_id = nas2sai_switch_stats_type.at(stat_id);
+    }
+    catch (...) {
+        EV_LOGGING(NDI, NOTICE, "NDI-SWITCH", "stats not mapped: stat_id %u",
+                   stat_id);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * This function gets the queue statistics
+ * @param ndi_id
+ * @param list of switch stats types to query
+ * @param number of switch stats types specified
+ * @param[out] counters: stats will be stored in the same order of the counter_ids
+ * return standard error
+ */
+extern "C" t_std_error ndi_switch_get_statistics(npu_id_t npu_id,
+                                BASE_SWITCH_SWITCHING_ENTITIES_SWITCH_STATS_t *counter_ids,
+                                uint_t number_of_counters,
+                                uint64_t *counters)
+{
+    sai_status_t sai_ret = SAI_STATUS_FAILURE;
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        NDI_LOG_TRACE("NDI-SWITCH",
+                      "npu_id %d not exist\n", npu_id);
+        return STD_ERR(NPU, PARAM, 0);
+    }
+
+    sai_attribute_t sai_attr_list[number_of_counters];
+    sai_switch_attr_t sai_attr_id;
+    uint_t i, j;
+    int count = 0;
+
+    for (i= 0; i < number_of_counters; i++) {
+        if (nas2sai_switch_stats_type_get(counter_ids[i], &sai_attr_id)) {
+            sai_attr_list[i].id = sai_attr_id;
+            count++;
+        } else {
+            NDI_LOG_ERROR("NDI-SWITCH",
+                    "NAS SWITCH Stat id %d is not mapped to any SAI stat id",
+                    counter_ids[i]);
+        }
+    }
+
+    if ((sai_ret = ndi_sai_switch_api_tbl_get(ndi_db_ptr)->get_switch_attribute(ndi_switch_id_get(),
+                                             (uint32_t)count, sai_attr_list)) != SAI_STATUS_SUCCESS) {
+        NDI_LOG_ERROR("NDI-SWITCH", "Error from SAI:%d in get attrs for NPU:%d",
+                      sai_ret, (int)npu_id);
+        return STD_ERR(NPU, CFG, sai_ret);
+    }
+
+    for (i= 0, j= 0; i < number_of_counters; i++) {
+        if (nas2sai_switch_stats_type_get(counter_ids[i], &sai_attr_id)) {
+            counters[i] = sai_attr_list[j].value.u32;
+            j++;
+        }
+        else {
+            // zero-filled for counters not able to poll
+            counters[i] = 0;
+        }
+    }
+
+    return STD_ERR_OK;
+}
+
+

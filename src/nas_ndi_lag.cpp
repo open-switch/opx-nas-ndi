@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -27,6 +27,7 @@
 #include "nas_ndi_bridge_port.h"
 #include "sai.h"
 #include "sailag.h"
+#include "sailagextensions.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -306,6 +307,7 @@ static sai_bridge_port_fdb_learning_mode_t ndi_lag_get_sai_mac_learn_mode
         {BASE_IF_MAC_LEARN_MODE_HW, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW},
         {BASE_IF_MAC_LEARN_MODE_CPU_TRAP, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_TRAP},
         {BASE_IF_MAC_LEARN_MODE_CPU_LOG, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_LOG},
+        {BASE_IF_MAC_LEARN_MODE_HW_DISABLE_ONLY, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DISABLE},
     };
 
     sai_bridge_port_fdb_learning_mode_t mode;
@@ -369,10 +371,33 @@ t_std_error ndi_lag_set_packet_drop(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id,
                                         mode, enable, ndi_lag_id);
     return STD_ERR_OK;
 }
+
+t_std_error ndi_set_lag_resilient_hash(npu_id_t npu_id, ndi_obj_id_t ndi_lag_id, bool hash_mode)
+{
+    sai_status_t    sai_ret = SAI_STATUS_FAILURE;
+    sai_attribute_t sai_lag_attr;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == NULL) {
+        return STD_ERR(INTERFACE, CFG,0);
+    }
+
+    NDI_LAG_LOG_INFO("Set lag hash mode (%d) in NPU %d lag id %lu",
+            hash_mode, npu_id, ndi_lag_id);
+
+    memset (&sai_lag_attr, 0, sizeof (sai_attribute_t));
+
+    sai_lag_attr.id = SAI_LAG_ATTR_EXTENSIONS_RESILIENT_HASH_ENABLE;
+    sai_lag_attr.value.booldata = hash_mode;
+
+    if((sai_ret = ndi_sai_lag_api(ndi_db_ptr)->set_lag_attribute(ndi_lag_id,
+                    &sai_lag_attr)) != SAI_STATUS_SUCCESS) {
+        NDI_LAG_LOG_ERROR("Lag hash mode set failure, %d", ndi_lag_id);
+        return STD_ERR(INTERFACE, CFG, sai_ret);
+    }
+
+    return STD_ERR_OK;
 }
 
-
-
-
-
+}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -85,6 +85,9 @@
 
 #define NDI_ACL_LOG_INFO(msg, ...) \
                    NDI_LOG_INFO("NDI-ACL", msg, ##__VA_ARGS__)
+
+#define NDI_VLAN_LOG_INFO(msg, ...) \
+                   NDI_LOG_INFO("NDI-VLAN", msg, ##__VA_ARGS__)
 
 #define NDI_ACL_LOG_DETAIL(msg, ...) \
                    NDI_LOG_INFO("NDI-ACL", msg, ##__VA_ARGS__)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -21,7 +21,7 @@
 #ifndef __NAS_NDI_ACL_UTL_H__
 #define __NAS_NDI_ACL_UTL_H__
 
-#include "saiacl.h"
+#include "saiaclextensions.h"
 #include "saiextensions.h"
 #include <list>
 #include <stdlib.h>
@@ -31,14 +31,21 @@ const sai_acl_api_t* ndi_acl_utl_api_get (const nas_ndi_db_t* ndi_db_ptr);
 //////////////////////////////////////////////////////////
 //Utilities to convert IDs from NDI to SAI and vice-versa
 /////////////////////////////////////////////////////////
-#define ndi_acl_utl_ndi2sai_table_id(x)   (sai_object_id_t) (x)
-#define ndi_acl_utl_ndi2sai_entry_id(x)   (sai_object_id_t) (x)
-#define ndi_acl_utl_ndi2sai_counter_id(x) (sai_object_id_t) (x)
-#define ndi_acl_utl_ndi2sai_range_id(x)   (sai_object_id_t) (x)
-#define ndi_acl_utl_sai2ndi_table_id(x)   (ndi_obj_id_t) (x)
-#define ndi_acl_utl_sai2ndi_entry_id(x)   (ndi_obj_id_t) (x)
-#define ndi_acl_utl_sai2ndi_counter_id(x) (ndi_obj_id_t) (x)
-#define ndi_acl_utl_sai2ndi_range_id(x)   (ndi_obj_id_t) (x)
+#define ndi_acl_utl_ndi2sai_table_id(x)         (sai_object_id_t) (x)
+#define ndi_acl_utl_ndi2sai_entry_id(x)         (sai_object_id_t) (x)
+#define ndi_acl_utl_ndi2sai_counter_id(x)       (sai_object_id_t) (x)
+#define ndi_acl_utl_ndi2sai_range_id(x)         (sai_object_id_t) (x)
+#define ndi_acl_utl_ndi2sai_trap_id(npu_id, x)    (sai_object_id_t) (x)
+#define ndi_acl_utl_ndi2sai_trap_grp(npu_id, x)   (sai_object_id_t) (x)
+#define ndi_acl_utl_ndi2sai_queue(npu_id, x)      (sai_object_id_t) (x)
+
+#define ndi_acl_utl_sai2ndi_table_id(x)         (ndi_obj_id_t) (x)
+#define ndi_acl_utl_sai2ndi_entry_id(x)         (ndi_obj_id_t) (x)
+#define ndi_acl_utl_sai2ndi_counter_id(x)       (ndi_obj_id_t) (x)
+#define ndi_acl_utl_sai2ndi_range_id(x)         (ndi_obj_id_t) (x)
+#define ndi_acl_utl_sai2ndi_trap_id(npu_id, x)    (ndi_obj_id_t) (x)
+#define ndi_acl_utl_sai2ndi_trap_grp(npu_id, x)   (ndi_obj_id_t) (x)
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Utilities to map NAS-NDI values to SAI values and populate the SAI attribute

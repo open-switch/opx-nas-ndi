@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -37,13 +37,22 @@
 #include <unordered_map>
 
 
-static const hal_vlan_id_t default_vlan_id = 1;
+static hal_vlan_id_t default_vlan_id = 1;
 
 static std::unordered_map <hal_vlan_id_t, sai_object_id_t> g_ndi_vlan_map;
 static std_rw_lock_t ndi_vlan_map_rwlock;
 
 extern "C" {
 
+
+void ndi_set_default_vlan_id (npu_id_t npu_id, hal_vlan_id_t vlan_id)
+{
+    default_vlan_id = vlan_id;
+    if (ndi_create_vlan(npu_id, vlan_id) != STD_ERR_OK) {
+        NDI_VLAN_LOG_ERROR("Default vlan(%u) create failed.", vlan_id);
+    }
+
+}
 
 sai_object_id_t ndi_get_sai_vlan_obj_id(npu_id_t npu_id,
         hal_vlan_id_t vlan_id)
@@ -370,7 +379,7 @@ t_std_error ndi_create_vlan(npu_id_t npu_id, hal_vlan_id_t vlan_id)
             NDI_VLAN_LOG_ERROR("Failed to add virtual obj cache mapping");
         }
     } else {
-        NDI_VLAN_LOG_ERROR("VLAN-id:%d already exists",
+        NDI_VLAN_LOG_INFO("VLAN-id:%d already exists",
                 vlan_id);
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -29,6 +29,8 @@
 #include "sai.h"
 #include "saistatus.h"
 #include "saitypes.h"
+#include "saihostifextensions.h"
+#include "nas_ndi_bridge_port.h"
 
 /*  NDI Packet specific APIs  */
 
@@ -53,6 +55,7 @@ t_std_error ndi_packet_tx (uint8_t* buf, uint32_t len, ndi_packet_attr_t *p_attr
     sai_attribute_t sai_attr[NDI_MAX_PKT_ATTR];
     sai_object_id_t sai_port;
     sai_size_t      buf_len  = len;
+    ndi_obj_id_t    l2mc_id;
 
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(p_attr->npu_id);
     STD_ASSERT(ndi_db_ptr != NULL);
@@ -64,8 +67,7 @@ t_std_error ndi_packet_tx (uint8_t* buf, uint32_t len, ndi_packet_attr_t *p_attr
         sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_HOSTIF_TX_TYPE;
         sai_attr[attr_idx].value.s32 = SAI_HOSTIF_TX_TYPE_PIPELINE_LOOKUP;
         ++attr_idx;
-    } else { /* default case is SAI_HOSTIF_TX_TYPE_PIPELINE_BYPASS */
-
+    } else if (p_attr->tx_type == NDI_PACKET_TX_TYPE_PIPELINE_BYPASS) {
         if ((ret_code = ndi_sai_port_id_get(p_attr->npu_id, p_attr->tx_port, &sai_port)) != STD_ERR_OK) {
              return ret_code;
         }
@@ -76,6 +78,24 @@ t_std_error ndi_packet_tx (uint8_t* buf, uint32_t len, ndi_packet_attr_t *p_attr
         sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_HOSTIF_TX_TYPE;
         sai_attr[attr_idx].value.s32 = SAI_HOSTIF_TX_TYPE_PIPELINE_BYPASS;
         ++attr_idx;
+    } else if (p_attr->tx_type == NDI_PACKET_TX_TYPE_PIPELINE_HYBRID_BRIDGE) {
+        if ((ret_code = ndi_1d_get_l2mc_id(p_attr->npu_id, p_attr->bridge_id, &l2mc_id)) != STD_ERR_OK) {
+            return ret_code;
+        }
+        sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_EGR_BRIDGE_ID;
+        sai_attr[attr_idx].value.oid = p_attr->bridge_id;
+        ++attr_idx;
+
+        sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_EGR_L2MC_GROUP;
+        sai_attr[attr_idx].value.oid = l2mc_id;
+        ++attr_idx;
+
+        sai_attr[attr_idx].id = SAI_HOSTIF_PACKET_ATTR_HOSTIF_TX_TYPE;
+        sai_attr[attr_idx].value.s32 = SAI_HOSTIF_TX_TYPE_HYBRID;
+        ++attr_idx;
+
+    } else {
+        return STD_ERR(INTERFACE, FAIL, sai_ret);
     }
 
     if ((sai_ret = ndi_packet_hostif_api_tbl_get(ndi_db_ptr)->send_hostif_packet(ndi_switch_id_get(), buf,
@@ -118,13 +138,13 @@ static t_std_error ndi_packet_get_attr (const sai_attribute_t *p_attr, ndi_packe
             break;
 
         case SAI_HOSTIF_PACKET_ATTR_HOSTIF_TRAP_ID:
-            if(p_attr->value.oid ==
-                               SAI_HOSTIF_TRAP_TYPE_SAMPLEPACKET)
+            if(p_attr->value.oid == SAI_HOSTIF_TRAP_TYPE_SAMPLEPACKET) {
                 p_ndi_attr->trap_id = NDI_PACKET_TRAP_ID_SAMPLEPACKET;
-            else if (p_attr->value.oid == SAI_HOSTIF_TRAP_TYPE_L3_MTU_ERROR)
+            } else if (p_attr->value.oid == SAI_HOSTIF_TRAP_TYPE_L3_MTU_ERROR) {
                 p_ndi_attr->trap_id = NDI_PACKET_TRAP_ID_L3_MTU_ERROR;
-            else
+            } else {
                 p_ndi_attr->trap_id = p_attr->value.oid;
+            }
             break;
 
         case SAI_HOSTIF_PACKET_ATTR_BRIDGE_ID:

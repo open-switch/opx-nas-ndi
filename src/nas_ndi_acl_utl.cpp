@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -97,15 +97,34 @@ t_std_error ndi_acl_utl_ndi2sai_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filter_ty
             {BASE_ACL_MATCH_TYPE_DROP_MARKED,        SAI_ACL_ENTRY_ATTR_FIELD_DROP_MARKED},
             {BASE_ACL_MATCH_TYPE_BRIDGE_TYPE,        SAI_ACL_ENTRY_ATTR_FIELD_BRIDGE_TYPE},
         };
+    //Added for extension attrs
+    static const
+        std::unordered_map<BASE_ACL_MATCH_TYPE_t, sai_acl_entry_attr_extensions_t, std::hash<int>>
+        _nas2sai_entry_extn_filter_type_map = {
+
+            {BASE_ACL_MATCH_TYPE_MCAST_ROUTE_DST_HIT,SAI_ACL_ENTRY_ATTR_EXTENSIONS_FIELD_MCAST_ROUTE_NPU_META_DST_HIT},
+            {BASE_ACL_MATCH_TYPE_ROUTER_INTERFACE_USER_MARK, SAI_ACL_ENTRY_ATTR_EXTENSIONS_FIELD_LAYER3_INTERFACE_USER_META},
+        };
 
     auto type_map_itr = _nas2sai_entry_filter_type_map.find (ndi_filter_type);
+    t_std_error rc = STD_ERR_OK;
 
     if (type_map_itr == _nas2sai_entry_filter_type_map.end()) {
-        return STD_ERR(ACL, PARAM, 0);
+        rc =  STD_ERR(ACL, PARAM, 0);
     }
 
-   sai_attr_p->id = type_map_itr->second;
-   return STD_ERR_OK;
+    if (rc != STD_ERR_OK) {
+       auto ext_type_map_itr = _nas2sai_entry_extn_filter_type_map.find (ndi_filter_type);
+
+       if (ext_type_map_itr == _nas2sai_entry_extn_filter_type_map.end()) {
+           return STD_ERR(ACL, PARAM, 0);
+       }
+       sai_attr_p->id = ext_type_map_itr->second;
+    } else {
+       sai_attr_p->id = type_map_itr->second;
+    }
+
+    return STD_ERR_OK;
 
 }
 
@@ -274,13 +293,31 @@ t_std_error ndi_acl_utl_ndi2sai_tbl_filter_type (BASE_ACL_MATCH_TYPE_t ndi_filte
             {BASE_ACL_MATCH_TYPE_BRIDGE_TYPE,        SAI_ACL_TABLE_ATTR_FIELD_BRIDGE_TYPE},
        };
 
+    static const
+        std::unordered_map<BASE_ACL_MATCH_TYPE_t, sai_acl_table_attr_extensions_t, std::hash<int>>
+        _nas2sai_tbl_extn_filter_type_map = {
+            {BASE_ACL_MATCH_TYPE_MCAST_ROUTE_DST_HIT,SAI_ACL_TABLE_ATTR_EXTENSIONS_FIELD_MCAST_ROUTE_NPU_META_DST_HIT},
+            {BASE_ACL_MATCH_TYPE_ROUTER_INTERFACE_USER_MARK, SAI_ACL_TABLE_ATTR_EXTENSIONS_FIELD_LAYER3_INTERFACE_USER_META},
+       };
+
     auto filter_type_itr = _nas2sai_tbl_filter_type_map.find (ndi_filter_type);
+    t_std_error rc = STD_ERR_OK;
 
     if (filter_type_itr == _nas2sai_tbl_filter_type_map.end()) {
-        return STD_ERR(ACL, PARAM, 0);
+        rc = STD_ERR(ACL, PARAM, 0);
     }
 
-    sai_attr_p->id = filter_type_itr->second;
+    if (rc != STD_ERR_OK) {
+       auto ext_filter_type_itr = _nas2sai_tbl_extn_filter_type_map.find (ndi_filter_type);
+
+       if (ext_filter_type_itr == _nas2sai_tbl_extn_filter_type_map.end()) {
+           return STD_ERR(ACL, PARAM, 0);
+       }
+       sai_attr_p->id = ext_filter_type_itr->second;
+    } else {
+       sai_attr_p->id = filter_type_itr->second;
+    }
+
     return STD_ERR_OK;
 }
 
@@ -614,6 +651,13 @@ static void _fill_sai_action_oid_list (sai_attribute_t* sai_attr_p,
     sai_attr_p->value.aclaction.parameter.objlist.list = oid_list;
 }
 
+static void _fill_sai_action_set_u64 (sai_attribute_t* sai_attr_p,
+                                     const ndi_acl_entry_action_t* ndi_action_p,
+                                     nas::mem_alloc_helper_t& mem_helper)
+{
+    sai_attr_p->value.aclaction.parameter.oid = ndi_action_p->values.u64;
+}
+
 static void _fill_sai_action_set_u32 (sai_attribute_t* sai_attr_p,
                                       const ndi_acl_entry_action_t* ndi_action_p,
                                       nas::mem_alloc_helper_t& mem_helper)
@@ -786,6 +830,7 @@ t_std_error ndi_acl_utl_fill_sai_action (sai_attribute_t* sai_attr_p,
             {NDI_ACL_ACTION_U16,               _fill_sai_action_set_u16},
             {NDI_ACL_ACTION_U8,                _fill_sai_action_set_u8},
             {NDI_ACL_ACTION_PKT_COLOR,         _fill_sai_action_pkt_color},
+            {NDI_ACL_ACTION_U64,               _fill_sai_action_set_u64},
         };
 
     BASE_ACL_ACTION_TYPE_t  action_type = ndi_action_p->action_type;

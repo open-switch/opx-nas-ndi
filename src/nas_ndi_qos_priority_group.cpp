@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -348,7 +348,7 @@ t_std_error ndi_qos_get_extended_priority_group_statistics(ndi_port_t ndi_port_i
                                 BASE_QOS_PRIORITY_GROUP_STAT_t *counter_ids,
                                 uint_t number_of_counters,
                                 uint64_t *counters,
-                                bool is_read_and_clear,
+                                ndi_stats_mode_t ndi_stats_mode,
                                 bool is_snapshot_counters)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
@@ -369,11 +369,15 @@ t_std_error ndi_qos_get_extended_priority_group_statistics(ndi_port_t ndi_port_i
     }
 
     std::vector<uint64_t> sai_counters(sai_counter_id_list.size());
+    sai_stats_mode_t sai_mode;
+    if (ndi_to_sai_stats_mode(ndi_stats_mode, &sai_mode) == false)
+        return STD_ERR(QOS, PARAM, 0);
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-                        get_ingress_priority_group_stats(ndi2sai_priority_group_id(ndi_priority_group_id),
+                        get_ingress_priority_group_stats_ext(ndi2sai_priority_group_id(ndi_priority_group_id),
                                 sai_counter_id_list.size(),
                                 &sai_counter_id_list[0],
+                                sai_mode,
                                 &sai_counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",

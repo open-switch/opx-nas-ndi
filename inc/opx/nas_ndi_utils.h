@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -99,9 +99,6 @@ static inline t_std_error ndi_utl_mk_std_err (enum e_std_error_subsystems sub,
              STD_ERR_MK (sub, e_std_err_code_FAIL, 0);
 }
 
-t_std_error handle_profile_map(sai_switch_profile_id_t profile_id,
-                               const char *profile_file_name);
-
 static inline t_std_error ndi_utl_mk_qos_std_err(sai_status_t st)
 {
     return ((st == SAI_STATUS_TABLE_FULL) || (st == SAI_STATUS_INSUFFICIENT_RESOURCES)) ?
@@ -109,6 +106,7 @@ static inline t_std_error ndi_utl_mk_qos_std_err(sai_status_t st)
              STD_ERR_MK (e_std_err_QOS, e_std_err_code_FAIL, st);
 }
 
+bool ndi_to_sai_stats_mode(ndi_stats_mode_t ndi_id, sai_stats_mode_t *sai_id);
 #ifdef __cplusplus
 }
 #endif

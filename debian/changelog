@@ -1,3 +1,13 @@
+opx-nas-ndi (5.4.0) unstable; urgency=medium
+
+  * Update: Set SAI flag on vlan api
+  * Update: NAS/NDI does not need to be aware of the SAI Default group
+  * Bugfix: To achieve flexible trap management packet queue need 
+            to be supported at trap group level instead of at trap level
+  * Update: Copyright year
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Wed, 06 Jun 2019 14:44:33 -0800
+
 opx-nas-ndi (4.8.0+opx2) unstable; urgency=medium
 
   * Update: Copyright information

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -20,12 +20,15 @@
 
 #include "std_ip_utils.h"
 #include "sail2mcgroup.h"
+#include "saivlan.h"
 #include "saistatus.h"
 #include "nas_ndi_int.h"
 #include "nas_ndi_l2mc.h"
 #include "nas_ndi_utils.h"
+#include "nas_ndi_vlan_util.h"
 #include "nas_ndi_event_logs.h"
 #include "nas_ndi_bridge_port.h"
+#include "nas_switch.h"
 #include "std_mutex_lock.h"
 #include <unordered_map>
 
@@ -40,6 +43,10 @@ using l2mc_grp_mem_map_t = std::unordered_map <l2mc_grp_id , member_map_t>; /*Fi
 
 l2mc_grp_mem_map_t l2mc_grp_mem_map;
 
+bool ndi_l2mc_vlan_port_lookup_enabled_get(void)
+{
+    return nas_switch_get_l2mc_vlan_port_lookup_enabled();
+}
 
 std_mutex_type_t *ndi_l2mc_mutex_lock()
 {
@@ -49,6 +56,11 @@ std_mutex_type_t *ndi_l2mc_mutex_lock()
 static inline sai_l2mc_group_api_t *ndi_l2mc_group_api_get(nas_ndi_db_t *ndi_db_ptr)
 {
     return ndi_db_ptr->ndi_sai_api_tbl.n_sai_l2mc_grp_api_tbl;
+}
+
+static inline  sai_vlan_api_t *ndi_vlan_api_get(nas_ndi_db_t *ndi_db_ptr)
+{
+     return(ndi_db_ptr->ndi_sai_api_tbl.n_sai_vlan_api_tbl);
 }
 
 static bool _del_mem_from_map(ndi_obj_id_t group_id, ndi_obj_id_t brport_id) {
@@ -370,6 +382,62 @@ t_std_error ndi_l2mc_group_delete_member(npu_id_t npu_id, ndi_obj_id_t member_id
         NDI_MCAST_LOG_ERROR("Failed to delete multicast group member");
         return STD_ERR(MCAST, FAIL, sai_ret);
     }
+
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_l2mc_set_flood_restrict(npu_id_t npu_id, hal_vlan_id_t vid,
+                                        ndi_flood_restrict_type_t restr_type,
+                                        ndi_obj_id_t group_id)
+{
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
+    if (ndi_db_ptr == nullptr) {
+        return STD_ERR(MCAST, PARAM, 0);
+    }
+
+    sai_object_id_t vlan_obj_id;
+    vlan_obj_id = ndi_get_sai_vlan_obj_id(npu_id, vid);
+    if (vlan_obj_id == SAI_NULL_OBJECT_ID) {
+        return STD_ERR(MCAST, PARAM, 0);
+    }
+
+    sai_status_t sai_ret;
+    sai_attribute_t vlan_attr;
+
+    sai_vlan_flood_control_type_t flood_control;
+    switch(restr_type) {
+    case NDI_FLOOD_TO_ALL_PORTS:
+        flood_control = SAI_VLAN_FLOOD_CONTROL_TYPE_ALL;
+        break;
+    case NDI_FLOOD_TO_NO_PORT:
+        flood_control = SAI_VLAN_FLOOD_CONTROL_TYPE_NONE;
+        break;
+    case NDI_FLOOD_TO_GROUP:
+        flood_control = SAI_VLAN_FLOOD_CONTROL_TYPE_L2MC_GROUP;
+        break;
+    default:
+        NDI_MCAST_LOG_ERROR("Unknown flood-restrict type %d", restr_type);
+        return STD_ERR(MCAST, PARAM, 0);
+    }
+
+    if (restr_type == NDI_FLOOD_TO_GROUP) {
+        vlan_attr.id = SAI_VLAN_ATTR_UNKNOWN_MULTICAST_FLOOD_GROUP;
+        vlan_attr.value.oid = (sai_object_id_t)group_id;
+        sai_ret = ndi_vlan_api_get(ndi_db_ptr)->set_vlan_attribute(vlan_obj_id, &vlan_attr);
+        if (sai_ret != SAI_STATUS_SUCCESS) {
+            NDI_MCAST_LOG_ERROR("Failed to set flood-restrict group ID 0x%lx", group_id);
+            return STD_ERR(MCAST, FAIL, sai_ret);
+        }
+    }
+
+    vlan_attr.id = SAI_VLAN_ATTR_UNKNOWN_MULTICAST_FLOOD_CONTROL_TYPE;
+    vlan_attr.value.s32 = flood_control;
+    sai_ret = ndi_vlan_api_get(ndi_db_ptr)->set_vlan_attribute(vlan_obj_id, &vlan_attr);
+    if (sai_ret != SAI_STATUS_SUCCESS) {
+        NDI_MCAST_LOG_ERROR("Failed to set flood-restrict type %d", restr_type);
+        return STD_ERR(MCAST, FAIL, sai_ret);
+    }
+
 
     return STD_ERR_OK;
 }

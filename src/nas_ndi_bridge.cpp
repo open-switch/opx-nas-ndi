@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -28,6 +28,7 @@
 #include "nas_ndi_vlan_util.h"
 #include "nas_ndi_port_utils.h"
 #include "nas_ndi_1d_bridge.h"
+#include "std_mutex_lock.h"
 
 #include "sai.h"
 #include "saitypes.h"
@@ -51,6 +52,9 @@ typedef struct bridge_port_create_info {
     sai_object_id_t bridge_oid;
     bool tag;
 } bridge_port_create_info_t;
+
+static std_rw_lock_t ndi_bridge_l2mc_map_rwlock;
+static const auto ndi_bridge_id_bcast_l2mc_id = new std::unordered_map<ndi_obj_id_t ,ndi_obj_id_t>;
 
 extern "C"
 {
@@ -526,11 +530,17 @@ static t_std_error ndi_delete_bridge_port(npu_id_t npu_id, ndi_brport_obj_t *inf
     if (ndi_set_bridge_port_attribute (npu_id, info->brport_obj_id, bridge_port_attr) != STD_ERR_OK) {
         return STD_ERR(NPU, CFG, sai_ret);
     }
-    if (ndi_flush_bridge_port_entry(info->brport_obj_id) != STD_ERR_OK) {
-        NDI_PORT_LOG_ERROR("MAC flush failed for bridgeport id :%"  PRIx64 " ",
-        info->brport_obj_id);
-        return STD_ERR(NPU, CFG, sai_ret);
+    /* Flush is not applicable for router bridge port */
+    if (info->brport_type != ndi_brport_type_1D_ROUTER) {
+        if (ndi_flush_bridge_port_entry(info->brport_obj_id) != STD_ERR_OK) {
+            NDI_PORT_LOG_ERROR("MAC flush failed for bridgeport id :%"  PRIx64 " ",
+                               info->brport_obj_id);
+            return STD_ERR(NPU, CFG, sai_ret);
+        }
     }
+
+    std_mutex_simple_lock_guard lock(ndi_stg_get_member_mutex());
+
     if (info->brport_type == ndi_brport_type_PORT) {
         if(ndi_stg_delete_port_stp_ports(npu_id,info->brport_obj_id) != STD_ERR_OK) {
             NDI_PORT_LOG_ERROR("STP Port delete failed for bridge port  %"  PRIx64 " ",
@@ -551,6 +561,7 @@ static t_std_error ndi_delete_bridge_port(npu_id_t npu_id, ndi_brport_obj_t *inf
         info->brport_obj_id);
         return STD_ERR(NPU, CFG, sai_ret);
     }
+
     /* Remove from cache */
     blk.brport_obj_id = info->brport_obj_id;
     blk.brport_type = info->brport_type;
@@ -611,6 +622,12 @@ t_std_error ndi_create_bridge_port(bridge_port_create_info_t *info, sai_object_i
            }
 
         case ndi_brport_type_1D_ROUTER:
+           {
+               bridge_port_attr[attr_idx].id = SAI_BRIDGE_PORT_ATTR_RIF_ID;
+               bridge_port_attr[attr_idx++].value.oid = info->data.rif_obj_id;
+               break;
+           }
+
         case ndi_brport_type_1Q_ROUTER:
         default:
             {
@@ -643,7 +660,6 @@ t_std_error ndi_create_bridge_port(bridge_port_create_info_t *info, sai_object_i
 
     NDI_PORT_LOG_TRACE("Create  bridgeport: SAI type %d  brport id %" PRIx64 " " "port id %" PRIx64 " ",
                      sai_po_ty, info->data.brport_obj_id, info->data.port_obj_id);
-
     /* Set ADMIN UP  */
     sai_attribute_t br_port_attr[1];
     sai_status_t   sai_ret = SAI_STATUS_FAILURE;
@@ -667,25 +683,27 @@ t_std_error ndi_create_bridge_port(bridge_port_create_info_t *info, sai_object_i
         return STD_ERR_OK;
     }
 
-    /* Set ingress & egress filtering to enable i.e drop unknown vlan packets */
-    br_port_attr[0].id = SAI_BRIDGE_PORT_ATTR_INGRESS_FILTERING;
-    br_port_attr[0].value.booldata = true;
+    /* Avoid the below settings for router bridge port */
+    if (brport_type != ndi_brport_type_1D_ROUTER) {
+        /* Set ingress & egress filtering to enable i.e drop unknown vlan packets */
+        br_port_attr[0].id = SAI_BRIDGE_PORT_ATTR_INGRESS_FILTERING;
+        br_port_attr[0].value.booldata = true;
 
-    if (ndi_set_bridge_port_attribute (info->npu_id, info->data.brport_obj_id, br_port_attr) != STD_ERR_OK) {
-        return STD_ERR(NPU, CFG, sai_ret);
+        if (ndi_set_bridge_port_attribute (info->npu_id, info->data.brport_obj_id, br_port_attr) != STD_ERR_OK) {
+            return STD_ERR(NPU, CFG, sai_ret);
+        }
+
+        br_port_attr[0].id = SAI_BRIDGE_PORT_ATTR_EGRESS_FILTERING;
+        br_port_attr[0].value.booldata = true;
+
+        if (ndi_set_bridge_port_attribute (info->npu_id, info->data.brport_obj_id, br_port_attr) != STD_ERR_OK) {
+            return STD_ERR(NPU, CFG, sai_ret);
+        }
+
+        if(!ndi_stg_create_default_stp_port(info->data.brport_obj_id)){
+            return STD_ERR(NPU,CFG,0);
+        }
     }
-
-    br_port_attr[0].id = SAI_BRIDGE_PORT_ATTR_EGRESS_FILTERING;
-    br_port_attr[0].value.booldata = true;
-
-    if (ndi_set_bridge_port_attribute (info->npu_id, info->data.brport_obj_id, br_port_attr) != STD_ERR_OK) {
-        return STD_ERR(NPU, CFG, sai_ret);
-    }
-
-    if(!ndi_stg_create_default_stp_port(info->data.brport_obj_id)){
-        return STD_ERR(NPU,CFG,0);
-    }
-
     nas_ndi_add_bridge_port_obj(&info->data);
     return STD_ERR_OK;
 }
@@ -1105,9 +1123,12 @@ ndi_set_mcast_flooding(npu_id_t npu_id, ndi_obj_id_t bridge_id,  ndi_obj_id_t mu
 
             if (enable_flood ) {
                 bridge_fl_attr[0].value.oid =  multicast_grp;
+                std_rw_lock_write_guard m(&ndi_bridge_l2mc_map_rwlock);
+                ndi_bridge_id_bcast_l2mc_id->insert(std::make_pair(bridge_id, multicast_grp));
             } else {
+                std_rw_lock_write_guard m(&ndi_bridge_l2mc_map_rwlock);
+                ndi_bridge_id_bcast_l2mc_id->erase(bridge_id);
                 bridge_fl_attr[0].value.oid =  SAI_NULL_OBJECT_ID;
-
             }
             break;
         }
@@ -1202,6 +1223,7 @@ static t_std_error _sub_port_mac_learn_handler(npu_id_t npu_id, sai_object_id_t 
         {BASE_IF_MAC_LEARN_MODE_HW, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW},
         {BASE_IF_MAC_LEARN_MODE_CPU_TRAP, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_TRAP},
         {BASE_IF_MAC_LEARN_MODE_CPU_LOG, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_LOG},
+        {BASE_IF_MAC_LEARN_MODE_HW_DISABLE_ONLY, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DISABLE},
     };
 
     BASE_IF_MAC_LEARN_MODE_t mac_lrn_mode = *(BASE_IF_MAC_LEARN_MODE_t *)attr.val;
@@ -1300,6 +1322,81 @@ t_std_error ndi_bridge_sub_port_attr_set(npu_id_t npu_id, ndi_obj_id_t port_id,
     }
 
     return rc;
+}
+
+/************** L3 VXLAN handlers *****************/
+t_std_error ndi_1d_get_l2mc_id(npu_id_t npu_id, ndi_obj_id_t br_oid, ndi_obj_id_t *l2mc_id) {
+    std_rw_lock_read_guard m(&ndi_bridge_l2mc_map_rwlock);
+    auto it = ndi_bridge_id_bcast_l2mc_id->find(br_oid);
+    if (it == ndi_bridge_id_bcast_l2mc_id->end()) {
+        return STD_ERR(NPU,PARAM,0);
+    }
+    *l2mc_id = it->second;
+    return STD_ERR_OK;
+}
+
+static bool _ndi_get_1d_router_bridge_port(sai_object_id_t *brport_oid, sai_object_id_t saiport_oid) {
+
+    /* Get sai port id from bridge port */
+    ndi_brport_obj_t blk;
+    blk.rif_obj_id = saiport_oid;
+
+    if (!nas_ndi_get_bridge_port_obj(&blk, ndi_brport_query_type_FROM_RIF)) {
+        return false;
+    }
+    *brport_oid = blk.brport_obj_id;
+    NDI_PORT_LOG_TRACE("Got bridge port: for 1d bridge port id %" PRIx64 " " "port id %" PRIx64 " ",
+               blk.brport_obj_id, saiport_oid);
+    return true;
+
+}
+
+static t_std_error _ndi_1d_router_bridge_port_delete(npu_id_t npu_id, ndi_obj_id_t brport_oid) {
+
+    ndi_brport_obj_t blk;
+    memset(&blk, 0, sizeof(ndi_brport_obj_t));
+    blk.brport_obj_id = brport_oid;
+    blk.brport_type = ndi_brport_type_1D_ROUTER;
+
+    if (STD_ERR_OK != ndi_delete_bridge_port(npu_id, &blk)) {
+        NDI_PORT_LOG_ERROR("Remove bridgeport failed. tunnel brport_oid % " PRIx64 " ",
+        brport_oid);
+        return STD_ERR(NPU, CFG, 0);
+    }
+    NDI_PORT_LOG_TRACE("Delete tunnel bridge port success id %" PRIx64 " ", brport_oid);
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_1d_router_bridge_port_add(npu_id_t npu_id, bridge_id_t br_oid, ndi_obj_id_t rif_id, ndi_obj_id_t *br_port_id) {
+
+    bridge_port_create_info_t info;
+    sai_attribute_t bridge_port_attr[2];
+    t_std_error rc;
+
+    memset(&info, 0, sizeof(bridge_port_create_info_t));
+    info.npu_id = npu_id;
+    info.bridge_oid = br_oid;
+
+    info.data.brport_type = ndi_brport_type_1D_ROUTER;
+    info.data.rif_obj_id = rif_id;
+
+    if((rc  = ndi_create_bridge_port(&info, br_port_id, bridge_port_attr, 0)) != STD_ERR_OK) {
+        NDI_PORT_LOG_ERROR("ADD 1D port bridgeport failed. br_oid % " PRIx64 " ",
+        br_oid);
+        return rc;
+    }
+    return STD_ERR_OK;
+}
+
+t_std_error ndi_1d_router_bridge_port_delete(npu_id_t npu_id, ndi_obj_id_t ndi_rif) {
+
+    sai_object_id_t brport_oid;
+
+    /* Find brport oid from ndi_lag_id and vlan_id */
+    if (!_ndi_get_1d_router_bridge_port(&brport_oid, ndi_rif)) {
+        return STD_ERR_OK;
+    }
+    return _ndi_1d_router_bridge_port_delete(npu_id, brport_oid);
 }
 
 }
