@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -453,6 +453,14 @@ static bool nas2sai_queue_counter_type_get(BASE_QOS_QUEUE_STAT_t stat_id,
         {BASE_QOS_QUEUE_STAT_WATERMARK_BYTES, SAI_QUEUE_STAT_WATERMARK_BYTES},
         {BASE_QOS_QUEUE_STAT_SHARED_CURRENT_OCCUPANCY_BYTES, SAI_QUEUE_STAT_SHARED_CURR_OCCUPANCY_BYTES},
         {BASE_QOS_QUEUE_STAT_SHARED_WATERMARK_BYTES, SAI_QUEUE_STAT_SHARED_WATERMARK_BYTES},
+        {BASE_QOS_QUEUE_STAT_GREEN_WRED_ECN_MARKED_PACKETS, SAI_QUEUE_STAT_GREEN_WRED_ECN_MARKED_PACKETS},
+        {BASE_QOS_QUEUE_STAT_GREEN_WRED_ECN_MARKED_BYTES, SAI_QUEUE_STAT_GREEN_WRED_ECN_MARKED_BYTES},
+        {BASE_QOS_QUEUE_STAT_YELLOW_WRED_ECN_MARKED_PACKETS, SAI_QUEUE_STAT_YELLOW_WRED_ECN_MARKED_PACKETS},
+        {BASE_QOS_QUEUE_STAT_YELLOW_WRED_ECN_MARKED_BYTES, SAI_QUEUE_STAT_YELLOW_WRED_ECN_MARKED_BYTES},
+        {BASE_QOS_QUEUE_STAT_RED_WRED_ECN_MARKED_PACKETS, SAI_QUEUE_STAT_RED_WRED_ECN_MARKED_PACKETS},
+        {BASE_QOS_QUEUE_STAT_RED_WRED_ECN_MARKED_BYTES, SAI_QUEUE_STAT_RED_WRED_ECN_MARKED_BYTES},
+        {BASE_QOS_QUEUE_STAT_WRED_ECN_MARKED_PACKETS, SAI_QUEUE_STAT_WRED_ECN_MARKED_PACKETS},
+        {BASE_QOS_QUEUE_STAT_WRED_ECN_MARKED_BYTES, SAI_QUEUE_STAT_WRED_ECN_MARKED_BYTES},
     };
 
     static const auto &  nas2sai_queue_snapshot_counter_type =
@@ -646,7 +654,7 @@ t_std_error ndi_qos_get_queue_statistics(ndi_port_t ndi_port_id,
 {
     return ndi_qos_get_extended_queue_statistics (ndi_port_id,
                             ndi_queue_id, counter_ids,
-                            number_of_counters, counters, false, false);
+                            number_of_counters, counters, NAS_NDI_STATS_MODE_READ, false);
 }
 
 /**
@@ -665,7 +673,7 @@ t_std_error ndi_qos_get_extended_queue_statistics(ndi_port_t ndi_port_id,
                                 BASE_QOS_QUEUE_STAT_t *counter_ids,
                                 uint_t number_of_counters,
                                 uint64_t *counters,
-                                bool is_read_and_clear,
+                                ndi_stats_mode_t ndi_stats_mode,
                                 bool is_snapshot_counters)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
@@ -685,7 +693,7 @@ t_std_error ndi_qos_get_extended_queue_statistics(ndi_port_t ndi_port_id,
                                            is_snapshot_counters))
             sai_counter_id_list.push_back(sai_stat_id);
         else {
-            EV_LOGGING(NDI, NOTICE, "NDI-QOS",
+            EV_LOGGING(NDI, DEBUG, "NDI-QOS",
                     "NAS Queue Stat id %d is not mapped to any SAI stat id",
                     counter_ids[i]);
         }
@@ -693,15 +701,20 @@ t_std_error ndi_qos_get_extended_queue_statistics(ndi_port_t ndi_port_id,
 
     std::vector<uint64_t> sai_counters(sai_counter_id_list.size());
 
+    sai_stats_mode_t sai_mode;
+    if (ndi_to_sai_stats_mode(ndi_stats_mode, &sai_mode) == false)
+        return STD_ERR(QOS, PARAM, 0);
+
     if ((sai_ret = ndi_sai_qos_queue_api(ndi_db_ptr)->
-                        get_queue_stats(ndi2sai_queue_id(ndi_queue_id),
+                        get_queue_stats_ext(ndi2sai_queue_id(ndi_queue_id),
                                 sai_counter_id_list.size(),
                                 &sai_counter_id_list[0],
+                                sai_mode,
                                 &sai_counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                "queue get stats fails: npu_id %u\n",
-                ndi_port_id.npu_id);
+                "queue get stats fails: npu_id %u  ndi_port_id %lx ndi_queue_id %lx \n",
+                ndi_port_id.npu_id, ndi_port_id.npu_port, ndi_queue_id);
         return ndi_utl_mk_qos_std_err(sai_ret);
     }
     for (i= 0, j= 0; i < number_of_counters; i++) {

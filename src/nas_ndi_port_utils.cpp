@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -35,6 +35,7 @@ sai_bridge_port_fdb_learning_mode_t ndi_port_get_sai_mac_learn_mode
         {BASE_IF_PHY_MAC_LEARN_MODE_HW, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW},
         {BASE_IF_PHY_MAC_LEARN_MODE_CPU_TRAP, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_TRAP},
         {BASE_IF_PHY_MAC_LEARN_MODE_CPU_LOG, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_CPU_LOG},
+        {BASE_IF_PHY_MAC_LEARN_MODE_HW_DISABLE_ONLY, SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DISABLE},
     };
 
     sai_bridge_port_fdb_learning_mode_t mode = SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW;

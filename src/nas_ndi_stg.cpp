@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -28,6 +28,7 @@
 #include "nas_ndi_vlan_util.h"
 #include "nas_ndi_obj_cache.h"
 #include "nas_ndi_map.h"
+#include "std_mutex_lock.h"
 
 #include "saitypes.h"
 #include "saiport.h"
@@ -39,6 +40,16 @@
 #include <functional>
 #include <inttypes.h>
 #include <vector>
+
+static std_mutex_lock_create_static_init_fast(_stp_member_mutex);
+
+extern "C" {
+
+std_mutex_type_t * ndi_stg_get_member_mutex(){
+    return &_stp_member_mutex;
+}
+
+}
 
 #define NDI_STG_LOG(type,LVL,msg, ...) \
         EV_LOG( type, NAS_L2, LVL,"NDI-STG", msg, ##__VA_ARGS__)
@@ -191,7 +202,7 @@ static bool ndi_stg_create_stp_port(
             sai_object_id_t brport,
             sai_stp_port_state_t sai_stp_state)
 {
-
+    std_mutex_simple_lock_guard lock(ndi_stg_get_member_mutex());
     npu_id_t npu_id = ndi_npu_id_get();
     nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(npu_id);
 

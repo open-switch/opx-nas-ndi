@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -28,7 +28,7 @@ static auto kvpair = new nas_ndi_cfg_kv_pair_t;
 
 static const char* ndi_profile_set_value(int profile_id,
                                  const char* variable,
-                                 std::string value)
+                                 const std::string &value)
 {
     kv_iter kviter;
 
@@ -127,7 +127,9 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
     char value[NAS_CMN_NPU_PROFILE_ATTR_SIZE] = { 0 };
     char acl_prof_db_name[NAS_CMN_PROFILE_NAME_SIZE] = { 0 };
 
-    uint32_t conf_uft_mode,l2_size,l3_size,l3_host_size;
+    uint32_t conf_uft_mode,l2_size,l3_size,l3_host_size, conf_vxlan_riot = 0,
+             conf_vxlan_overlay_rifs = 0,
+             conf_vxlan_overlay_nexthops = 0;
     uint32_t cur_max_ecmp_per_grp = 0;
     uint32_t cur_ipv6_ext_prefix_routes = 0;
     bool cur_deep_buffer_mode = false;
@@ -265,6 +267,29 @@ void nas_ndi_populate_cfg_key_value_pair (uint32_t switch_id)
         for (; (ret == STD_ERR_OK);
                 (ret = nas_switch_npu_profile_get_next_value(key, value))) {
            ndi_profile_set_value(switch_id, key, value);
+        }
+    }
+    /* Get current VXLAN RIOT values and update */
+    ret = nas_sw_profile_vxlan_riot_conf_get(&conf_vxlan_riot, &conf_vxlan_overlay_rifs,
+                                             &conf_vxlan_overlay_nexthops);
+    if (ret != STD_ERR_OK)
+    {
+        NDI_INIT_LOG_TRACE("Failed to get current VXLAN configurations");
+    }
+    else
+    {
+        ndi_profile_set_value(switch_id, "SAI_KEY_VXLAN_RIOT_ENABLE",
+                              std::to_string(conf_vxlan_riot));
+        NDI_INIT_LOG_TRACE("VXLAN RIOT enable:%d RIFs:%d NHs:%d",
+                           conf_vxlan_riot, conf_vxlan_overlay_rifs, conf_vxlan_overlay_nexthops);
+        if (conf_vxlan_overlay_rifs) {
+            ndi_profile_set_value(switch_id, "SAI_KEY_VXLAN_NUM_OVERLAY_RIFS",
+                                  std::to_string(conf_vxlan_overlay_rifs));
+        }
+
+        if (conf_vxlan_overlay_nexthops) {
+            ndi_profile_set_value(switch_id, "SAI_KEY_VXLAN_NUM_OVERLAY_NEXT_HOPS",
+                                  std::to_string(conf_vxlan_overlay_nexthops));
         }
     }
 

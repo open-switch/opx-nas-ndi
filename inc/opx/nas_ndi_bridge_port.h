@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -52,6 +52,10 @@ t_std_error ndi_1d_bridge_tunnel_delete(npu_id_t npu_id, sai_object_id_t tun_brp
 
 t_std_error ndi_bridge_port_tunnel_stats_get(npu_id_t npu_id, sai_object_id_t tun_bridge_port_oid, ndi_stat_id_t *ndi_stat_ids, uint64_t* stats_val, size_t len);
 
+t_std_error ndi_1d_router_bridge_port_add(npu_id_t npu_id, bridge_id_t br_oid, ndi_obj_id_t rif_id,
+                                          ndi_obj_id_t *br_port_id);
+t_std_error ndi_1d_router_bridge_port_delete(npu_id_t npu_id, ndi_obj_id_t brport_oid);
+t_std_error ndi_1d_get_l2mc_id(npu_id_t npu_id, ndi_obj_id_t br_oid, ndi_obj_id_t *l2mc_id);
 #ifdef __cplusplus
 }
 #endif

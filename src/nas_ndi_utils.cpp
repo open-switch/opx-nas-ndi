@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -40,21 +40,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include <set>
-#include <sstream>
-#include <vector>
-#include <iostream>
-#include <fstream>
-
 #define NDI_SAI_PORT_OBJECT_TYPE_BITPOS     48
 #define NDI_SAI_PORT_OBJECT_ID_BITPOS     0
 
 #define NDI_SAI_PORT_OBJECT_ID_BITMASK       0x0000ffffffffffff
 #define NDI_SAI_PORT_OBJECT_TYPE_BITMASK     0x0fff000000000000
 
-static std::map<sai_switch_profile_id_t, size_t> profile_id_map;
-static std::vector<std::map<std::string, std::string>> profile_map;
-static std::vector<std::map<std::string, std::string>::iterator> profile_iter;
 
 static nas_ndi_db_t  *g_nas_ndi_db_tbl = NULL;
 /*  @todo as mentioned in the Current SAI spec supports only one NPU. Use npu_id  of 0 always */
@@ -329,48 +320,20 @@ bool ndi_to_sai_tunnel_stats(ndi_stat_id_t ndi_id, sai_tunnel_stat_t *sai_id){
     return true;
 }
 
-t_std_error handle_profile_map(sai_switch_profile_id_t profile_id,
-                               const char *profile_file_name) {
-    std::string profile_map_file = DEFAULT_SAI_PROFILE_FILE;
-    if (profile_file_name != NULL) {
-        profile_map_file = profile_file_name;
-    }
+bool ndi_to_sai_stats_mode(ndi_stats_mode_t ndi_id, sai_stats_mode_t *sai_id){
+    static const auto ndi_to_sai_stats_mode_ids = new std::map<ndi_stats_mode_t, sai_stats_mode_t>
+    {
+        {  NAS_NDI_STATS_MODE_READ, SAI_STATS_MODE_READ },
+        {  NAS_NDI_STATS_MODE_READ_AND_CLEAR, SAI_STATS_MODE_READ_AND_CLEAR },
+        {  NAS_NDI_STATS_MODE_SYNC, SAI_STATS_MODE_SYNC_AND_READ },
+        {  NAS_NDI_STATS_MODE_SYNC_AND_READ, SAI_STATS_MODE_SYNC_AND_READ },
+    };
 
-    size_t profile_index = profile_id_map.size();
-    profile_id_map[profile_id] = profile_index;
-
-    if (profile_map.size() <= profile_id) {
-        profile_map.resize(profile_index + 1);
+    auto it = ndi_to_sai_stats_mode_ids->find(ndi_id);
+    if(it == ndi_to_sai_stats_mode_ids->end() || (sai_id == NULL)){
+        NDI_LOG_ERROR("NAS-NDI-UTILS","Failed to get the sai stat id for ndi id %d", ndi_id);
+        return false;
     }
-    if (profile_iter.size() <= profile_index) {
-        size_t profile_iter_size = profile_iter.size();
-        profile_iter.resize(profile_index + 1);
-        for (int i = profile_iter_size; i <= profile_iter.size(); ++i) {
-            profile_iter[i] = profile_map[i].begin();
-        }
-    }
-    std::ifstream profile(profile_map_file);
-    if (!profile.is_open()) {
-        NDI_INIT_LOG_INFO("failed to open profile map file: %s : %s using SAI default profile",
-                          profile_map_file.c_str(), strerror(errno));
-        return STD_ERR_OK;
-    }
-    std::string line;
-    while(getline(profile, line)) {
-        if (line.size() > 0 && (line[0] == '#' || line[0] == ';'))
-            continue;
-
-        size_t pos = line.find("=");
-        if (pos == std::string::npos) {
-            NDI_INIT_LOG_INFO("not found '=' in line %s", line.c_str());
-            continue;
-        }
-        std::string key = line.substr(0, pos);
-        std::string value = line.substr(pos + 1);
-        profile_map[profile_id][key] = value;
-
-        NDI_INIT_LOG_TRACE("handle profile map insert key %s: %s", key.c_str(), value.c_str());
-    }
-    return STD_ERR_OK;
+    *sai_id = it->second;
+    return true;
 }
-

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -218,15 +218,27 @@ t_std_error ndi_update_mac_entry(ndi_mac_entry_t *entry, ndi_mac_attr_flags attr
 
 
 static bool _get_port_vlan_from_bridge_port(sai_object_id_t & brport ,ndi_mac_entry_t * entry){
+
     ndi_brport_obj_t _br_port;
     _br_port.brport_obj_id  = brport;
 
     if(!nas_ndi_get_bridge_port_obj(&_br_port,ndi_brport_query_type_FROM_BRPORT)){
-        NDI_MAC_LOG(ERR,"Failed to find bridge port for port %llx",_br_port.port_obj_id);
+        NDI_MAC_LOG(ERR,"Failed to find bridge port  %llx",brport);
         return false;
     }
 
-    if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_LOCAL){
+    if (_br_port.brport_type == ndi_brport_type_TUNNEL) {
+        if (entry->mac_entry_type != NDI_MAC_ENTRY_TYPE_1D_REMOTE) {
+            NDI_MAC_LOG(DEBUG,"Type sent for mac get is %d vs remote tunnel for port %llx",
+                        entry->mac_entry_type, _br_port.port_obj_id);
+
+        }
+        entry->mac_entry_type = NDI_MAC_ENTRY_TYPE_1D_REMOTE;
+        entry->endpoint_ip_port = brport;
+        return true;
+    }
+
+    if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_LOCAL) {
         if (_br_port.brport_type == ndi_brport_type_SUBPORT_UNTAG) {
             EV_LOGGING(NDI,DEBUG,"NDI-MAC","returning 0 vlan id for brport %llx with real vlan id %d",
                                 _br_port.port_obj_id, _br_port.vlan_id);
@@ -273,13 +285,22 @@ t_std_error ndi_create_mac_entry(ndi_mac_entry_t *entry)
         return STD_ERR(MAC,FAIL,0);
     }
 
+    sai_attr[attr_idx].id = SAI_FDB_ENTRY_ATTR_PACKET_ACTION;
+    sai_attr[attr_idx++].value.s32 = ndi_mac_sai_packet_action_get(entry->action);
+
     memcpy(&(sai_mac_entry.mac_address), entry->mac_addr, HAL_MAC_ADDR_LEN);
     sai_mac_entry.switch_id = ndi_switch_id_get();
 
-    if(!_get_brport_from_entry(entry,sai_brport)){
-        NDI_MAC_LOG(ERR,"Failed to get bridge port for entry type %d",entry->mac_entry_type);
-        return STD_ERR(MAC,PARAM,0);
+    if (entry->action != BASE_MAC_PACKET_ACTION_TRAP) {
+
+        if(!_get_brport_from_entry(entry,sai_brport)){
+            NDI_MAC_LOG(ERR,"Failed to get bridge port for entry type %d",entry->mac_entry_type);
+            return STD_ERR(MAC,PARAM,0);
+        }
+        sai_attr[attr_idx].id = SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID;
+        sai_attr[attr_idx++].value.oid = sai_brport;
     }
+
 
     if(entry->mac_entry_type == NDI_MAC_ENTRY_TYPE_1D_LOCAL){
         sai_mac_entry.bv_id = entry->bridge_id;
@@ -312,12 +333,6 @@ t_std_error ndi_create_mac_entry(ndi_mac_entry_t *entry)
 
     sai_attr[attr_idx].id = SAI_FDB_ENTRY_ATTR_TYPE;
     sai_attr[attr_idx++].value.s32 = (entry->is_static) ? SAI_FDB_ENTRY_TYPE_STATIC : SAI_FDB_ENTRY_TYPE_DYNAMIC;
-
-    sai_attr[attr_idx].id = SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID;
-    sai_attr[attr_idx++].value.oid = sai_brport;
-
-    sai_attr[attr_idx].id = SAI_FDB_ENTRY_ATTR_PACKET_ACTION;
-    sai_attr[attr_idx++].value.s32 = ndi_mac_sai_packet_action_get(entry->action);
 
     if ((sai_ret = ndi_mac_api_get(ndi_db_ptr)->
             create_fdb_entry(&sai_mac_entry, attr_idx, sai_attr)) != SAI_STATUS_SUCCESS) {
@@ -492,6 +507,7 @@ t_std_error ndi_mac_event_notify_register(ndi_mac_event_notification_fn reg_fn)
 }
 
 static bool _fill_mac_entry_from_brport(ndi_mac_entry_t * mac_entry, sai_object_id_t oid){
+
     if(mac_entry->mac_entry_type ==NDI_MAC_ENTRY_TYPE_1D_REMOTE ){
         mac_entry->endpoint_ip_port = oid;
         return true;
@@ -545,7 +561,6 @@ t_std_error ndi_get_mac_entry_attr(ndi_mac_entry_t *mac_entry)
     }
 
     sai_attr_ix = 0;
-
 
     if(!_fill_mac_entry_from_brport(mac_entry,sai_attrs[sai_attr_ix++].value.oid)){
         return STD_ERR(MAC,FAIL,0);

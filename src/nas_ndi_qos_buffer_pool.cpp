@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -333,7 +333,34 @@ static bool nas2sai_buffer_pool_counter_type_get(BASE_QOS_BUFFER_POOL_STAT_t sta
                 SAI_BUFFER_POOL_STAT_XOFF_ROOM_CURR_OCCUPANCY_BYTES},
         {BASE_QOS_BUFFER_POOL_STAT_XOFF_HEADROOM_WATERMARK_BYTES,
                 SAI_BUFFER_POOL_STAT_XOFF_ROOM_WATERMARK_BYTES},
-    };
+        {BASE_QOS_BUFFER_POOL_STAT_GREEN_DISCARD_DROPPED_PACKETS,
+                SAI_BUFFER_POOL_STAT_GREEN_WRED_DROPPED_PACKETS},
+        {BASE_QOS_BUFFER_POOL_STAT_GREEN_DISCARD_DROPPED_BYTES,
+            SAI_BUFFER_POOL_STAT_GREEN_WRED_DROPPED_BYTES},
+
+        {BASE_QOS_BUFFER_POOL_STAT_YELLOW_DISCARD_DROPPED_PACKETS,
+                SAI_BUFFER_POOL_STAT_YELLOW_WRED_DROPPED_PACKETS},
+
+        {BASE_QOS_BUFFER_POOL_STAT_YELLOW_DISCARD_DROPPED_BYTES,
+            SAI_BUFFER_POOL_STAT_YELLOW_WRED_DROPPED_BYTES},
+
+        {BASE_QOS_BUFFER_POOL_STAT_RED_DISCARD_DROPPED_BYTES,
+            SAI_BUFFER_POOL_STAT_RED_WRED_DROPPED_BYTES},
+
+        {BASE_QOS_BUFFER_POOL_STAT_RED_DISCARD_DROPPED_PACKETS,
+                SAI_BUFFER_POOL_STAT_RED_WRED_DROPPED_PACKETS},
+
+        {BASE_QOS_BUFFER_POOL_STAT_DISCARD_DROPPED_PACKETS, SAI_BUFFER_POOL_STAT_WRED_DROPPED_PACKETS},
+        {BASE_QOS_BUFFER_POOL_STAT_DISCARD_DROPPED_BYTES, SAI_BUFFER_POOL_STAT_WRED_DROPPED_BYTES},
+        {BASE_QOS_BUFFER_POOL_STAT_GREEN_WRED_ECN_MARKED_PACKETS, SAI_BUFFER_POOL_STAT_GREEN_WRED_ECN_MARKED_PACKETS},
+        {BASE_QOS_BUFFER_POOL_STAT_GREEN_WRED_ECN_MARKED_BYTES, SAI_BUFFER_POOL_STAT_GREEN_WRED_ECN_MARKED_BYTES},
+        {BASE_QOS_BUFFER_POOL_STAT_YELLOW_WRED_ECN_MARKED_PACKETS, SAI_BUFFER_POOL_STAT_YELLOW_WRED_ECN_MARKED_PACKETS },
+        {BASE_QOS_BUFFER_POOL_STAT_YELLOW_WRED_ECN_MARKED_BYTES, SAI_BUFFER_POOL_STAT_YELLOW_WRED_ECN_MARKED_BYTES},
+        {BASE_QOS_BUFFER_POOL_STAT_RED_WRED_ECN_MARKED_PACKETS, SAI_BUFFER_POOL_STAT_RED_WRED_ECN_MARKED_PACKETS },
+        {BASE_QOS_BUFFER_POOL_STAT_RED_WRED_ECN_MARKED_BYTES, SAI_BUFFER_POOL_STAT_RED_WRED_ECN_MARKED_BYTES},
+        {BASE_QOS_BUFFER_POOL_STAT_WRED_ECN_MARKED_PACKETS, SAI_BUFFER_POOL_STAT_WRED_ECN_MARKED_PACKETS },
+        {BASE_QOS_BUFFER_POOL_STAT_WRED_ECN_MARKED_BYTES, SAI_BUFFER_POOL_STAT_WRED_ECN_MARKED_BYTES },
+   };
 
     static const auto & nas2sai_buffer_pool_snapshot_counter_type =
         * new std::unordered_map<BASE_QOS_BUFFER_POOL_STAT_t, sai_buffer_pool_stat_t,
@@ -348,7 +375,6 @@ static bool nas2sai_buffer_pool_counter_type_get(BASE_QOS_BUFFER_POOL_STAT_t sta
         {BASE_QOS_BUFFER_POOL_STAT_XOFF_HEADROOM_WATERMARK_BYTES,
                 SAI_BUFFER_POOL_STAT_EXTENSIONS_SNAPSHOT_XOFF_ROOM_WATERMARK_BYTES},
     };
-
 
     try {
         if (is_snapshot == false)
@@ -434,7 +460,7 @@ t_std_error ndi_qos_get_buffer_pool_statistics(npu_id_t npu_id,
 {
     return ndi_qos_get_extended_buffer_pool_statistics(npu_id,
                    ndi_buffer_pool_id, counter_ids, number_of_counters,
-                   counters, false, false);
+                   counters, NAS_NDI_STATS_MODE_READ, false);
 }
 
 /**
@@ -453,7 +479,7 @@ t_std_error ndi_qos_get_extended_buffer_pool_statistics(npu_id_t npu_id,
                                 BASE_QOS_BUFFER_POOL_STAT_t *counter_ids,
                                 uint_t number_of_counters,
                                 uint64_t *counters,
-                                bool is_read_and_clear,
+                                ndi_stats_mode_t ndi_stats_mode,
                                 bool is_snapshot_counters)
 {
     sai_status_t sai_ret = SAI_STATUS_FAILURE;
@@ -474,17 +500,21 @@ t_std_error ndi_qos_get_extended_buffer_pool_statistics(npu_id_t npu_id,
             sai_counter_id_list.push_back(sai_stat_id);
         else {
             EV_LOGGING(NDI, NOTICE, "NDI-QOS",
-                    "NAS Queue Stat id %d is not mapped to any SAI stat id",
+                    "NAS Buffer pool Stat id %d is not mapped to any SAI stat id",
                     counter_ids[i]);
         }
     }
 
     std::vector<uint64_t> sai_counters(sai_counter_id_list.size());
+    sai_stats_mode_t sai_mode;
+    if (ndi_to_sai_stats_mode(ndi_stats_mode, &sai_mode) == false)
+        return STD_ERR(QOS, PARAM, 0);
 
     if ((sai_ret = ndi_sai_qos_buffer_api(ndi_db_ptr)->
-                        get_buffer_pool_stats(ndi2sai_buffer_pool_id(ndi_buffer_pool_id),
+                        get_buffer_pool_stats_ext(ndi2sai_buffer_pool_id(ndi_buffer_pool_id),
                                 sai_counter_id_list.size(),
                                 &sai_counter_id_list[0],
+                                sai_mode,
                                 &sai_counters[0]))
                          != SAI_STATUS_SUCCESS) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",

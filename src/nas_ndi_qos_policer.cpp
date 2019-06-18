@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -203,7 +203,7 @@ static void _fill_sai_meter_stat_list(sai_attribute_t *sai_attr_p,
             sai_attr_p->value.s32list.list[i] = nas2ndi_policer_stat_type.at(type);
         }
     }
-    catch (std::out_of_range e) {
+    catch (std::out_of_range &e) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "stat type out of range: %s",
                       e.what());
@@ -243,7 +243,7 @@ static t_std_error ndi_qos_utl_fill_policer_attr (sai_attribute_t *sai_attr_p,
         auto fn_set_policer = _fill_sai_policer_fn_map.at (attr_id);
         fn_set_policer (sai_attr_p, p);
 
-    } catch (std::out_of_range e) {
+    } catch (std::out_of_range &e) {
         EV_LOGGING(NDI, NOTICE, "NDI-QOS",
                       "Invalid Policer attr_id %d or value parameter %s",
                       attr_id, e.what());

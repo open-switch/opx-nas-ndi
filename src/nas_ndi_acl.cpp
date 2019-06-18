@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -27,6 +27,7 @@
 #include "nas_base_utils.h"
 #include "nas_ndi_switch.h"
 #include "nas_ndi_acl.h"
+#include "nas_ndi_trap.h"
 #include "nas_ndi_acl_utl.h"
 #include "nas_ndi_udf_utl.h"
 #include <vector>
@@ -748,7 +749,7 @@ t_std_error ndi_acl_range_create(npu_id_t npu_id, const ndi_acl_range_t *acl_ran
                     ndi_switch_id_get(), sai_attr_list.size(),
                     sai_attr_list.data());
     if (sai_ret != SAI_STATUS_SUCCESS) {
-        NDI_ACL_LOG_ERROR("Create ACL range failed in SAI %d", sai_ret);
+        NDI_ACL_LOG_ERROR("Create ACL range failed in SAI ret %d", sai_ret);
         return _sai_to_ndi_err(sai_ret);
     }
     *ndi_range_id_p = ndi_acl_utl_sai2ndi_range_id(sai_range_id);
@@ -809,7 +810,7 @@ t_std_error ndi_acl_get_slice_attribute (npu_id_t npu_id, ndi_obj_id_t slice_id,
 
     sai_attr[attr_idx].id = SAI_ACL_SLICE_ATTR_EXTENSIONS_ACL_TABLE_LIST;
     sai_attr[attr_idx].value.objlist.count = list_sz;
-    sai_attr[attr_idx].value.objlist.list = &(slice_acl_tbl_obj_list[0]);
+    sai_attr[attr_idx].value.objlist.list = slice_acl_tbl_obj_list.data();
 
     attr_idx++;
 
@@ -905,12 +906,12 @@ t_std_error ndi_acl_get_acl_table_attribute (npu_id_t npu_id, ndi_obj_id_t table
 
     sai_attr[attr_idx].id = SAI_ACL_TABLE_ATTR_EXTENSIONS_USED_ACL_ENTRY_LIST;
     sai_attr[attr_idx].value.u32list.count = list_sz;
-    sai_attr[attr_idx].value.u32list.list = &(used_entry_obj_list[0]);
+    sai_attr[attr_idx].value.u32list.list = used_entry_obj_list.data();
     attr_idx++;
 
     sai_attr[attr_idx].id = SAI_ACL_TABLE_ATTR_EXTENSIONS_AVAILABLE_ACL_ENTRY_LIST;
     sai_attr[attr_idx].value.u32list.count = list_sz;
-    sai_attr[attr_idx].value.u32list.list = &(avail_entry_obj_list[0]);
+    sai_attr[attr_idx].value.u32list.list = avail_entry_obj_list.data();
     attr_idx++;
 
     attr_count = attr_idx;

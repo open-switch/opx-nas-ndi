@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -23,15 +23,17 @@
 #include "std_error_codes.h"
 #include "std_assert.h"
 #include "std_ip_utils.h"
+#include "std_bit_ops.h"
 #include "ds_common_types.h"
 #include "nas_ndi_event_logs.h"
 #include "nas_ndi_int.h"
 #include "nas_ndi_route.h"
 #include "nas_ndi_utils.h"
 #include "nas_ndi_map.h"
-#include "sai.h"
 #include "saistatus.h"
 #include "saitypes.h"
+#include "sainexthopgroupextensions.h"
+#include "nas_switch.h"
 
 /* TODO: To be removed once the SAI Switch id changes are merged */
 sai_object_id_t g_nas_ndi_switch_id = 0;
@@ -598,6 +600,13 @@ t_std_error ndi_route_next_hop_group_create (ndi_nh_group_t *p_nh_group_entry,
     sai_attr[attr_idx].id = SAI_NEXT_HOP_GROUP_ATTR_TYPE;
     attr_idx++;
 
+    /* add Resilient Hashing, if supported */
+    if (nas_switch_resilient_hash_ecmp_supported()) {
+        sai_attr[attr_idx].value.booldata = p_nh_group_entry->res_hash;
+        sai_attr[attr_idx].id = SAI_NEXT_HOP_GROUP_ATTR_EXTENSIONS_RESILIENT_HASH_ENABLE;
+        attr_idx++;
+    }
+
     if ((sai_ret = ndi_next_hop_group_api_get(ndi_db_ptr)->
             create_next_hop_group(&sai_nh_group_id, g_nas_ndi_switch_id, attr_idx, sai_attr))
             != SAI_STATUS_SUCCESS) {
@@ -658,8 +667,33 @@ t_std_error ndi_route_next_hop_group_delete (npu_id_t npu_id,
 t_std_error ndi_route_set_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_entry,
                                         next_hop_id_t nh_group_handle)
 {
-    /* Currently all Next Group Attributes are not settable */
-    return (STD_ERR (ROUTE, FAIL, SAI_STATUS_FAILURE));
+    sai_attribute_t   sai_attr;
+    sai_status_t      sai_ret = SAI_STATUS_FAILURE;
+    sai_object_id_t   sai_nh_group_id = nh_group_handle;
+
+    nas_ndi_db_t *ndi_db_ptr = ndi_db_ptr_get(p_nh_group_entry->npu_id);
+
+    if (STD_BIT_TEST(p_nh_group_entry->flags, NDI_ROUTE_NH_GROUP_RESILIENT_HASH)) {
+        sai_attr.value.booldata = p_nh_group_entry->res_hash;
+        sai_attr.id = SAI_NEXT_HOP_GROUP_ATTR_EXTENSIONS_RESILIENT_HASH_ENABLE;
+
+        NDI_LOG_TRACE("NDI-ROUTE", 
+                "set next hop attribute (r-hash) to %s vrf(%d) npu(%lu)",
+                sai_attr.value.booldata ? "enable" : "disable",
+                p_nh_group_entry->npu_id, p_nh_group_entry->vrf_id);
+    } else {
+        NDI_LOG_TRACE("NDI-ROUTE", "Invalid attribute");
+        return STD_ERR(ROUTE, FAIL, 0);
+    }
+
+    if ((sai_ret = ndi_next_hop_group_api_get(ndi_db_ptr)->
+                set_next_hop_group_attribute(sai_nh_group_id, &sai_attr))
+                != SAI_STATUS_SUCCESS) {
+        NDI_LOG_TRACE("NDI-ROUTE", "failed setting next hop group attribute");
+        return STD_ERR(ROUTE, FAIL, sai_ret);
+    }
+
+    return STD_ERR_OK;
 }
 
 t_std_error ndi_route_get_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_entry,
@@ -688,6 +722,11 @@ t_std_error ndi_route_get_next_hop_group_attribute (ndi_nh_group_t *p_nh_group_e
 
     for(attr_idx = 0; attr_idx < attr_count; attr_idx++) {
         switch(sai_attr[attr_idx].id) {
+
+            case SAI_NEXT_HOP_GROUP_ATTR_EXTENSIONS_RESILIENT_HASH_ENABLE:
+                p_nh_group_entry->res_hash = sai_attr[attr_idx].value.booldata;
+                break;
+
             case SAI_NEXT_HOP_GROUP_ATTR_NEXT_HOP_COUNT:
                 p_nh_group_entry->nhop_count = sai_attr[attr_idx].value.u32;
                 break;

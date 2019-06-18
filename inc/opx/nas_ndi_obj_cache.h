@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -51,6 +51,7 @@ typedef enum{
     ndi_brport_query_type_FROM_PORT=1,
     ndi_brport_query_type_FROM_BRPORT,
     ndi_brport_query_type_FROM_PORT_VLAN,
+    ndi_brport_query_type_FROM_RIF,
 }ndi_brport_query_type_t;
 
 
@@ -71,6 +72,7 @@ typedef struct {
     ndi_port_type_t port_type;
     ndi_brport_type_t brport_type;
     hal_vlan_id_t vlan_id;
+    sai_object_id_t rif_obj_id;
 
 } ndi_brport_obj_t;
 

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Dell Inc.
+# Copyright (c) 2019 Dell Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -44,6 +44,9 @@ libopx_nas_ndi_la_SOURCES= src/hal_shell.c  src/nas_ndi_init.c \
            src/nas_ndi_tunnel.cpp \
            src/nas_ndi_tunnel_map.cpp \
            src/nas_ndi_plat_stat.c \
+           src/nas_ndi_ipmc.cpp \
+           src/nas_ndi_router_interface_utl.cpp \
+           src/nas_ndi_trap.cpp \
            src/nas_ndi_tunnel_obj.cpp
 
 libopx_nas_ndi_la_CPPFLAGS= -D_FILE_OFFSET_BITS=64 -I$(top_srcdir)/inc/opx -I$(includedir)/opx

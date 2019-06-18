@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -24,6 +24,7 @@
 #include "std_error_codes.h"
 #include "ds_common_types.h"
 #include "nas_ndi_common.h"
+#include "std_mutex_lock.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +43,8 @@ extern "C" {
 
 t_std_error ndi_stg_delete_port_stp_ports(npu_id_t npu_id,
         sai_object_id_t brport);
+
+std_mutex_type_t * ndi_stg_get_member_mutex();
 
 #ifdef __cplusplus
 }

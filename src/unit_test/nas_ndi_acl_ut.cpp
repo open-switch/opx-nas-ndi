@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -20,11 +20,9 @@
 
 #include "dell-base-acl.h"
 #include "std_error_codes.h"
-#include  "nas_ndi_acl.h"
-#include  "nas_ndi_init.h"
+#include "nas_ndi_acl.h"
 #include "nas_ndi_event_logs.h"
 #include <gtest/gtest.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 
 #define MY_ASSERT_TRUE(x) \
@@ -54,6 +52,7 @@ void my_acltest_entry ()
     ndi_acl_entry_filter_t filter_mac;
     filter_mac.filter_type = BASE_ACL_MATCH_TYPE_DST_MAC;
     filter_mac.values_type = NDI_ACL_FILTER_MAC_ADDR;
+    filter_mac.udf_seq_no = 0;
 
     hal_mac_addr_t mac = {0x10,0x20,0x30,0x40,0x50,0x60};
     memcpy (filter_mac.data.values.mac, &mac, sizeof (mac));
@@ -62,6 +61,7 @@ void my_acltest_entry ()
     ndi_acl_entry_filter_t filter_ip;
     filter_ip.filter_type = BASE_ACL_MATCH_TYPE_SRC_IP;
     filter_ip.values_type = NDI_ACL_FILTER_IPV4_ADDR;
+    filter_ip.udf_seq_no  = 0;
 
     inet_aton ("50.0.0.40", &filter_ip.data.values.ipv4);
     inet_aton ("255.255.255.255", &filter_ip.mask.values.ipv4);
@@ -96,10 +96,12 @@ void my_acltest_entry_plist ()
     filter_vlan.values_type = NDI_ACL_FILTER_U16;
     filter_vlan.data.values.u16 = 45;
     filter_vlan.mask.values.u16 = 0xffff;
+    filter_vlan.udf_seq_no = 0;
 
     ndi_acl_entry_filter_t filter_in_ports;
     filter_in_ports.filter_type = BASE_ACL_MATCH_TYPE_IN_PORTS;
     filter_in_ports.values_type = NDI_ACL_FILTER_PORTLIST;
+    filter_in_ports.udf_seq_no = 0;
     ndi_port_t plist[] = {{0,2},{0,4},{0,6}};
     filter_in_ports.data.values.ndi_portlist = {3, plist};
 
@@ -140,6 +142,7 @@ void my_acltest_mod_entry ()
     filter_vlan.filter_type = BASE_ACL_MATCH_TYPE_OUTER_VLAN_ID;
     filter_vlan.values_type = NDI_ACL_FILTER_U16;
     filter_vlan.data.values.u16 = 100;
+    filter_vlan.udf_seq_no = 0;
 
     MY_EXPECT_TRUE (ndi_acl_entry_set_filter (0, entry_id, &filter_vlan) == STD_ERR_OK);
     MY_EXPECT_TRUE (ndi_acl_entry_disable_filter (0, entry_id, BASE_ACL_MATCH_TYPE_SRC_IP) == STD_ERR_OK);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -130,6 +130,7 @@ private:
     std::map<ndi_bridge_pv_t, brport_shared_ptr> _pv_to_brport_blk;
 
     std::map<sai_object_id_t, brport_list> _port_to_brport_list;
+    std::map<sai_object_id_t, brport_shared_ptr> _rif_to_brport_blk;
 
 public:
 
@@ -196,6 +197,14 @@ bool ndi_brport_cache::get_brport_block(ndi_brport_obj_t * obj, ndi_brport_query
                 memcpy(obj, &(*(blk_it->second)), sizeof(ndi_brport_obj_t));
                 break;
             }
+        case ndi_brport_query_type_FROM_RIF:
+            {
+                auto blk_it = _rif_to_brport_blk.find(obj->rif_obj_id);
+                if ( blk_it == _rif_to_brport_blk.end())  return false;
+                memcpy(obj, &(*(blk_it->second)), sizeof(ndi_brport_obj_t));
+                break;
+            }
+
         default:
             return false;
 
@@ -220,6 +229,10 @@ bool ndi_brport_cache::add_bridge_port(ndi_brport_obj_t *obj) {
     auto var = std::make_shared<ndi_brport_obj_t>(*obj);
 
     std_rw_lock_write_guard lg(&rw_lock);
+    if  (obj->brport_type == ndi_brport_type_1D_ROUTER) {
+        _rif_to_brport_blk[obj->rif_obj_id] = var;
+        return true;
+    }
     /* Added for only .IQ entries */
     if  (obj->brport_type == ndi_brport_type_PORT) {
       _port_to_brport_blk[obj->port_obj_id] = var;
@@ -243,6 +256,13 @@ bool ndi_brport_cache::remove_bridge_port(ndi_brport_obj_t * obj) {
     bool found = false;
     if (obj == nullptr) return false;
     std_rw_lock_write_guard lg(&rw_lock);
+
+    if  (obj->brport_type == ndi_brport_type_1D_ROUTER) {
+        auto br_it = _rif_to_brport_blk.find(obj->rif_obj_id);
+        if ( br_it == _rif_to_brport_blk.end()) return false;
+        _rif_to_brport_blk.erase(br_it);
+        return true;
+    }
 
     auto it = _brport_to_port_blk.find(obj->brport_obj_id);
     if ( it == _brport_to_port_blk.end()) return false;
